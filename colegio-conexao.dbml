@@ -1,0 +1,224 @@
+// ==========================================================
+// AVA - COLÉGIO CONEXÃO
+// MODELO RELACIONAL (.DBML) - Gerado por José + ChatGPT
+// ==========================================================
+
+//////////////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////////////
+Enum tipo_usuario {
+  'aluno'
+  'professor'
+  'coordenador'
+  'conteudista'
+  'admin'
+}
+
+Enum tipo_material {
+  'aluno'
+  'professor'
+}
+
+Enum status_entrega {
+  'pendente'
+  'entregue'
+  'corrigida'
+}
+
+Enum dia_semana {
+  'segunda'
+  'terça'
+  'quarta'
+  'quinta'
+  'sexta'
+}
+
+//////////////////////////////////////////////////////////////
+// TABELAS PRINCIPAIS
+//////////////////////////////////////////////////////////////
+
+Table "users" {
+  id uuid [pk, note: 'Identificador do usuário']
+  nome_completo text
+  email text [unique]
+  usuario_login text [unique]
+  senha text
+  tipo_user tipo_usuario
+  data_nascimento date
+  ativo boolean
+  criado_em timestamp
+}
+
+Table "turmas" {
+  id uuid [pk]
+  nome text
+  ano_letivo int
+  criado_em timestamp
+}
+
+Table "disciplinas" {
+  id uuid [pk]
+  nome text
+  descricao text
+  turma_id uuid [ref: > turmas.id]
+  criado_em timestamp
+}
+
+Table "professor_disciplinas" {
+  id uuid [pk]
+  professor_id uuid [ref: > users.id]
+  disciplina_id uuid [ref: > disciplinas.id]
+  criado_em timestamp
+}
+
+Table "matriculas" {
+  id uuid [pk]
+  aluno_id uuid [ref: > users.id]
+  turma_id uuid [ref: > turmas.id]
+  criado_em timestamp
+}
+
+Table "materiais" {
+  id uuid [pk]
+  enviado_por uuid [ref: > users.id]
+  turma_id uuid [ref: > turmas.id]
+  disciplina_id uuid [ref: > disciplinas.id]
+  bimestre int
+  tipo tipo_material
+  titulo text
+  arquivo_url text
+  criado_em timestamp
+}
+
+Table "atividades" {
+  id uuid [pk]
+  disciplina_id uuid [ref: > disciplinas.id]
+  titulo text
+  descricao text
+  data_limite timestamp
+  valor_total numeric
+  criado_em timestamp
+}
+
+Table "entregas" {
+  id uuid [pk]
+  atividade_id uuid [ref: > atividades.id]
+  aluno_id uuid [ref: > users.id]
+  status status_entrega
+  nota numeric
+  arquivo_url text
+  feedback text
+  data_entrega timestamp
+  criado_em timestamp
+}
+
+Table "notas_avaliacoes" {
+  id uuid [pk]
+  professor_id uuid [ref: > users.id]
+  aluno_id uuid [ref: > users.id]
+  disciplina_id uuid [ref: > disciplinas.id]
+  bimestre int
+  av1 numeric
+  av2 numeric
+  media_bimestral numeric
+  recuperacao numeric
+  media_final_bimestre numeric
+  aprovado_bimestre boolean
+  criado_em timestamp
+}
+
+Table "mural_comunicados" {
+  id uuid [pk]
+  remetente_id uuid [ref: > users.id]
+  destino_tipo text
+  destino_id uuid
+  titulo text
+  mensagem text
+  criado_em timestamp
+}
+
+Table "chat_mensagens" {
+  id uuid [pk]
+  turma_id uuid [ref: > turmas.id]
+  remetente_id uuid [ref: > users.id]
+  mensagem text
+  criado_em timestamp
+}
+
+Table "mensagens_privadas" {
+  id uuid [pk]
+  disciplina_id uuid [ref: > disciplinas.id]
+  remetente_id uuid [ref: > users.id]
+  destinatario_id uuid [ref: > users.id]
+  mensagem text
+  criado_em timestamp
+}
+
+Table "diario_frequencia" {
+  id uuid [pk]
+  turma_id uuid [ref: > turmas.id]
+  disciplina_id uuid [ref: > disciplinas.id]
+  professor_id uuid [ref: > users.id]
+  aluno_id uuid [ref: > users.id]
+  data_aula date
+  presenca boolean
+  observacao text
+  criado_em timestamp
+}
+
+Table "arquivos_enviados_professor" {
+  id uuid [pk]
+  professor_id uuid [ref: > users.id]
+  turma_id uuid [ref: > turmas.id]
+  disciplina_id uuid [ref: > disciplinas.id]
+  aluno_id uuid [ref: > users.id]
+  arquivo_url text
+  descricao text
+  criado_em timestamp
+}
+
+Table "log_acoes_administrador" {
+  id uuid [pk]
+  admin_id uuid [ref: > users.id]
+  acao text
+  alvo_usuario_id uuid [ref: > users.id]
+  detalhes jsonb
+  data_execucao timestamp
+}
+
+//////////////////////////////////////////////////////////////
+// RELAÇÕES COMENTADAS
+//////////////////////////////////////////////////////////////
+
+Ref: disciplinas.turma_id > turmas.id               // Cada disciplina pertence a uma turma
+Ref: professor_disciplinas.professor_id > users.id  // Professor ministrante
+Ref: professor_disciplinas.disciplina_id > disciplinas.id
+Ref: matriculas.aluno_id > users.id                 // Aluno matriculado
+Ref: matriculas.turma_id > turmas.id                // Turma da matrícula
+Ref: materiais.turma_id > turmas.id
+Ref: materiais.disciplina_id > disciplinas.id
+Ref: materiais.enviado_por > users.id
+Ref: atividades.disciplina_id > disciplinas.id
+Ref: entregas.atividade_id > atividades.id
+Ref: entregas.aluno_id > users.id
+Ref: notas_avaliacoes.aluno_id > users.id
+Ref: notas_avaliacoes.professor_id > users.id
+Ref: notas_avaliacoes.disciplina_id > disciplinas.id
+Ref: chat_mensagens.turma_id > turmas.id
+Ref: chat_mensagens.remetente_id > users.id
+Ref: mensagens_privadas.remetente_id > users.id
+Ref: mensagens_privadas.destinatario_id > users.id
+Ref: diario_frequencia.professor_id > users.id
+Ref: diario_frequencia.aluno_id > users.id
+Ref: diario_frequencia.turma_id > turmas.id
+Ref: diario_frequencia.disciplina_id > disciplinas.id
+Ref: arquivos_enviados_professor.professor_id > users.id
+Ref: arquivos_enviados_professor.aluno_id > users.id
+Ref: arquivos_enviados_professor.turma_id > turmas.id
+Ref: arquivos_enviados_professor.disciplina_id > disciplinas.id
+Ref: log_acoes_administrador.admin_id > users.id
+Ref: log_acoes_administrador.alvo_usuario_id > users.id
+
+//////////////////////////////////////////////////////////////
+// FIM DO ARQUIVO .DBML
+//////////////////////////////////////////////////////////////
