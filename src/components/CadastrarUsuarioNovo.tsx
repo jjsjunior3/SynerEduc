@@ -1,5 +1,5 @@
 // src/components/CadastrarUsuarioNovo.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -46,6 +46,8 @@ interface CadastrarUsuarioNovoProps {
   onUsuarioCriado?: () => void;
 }
 
+type SegmentoDisciplina = "Fundamental 1" | "Fundamental 2" | "Ensino Médio";
+
 interface NovoUsuario {
   nome: string;
   nomeUsuario: string;
@@ -59,7 +61,7 @@ interface NovoUsuario {
 
 interface VinculacaoProfessor {
   id: string;
-  segmento: "fundamental" | "medio";
+  segmento: SegmentoDisciplina;
   disciplinaId: string;
   disciplinaNome: string;
   seriesSelecionadas: string[];
@@ -68,18 +70,24 @@ interface VinculacaoProfessor {
 interface DisciplinaDisponivel {
   id: string;
   nome: string;
-  segmento: "fundamental" | "medio";
+  segmento: SegmentoDisciplina | null;
 }
 
-const seriesPorSegmento = {
-  fundamental: [
+const seriesPorSegmento: Record<SegmentoDisciplina, string[]> = {
+  "Fundamental 1": [
+    "1º ano - Ensino Fundamental",
+    "2º ano - Ensino Fundamental",
+    "3º ano - Ensino Fundamental",
+    "4º ano - Ensino Fundamental",
     "5º ano - Ensino Fundamental",
+  ],
+  "Fundamental 2": [
     "6º ano - Ensino Fundamental",
     "7º ano - Ensino Fundamental",
     "8º ano - Ensino Fundamental",
     "9º ano - Ensino Fundamental",
   ],
-  medio: [
+  "Ensino Médio": [
     "1ª série - Ensino Médio",
     "2ª série - Ensino Médio",
     "3ª série - Ensino Médio",
@@ -87,6 +95,10 @@ const seriesPorSegmento = {
 };
 
 const seriesDisponiveis = [
+  "1º ano - Ensino Fundamental",
+  "2º ano - Ensino Fundamental",
+  "3º ano - Ensino Fundamental",
+  "4º ano - Ensino Fundamental",
   "5º ano - Ensino Fundamental",
   "6º ano - Ensino Fundamental",
   "7º ano - Ensino Fundamental",
@@ -100,7 +112,7 @@ const seriesDisponiveis = [
 export function CadastrarUsuarioNovo({
   onVoltar,
   onUsuarioCriado,
-}: CadastrarUsuarioNovo) {
+}: CadastrarUsuarioNovoProps) {
   const [dados, setDados] = useState<NovoUsuario>({
     nome: "",
     nomeUsuario: "",
@@ -124,10 +136,14 @@ export function CadastrarUsuarioNovo({
   const [carregandoDisciplinas, setCarregandoDisciplinas] = useState(true);
 
   const [modalDisciplina, setModalDisciplina] = useState(false);
-  const [novaVinculacao, setNovaVinculacao] = useState({
-    segmento: "" as "fundamental" | "medio" | "",
+  const [novaVinculacao, setNovaVinculacao] = useState<{
+    segmento: SegmentoDisciplina | "";
+    disciplinaId: string;
+    seriesSelecionadas: string[];
+  }>({
+    segmento: "",
     disciplinaId: "",
-    seriesSelecionadas: [] as string[],
+    seriesSelecionadas: [],
   });
 
   const tiposUsuario = [
@@ -138,13 +154,13 @@ export function CadastrarUsuarioNovo({
     { value: "professor_conteudista", label: "Professor Conteudista" },
   ];
 
-  // Carrega disciplinas
+  // Carrega disciplinas (com segmento vindo do banco)
   const carregarDisciplinas = async () => {
     try {
       setCarregandoDisciplinas(true);
       const { data, error } = await supabase
         .from("disciplinas")
-        .select("id, nome")
+        .select("id, nome, segmento")
         .order("nome", { ascending: true });
 
       if (error) throw error;
@@ -153,7 +169,12 @@ export function CadastrarUsuarioNovo({
         (d: any) => ({
           id: d.id,
           nome: d.nome,
-          segmento: "fundamental", // fallback
+          segmento:
+            d.segmento === "Fundamental 1" ||
+            d.segmento === "Fundamental 2" ||
+            d.segmento === "Ensino Médio"
+              ? (d.segmento as SegmentoDisciplina)
+              : null,
         })
       );
 
@@ -259,11 +280,18 @@ export function CadastrarUsuarioNovo({
     setModalDisciplina(true);
   };
 
-  const disciplinasPorSegmento = (segmento: "fundamental" | "medio") =>
-    disciplinasDisponiveis.filter((d) => d.segmento === segmento);
+  const disciplinasFiltradas = useMemo(
+    () =>
+      novaVinculacao.segmento
+        ? disciplinasDisponiveis.filter(
+            (d) => d.segmento === novaVinculacao.segmento
+          )
+        : [],
+    [disciplinasDisponiveis, novaVinculacao.segmento]
+  );
 
-  const seriesDoSegmento = (segmento: "fundamental" | "medio") =>
-    seriesPorSegmento[segmento] || [];
+  const seriesDoSegmento = (segmento: SegmentoDisciplina | "") =>
+    segmento ? seriesPorSegmento[segmento] || [] : [];
 
   const adicionarVinculacao = () => {
     if (!novaVinculacao.segmento || !novaVinculacao.disciplinaId) {
@@ -302,7 +330,10 @@ export function CadastrarUsuarioNovo({
 
     setDados((prev) => ({
       ...prev,
-      vinculacoesProfessor: [...prev.vinculacoesProfessor, novaVinculacaoCompleta],
+      vinculacoesProfessor: [
+        ...prev.vinculacoesProfessor,
+        novaVinculacaoCompleta,
+      ],
     }));
 
     setModalDisciplina(false);
@@ -346,18 +377,23 @@ export function CadastrarUsuarioNovo({
         nome,
         email: emailFinal,
         senha: dados.senha,
-        tipo: dados.tipo, // precisa estar dentro do CHECK de `usuarios.tipo`
+        tipo: dados.tipo,
         serie: dados.tipo === "aluno" ? dados.serie : null,
+        vinculacoesProfessor:
+          dados.tipo === "professor" || dados.tipo === "professor_conteudista"
+            ? dados.vinculacoesProfessor
+            : [],
       };
+
 
       console.log("[CADASTRO_NOVO] Enviando para admin-create-user:", payload);
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
         }
       );
 
@@ -669,9 +705,7 @@ export function CadastrarUsuarioNovo({
                                   {v.disciplinaNome}
                                 </span>
                                 <Badge variant="outline" className="text-xs">
-                                  {v.segmento === "fundamental"
-                                    ? "Ens. Fundamental"
-                                    : "Ens. Médio"}
+                                  {v.segmento}
                                 </Badge>
                               </div>
                               <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -760,7 +794,7 @@ export function CadastrarUsuarioNovo({
               <Label>1. Segmento *</Label>
               <Select
                 value={novaVinculacao.segmento}
-                onValueChange={(value: "fundamental" | "medio") =>
+                onValueChange={(value: SegmentoDisciplina) =>
                   setNovaVinculacao((prev) => ({
                     ...prev,
                     segmento: value,
@@ -773,10 +807,13 @@ export function CadastrarUsuarioNovo({
                   <SelectValue placeholder="Selecione o segmento" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="fundamental">
-                    Ensino Fundamental
+                  <SelectItem value="Fundamental 1">
+                    Ensino Fundamental 1
                   </SelectItem>
-                  <SelectItem value="medio">Ensino Médio</SelectItem>
+                  <SelectItem value="Fundamental 2">
+                    Ensino Fundamental 2
+                  </SelectItem>
+                  <SelectItem value="Ensino Médio">Ensino Médio</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -798,13 +835,11 @@ export function CadastrarUsuarioNovo({
                     <SelectValue placeholder="Selecione a disciplina" />
                   </SelectTrigger>
                   <SelectContent>
-                    {disciplinasPorSegmento(novaVinculacao.segmento).map(
-                      (disciplina) => (
-                        <SelectItem key={disciplina.id} value={disciplina.id}>
-                          {disciplina.nome}
-                        </SelectItem>
-                      )
-                    )}
+                    {disciplinasFiltradas.map((disciplina) => (
+                      <SelectItem key={disciplina.id} value={disciplina.id}>
+                        {disciplina.nome}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
