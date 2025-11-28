@@ -223,7 +223,7 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
       });
 
       const dadosParaEnviar: any = {
-        userId: usuarioEditando.id,
+        id: usuarioEditando.id,
         nome: dadosEdicao.nome,
         email: dadosEdicao.email,
         tipo: dadosEdicao.tipo,

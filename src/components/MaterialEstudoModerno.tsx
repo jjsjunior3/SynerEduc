@@ -1,21 +1,17 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
 import { PDFViewerModerno } from "./PDFViewerModerno";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Menu,
   X,
   Book,
-  Trophy,
   CheckCircle,
   FileText,
-  Clock,
-  Play,
   Sun,
   Moon,
 } from "lucide-react";
@@ -24,10 +20,11 @@ import { supabase } from "../supabase/supabaseClient";
 import { EstatisticasEstudo } from "./EstatisticasEstudo";
 import { ConquistasEstudante } from "./ConquistasEstudante";
 
+// Interface ajustada para aceitar Professor como Objeto ou String
 interface Disciplina {
   id: string;
   nome: string;
-  professor: string;
+  professor: string | { id: string; nome: string }; // <--- Correção aqui
   cor?: string;
 }
 
@@ -58,6 +55,13 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper para pegar o nome do professor com segurança
+  const getNomeProfessor = () => {
+    if (!disciplina.professor) return "Não atribuído";
+    if (typeof disciplina.professor === "string") return disciplina.professor;
+    return disciplina.professor.nome;
+  };
+
   // Detectar mobile
   useEffect(() => {
     const handleResize = () => {
@@ -81,36 +85,39 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
     setError(null);
 
     try {
+      // CORREÇÃO: Buscando da tabela nova 'pdfs_conteudista'
       const { data, error } = await supabase
-        .from("materiais_pdf")
-        .select(
-          `
-          id, bimestre, titulo, descricao, pdf_url,
-          progresso_aluno!left(
-            progresso, concluido
-          )
-        `
-        )
+        .from("pdfs_conteudista")
+        .select(`
+          id, 
+          bimestre, 
+          titulo, 
+          descricao, 
+          arquivo_url
+        `)
         .eq("disciplina_id", disciplina.id)
+        // .eq("serie", usuario?.serie) // Opcional: filtrar por série se necessário
         .order("bimestre", { ascending: true });
 
       if (error) throw error;
 
       // Mapear resultado
-      const mapped: MaterialPDF[] =
-        (data || []).map((m: any) => ({
-          id: m.id,
-          bimestre: m.bimestre,
-          titulo: m.titulo,
-          descricao: m.descricao,
-          pdf_url: m.pdf_url,
-          progresso: m.progresso_aluno?.[0]?.progresso || 0,
-          concluido: m.progresso_aluno?.[0]?.concluido || false,
-        })) ?? [];
+      const mapped: MaterialPDF[] = (data || []).map((m: any) => ({
+        id: m.id,
+        bimestre: m.bimestre,
+        titulo: m.titulo,
+        descricao: m.descricao,
+        pdf_url: m.arquivo_url, // Mapeando arquivo_url para pdf_url
+        progresso: 0, // Placeholder enquanto não reconectamos o progresso
+        concluido: false,
+      }));
 
       setBimestres(mapped);
-      if (mapped.length === 0)
+
+      if (mapped.length === 0) {
         setError("Nenhum material disponível para esta disciplina.");
+      }
+
     } catch (err: any) {
       console.error("Erro ao carregar materiais:", err.message);
       setError("Erro ao carregar materiais de estudo.");
@@ -119,31 +126,16 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
     }
   }
 
-  // Marcar conclusão
+  // Marcar conclusão (Simplificado)
   async function handleMarcarConcluido() {
     if (!bimestreSelecionado || !usuario?.id) return;
 
-    const b = bimestreSelecionado;
-    try {
-      const { error } = await supabase.from("progresso_aluno").upsert({
-        user_id: usuario.id,
-        disciplina_id: disciplina.id,
-        bimestre: b.bimestre,
-        progresso: 100,
-        concluido: true,
-      });
-      if (error) throw error;
-
-      setBimestres((prev) =>
-        prev.map((bm) =>
-          bm.id === b.id ? { ...bm, progresso: 100, concluido: true } : bm
-        )
-      );
-      toast.success("Material marcado como concluído!");
-    } catch (err: any) {
-      console.error("Erro ao atualizar progresso:", err.message);
-      toast.error("Erro ao atualizar progresso.");
-    }
+    setBimestres((prev) =>
+      prev.map((bm) =>
+        bm.id === bimestreSelecionado.id ? { ...bm, progresso: 100, concluido: true } : bm
+      )
+    );
+    toast.success("Material marcado como concluído!");
   }
 
   const progressoGeral =
@@ -191,7 +183,8 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
                   darkMode ? "text-gray-400" : "text-gray-600"
                 }`}
               >
-                Professor(a): {disciplina.professor}
+                {/* CORREÇÃO: Usando a função segura para exibir o nome */}
+                Professor(a): {getNomeProfessor()}
               </p>
             </div>
           </div>
@@ -274,8 +267,10 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
                 Carregando materiais...
               </p>
             ) : error ? (
-              <Card className="p-4 text-center">
-                <CardContent>{error}</CardContent>
+              <Card className="p-4 text-center bg-gray-50 border-dashed">
+                <CardContent className="pt-6 text-gray-500 text-sm">
+                  {error}
+                </CardContent>
               </Card>
             ) : (
               bimestres.map((bim, idx) => (
@@ -287,33 +282,37 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
                 >
                   <Card
                     onClick={() => setBimestreSelecionado(bim)}
-                    className={`cursor-pointer hover:shadow-lg ${
-                      bim.concluido
-                        ? "border-green-400 ring-1 ring-green-300"
+                    className={`cursor-pointer hover:shadow-lg transition-all ${
+                      bimestreSelecionado?.id === bim.id 
+                        ? "border-blue-500 ring-1 ring-blue-200 bg-blue-50" 
                         : "border-gray-200"
+                    } ${
+                      bim.concluido
+                        ? "border-green-400"
+                        : ""
                     }`}
                   >
-                    <CardContent className="p-4 flex justify-between">
+                    <CardContent className="p-4 flex justify-between items-start">
                       <div>
                         <h4
-                          className={`font-medium ${
+                          className={`font-medium text-sm ${
                             darkMode ? "text-white" : "text-gray-900"
                           }`}
                         >
-                          Bimestre {bim.bimestre}: {bim.titulo}
+                          {bim.bimestre}º Bimestre
                         </h4>
                         <p
-                          className={`text-xs ${
-                            darkMode ? "text-gray-400" : "text-gray-600"
+                          className={`text-xs mt-1 font-semibold ${
+                            darkMode ? "text-gray-300" : "text-gray-700"
                           }`}
                         >
-                          {bim.descricao || "Sem descrição"}
+                          {bim.titulo}
                         </p>
                       </div>
                       {bim.concluido ? (
                         <CheckCircle className="text-green-500 w-5 h-5" />
                       ) : (
-                        <FileText className="text-blue-500 w-5 h-5" />
+                        <FileText className={`w-5 h-5 ${bimestreSelecionado?.id === bim.id ? "text-blue-600" : "text-gray-400"}`} />
                       )}
                     </CardContent>
                   </Card>
@@ -324,7 +323,7 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
         </div>
 
         {/* Área principal */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col bg-gray-100">
           {bimestreSelecionado ? (
             <PDFViewerModerno
               bimestre={{
@@ -340,8 +339,12 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
               darkMode={darkMode}
             />
           ) : (
-            <div className="flex items-center justify-center flex-1 text-gray-500">
-              <p>Selecione um bimestre para visualizar o material.</p>
+            <div className="flex flex-col items-center justify-center flex-1 text-gray-500 p-8">
+              <div className="bg-white p-8 rounded-full shadow-sm mb-4">
+                <Book className="w-12 h-12 text-blue-200" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900">Pronto para estudar?</h3>
+              <p className="text-sm text-gray-500 mt-2">Selecione um bimestre na barra lateral para visualizar o material.</p>
             </div>
           )}
         </div>

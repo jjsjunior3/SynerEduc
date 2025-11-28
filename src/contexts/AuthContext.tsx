@@ -1,162 +1,97 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  ReactNode,
-  useEffect,
-  useRef
-} from 'react';
-import { Usuario, AuthState, LoginCredentials } from '../types/auth';
-import { supabase } from '../supabase/supabaseClient';
+import { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "../supabase/supabaseClient";
+import { Session, User } from "@supabase/supabase-js";
 
-interface AuthContextType extends AuthState {
-  login: (credentials: LoginCredentials) => Promise<boolean>;
-  logout: () => Promise<void>;
-  atualizarUsuario: (usuarioAtualizado: Usuario) => void;
-  configurationError: string | null;
-  isCheckingSetup: boolean;
+// Interface atualizada para incluir 'serie'
+interface UsuarioPerfil {
+  id: string;
+  email: string;
+  nome: string;
+  tipo: "administrador" | "professor" | "aluno" | "responsavel";
+  avatar?: string;
+  serie?: string; // <--- Adicionado aqui
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+interface AuthContextData {
+  session: Session | null;
+  usuario: UsuarioPerfil | null;
+  loading: boolean;
+  logout: () => Promise<void>;
+}
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [authState, setAuthState] = useState<AuthState>({
-    usuario: null,
-    isLoggedIn: false
-  });
-  const [configurationError, setConfigurationError] = useState<string | null>(
-    null
-  );
-  const [isCheckingSetup, setIsCheckingSetup] = useState(false);
-  const mountedRef = useRef(true);
+const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
-  // ==========================================================
-  // LOGIN via Supabase Auth + tabela users
-  // ==========================================================
-  const login = async (credentials: LoginCredentials): Promise<boolean> => {
-    try {
-      setIsCheckingSetup(true);
-      setConfigurationError(null);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [usuario, setUsuario] = useState<UsuarioPerfil | null>(null);
+  const [loading, setLoading] = useState(true);
 
-      const identifier = credentials.email || credentials.nomeUsuario || '';
-      const password = credentials.senha || credentials.password || '';
-
-      // login no Supabase Auth
-      const { data: sessionData, error: signInError } =
-        await supabase.auth.signInWithPassword({
-          email: identifier,
-          password
-        });
-
-      if (signInError) {
-        setConfigurationError(signInError.message);
-        setIsCheckingSetup(false);
-        return false;
-      }
-
-      if (!sessionData || !sessionData.user) {
-        setConfigurationError('Sessão inválida retornada pelo Supabase.');
-        setIsCheckingSetup(false);
-        return false;
-      }
-
-      // buscar o usuário na tabela users
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', identifier)
-        .maybeSingle();
-
-      if (userError) {
-        setConfigurationError(userError.message);
-        setIsCheckingSetup(false);
-        return false;
-      }
-
-      if (!userData) {
-        setConfigurationError('Usuário não encontrado na tabela users.');
-        setIsCheckingSetup(false);
-        return false;
-      }
-
-      setAuthState({ usuario: userData, isLoggedIn: true });
-      localStorage.setItem('ava_user_session', JSON.stringify(userData));
-      setConfigurationError(null);
-      setIsCheckingSetup(false);
-      return true;
-    } catch (err: any) {
-      console.error('Erro no login Supabase:', err);
-      setConfigurationError(err.message || 'Erro inesperado no login.');
-      setIsCheckingSetup(false);
-      return false;
-    }
-  };
-
-  // ==========================================================
-  // LOGOUT
-  // ==========================================================
-  const logout = async (): Promise<void> => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Erro no logout:', err);
-    } finally {
-      setAuthState({ usuario: null, isLoggedIn: false });
-      localStorage.removeItem('ava_user_session');
-    }
-  };
-
-  // ==========================================================
-  // ATUALIZAÇÃO DE USUÁRIO
-  // ==========================================================
-  const atualizarUsuario = (usuarioAtualizado: Usuario) => {
-    setAuthState((prev) => ({ ...prev, usuario: usuarioAtualizado }));
-    localStorage.setItem('ava_user_session', JSON.stringify(usuarioAtualizado));
-  };
-
-  // ==========================================================
-  // RESTAURAR SESSÃO LOCAL
-  // ==========================================================
   useEffect(() => {
-    mountedRef.current = true;
-
-    const savedSession = localStorage.getItem('ava_user_session');
-    if (savedSession) {
-      try {
-        const usuario = JSON.parse(savedSession);
-        setAuthState({ usuario, isLoggedIn: true });
-        setConfigurationError(null);
-      } catch (error) {
-        console.error('Erro ao restaurar sessão local:', error);
-        localStorage.removeItem('ava_user_session');
+    // 1. Verificar sessão atual ao carregar
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        buscarPerfil(session.user);
+      } else {
+        setLoading(false);
       }
-    }
+    });
 
-    return () => {
-      mountedRef.current = false;
-    };
+    // 2. Escutar mudanças na autenticação (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        buscarPerfil(session.user);
+      } else {
+        setUsuario(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  async function buscarPerfil(user: User) {
+    try {
+      // AQUI ESTÁ A CORREÇÃO: Garantimos que buscamos a 'serie'
+      const { data, error } = await supabase
+        .from("users")
+        .select("*") // Traz todas as colunas, incluindo 'serie'
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Erro ao buscar perfil:", error);
+      }
+
+      if (data) {
+        setUsuario({
+          id: user.id,
+          email: user.email || "",
+          nome: data.nome,
+          tipo: data.tipo,
+          avatar: data.avatar_url, // Ajuste conforme seu banco (avatar ou avatar_url)
+          serie: data.serie, // <--- Agora a série é salva no estado global
+        });
+      }
+    } catch (error) {
+      console.error("Erro fatal ao buscar perfil:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
+    setUsuario(null);
+    setSession(null);
+  }
+
   return (
-    <AuthContext.Provider
-      value={{
-        ...authState,
-        login,
-        logout,
-        atualizarUsuario,
-        configurationError,
-        isCheckingSetup
-      }}
-    >
+    <AuthContext.Provider value={{ session, usuario, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
-  }
-  return context;
-}
+export const useAuth = () => useContext(AuthContext);
