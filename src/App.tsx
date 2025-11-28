@@ -8,7 +8,7 @@ import DashboardAluno from "./components/DashboardAluno";
 import DashboardProfessor from "./components/DashboardProfessor";
 import DashboardCoordenador from "./components/DashboardCoordenador";
 import DashboardConteudista from "./components/DashboardConteudista";
-import DashboardAdministrador from "./components/DashboardAdministrador";
+import {DashboardAdministrador} from "./components/DashboardAdministrador";
 import DashboardFallback from "./components/DashboardFallback";
 
 // Site / Login

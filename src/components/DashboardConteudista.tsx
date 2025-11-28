@@ -1,5 +1,4 @@
-// src/components/DashboardConteudista.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -16,12 +15,15 @@ import {
   FolderOpen,
   Bell,
   LogOut,
-  Upload
+  Upload,
+  Loader2
 } from "lucide-react";
 import { PerfilUsuario } from "./PerfilUsuario";
 import { Notificacoes } from "./Notificacoes";
-import { UploadConteudoPDF } from "./UploadConteudoPDF";
+// Importante: Usando o componente corrigido
+import { GestaoConteudoPDF } from "./GestaoConteudoPDF"; 
 import { Usuario } from "../types/auth";
+import { supabase } from "../supabase/supabaseClient";
 
 interface DashboardConteudistaProps {
   onBackToSite?: () => void;
@@ -34,7 +36,7 @@ interface SerieEscolar {
   id: string;
   nome: string;
   nivel: "fundamental" | "medio";
-  disciplinas: any[];
+  disciplinas: string[];
   totalAlunos: number;
   status: "ativa" | "inativa";
 }
@@ -47,9 +49,10 @@ export default function DashboardConteudista({
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
   const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
   const [view, setView] = useState<"dashboard" | "uploadPDF">("dashboard");
+  const [loadingStats, setLoadingStats] = useState(true);
 
-  // Estatísticas sempre 0 enquanto não houver dados reais
-  const [estatisticas] = useState({
+  // Estatísticas dinâmicas
+  const [estatisticas, setEstatisticas] = useState({
     totalConteudos: 0,
     conteudosPublicados: 0,
     pendentesRevisao: 0,
@@ -59,18 +62,89 @@ export default function DashboardConteudista({
     seriesAtendidas: 0,
   });
 
-  // Lista de séries vazia (até conectar com Supabase)
-  const [series] = useState<SerieEscolar[]>([]);
+  // Lista de séries dinâmica
+  const [series, setSeries] = useState<SerieEscolar[]>([]);
+
+  // Função para carregar dados reais do Supabase
+  const carregarDadosReais = async () => {
+    if (!usuario?.id) {
+        setLoadingStats(false);
+        return;
+    }
+
+    try {
+      setLoadingStats(true);
+
+      // 1. Buscar todos os PDFs deste autor
+      const { data: pdfs, error } = await supabase
+        .from('pdfs_conteudista')
+        .select('*')
+        .eq('autor_id', usuario.id);
+
+      if (error) throw error;
+
+      const total = pdfs?.length || 0;
+
+      // 2. Calcular disciplinas e séries únicas
+      const disciplinasUnicas = new Set(pdfs?.map(p => p.disciplina));
+      const seriesUnicas = new Set(pdfs?.map(p => p.serie));
+
+      setEstatisticas(prev => ({
+        ...prev,
+        totalConteudos: total,
+        conteudosPublicados: total, 
+        disciplinasAtivas: disciplinasUnicas.size,
+        seriesAtendidas: seriesUnicas.size,
+      }));
+
+      // 3. Montar a lista de séries baseada no conteúdo enviado
+      const mapaSeries = new Map<string, SerieEscolar>();
+
+      pdfs?.forEach(pdf => {
+        if (!mapaSeries.has(pdf.serie)) {
+          mapaSeries.set(pdf.serie, {
+            id: pdf.serie, 
+            nome: pdf.serie,
+            nivel: pdf.serie.toLowerCase().includes('médio') ? 'medio' : 'fundamental',
+            disciplinas: [],
+            totalAlunos: 0, 
+            status: 'ativa'
+          });
+        }
+        const serieObj = mapaSeries.get(pdf.serie);
+        if (serieObj && !serieObj.disciplinas.includes(pdf.disciplina)) {
+          serieObj.disciplinas.push(pdf.disciplina);
+        }
+      });
+
+      setSeries(Array.from(mapaSeries.values()));
+
+    } catch (error) {
+      console.error("Erro ao carregar estatísticas:", error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === "dashboard") {
+      carregarDadosReais();
+    }
+  }, [usuario?.id, view]);
 
   if (view === "uploadPDF") {
     return (
-      <UploadConteudoPDF
-        onVoltar={() => setView("dashboard")}
-        usuario={usuario}
-        serieSelecionada={null}
-        disciplinaSelecionada={null}
-        bimestreSelecionado={1}
-      />
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <Button 
+          variant="ghost" 
+          onClick={() => setView("dashboard")}
+          className="mb-4"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
+        </Button>
+        {/* Passando o usuário explicitamente para evitar erro de autenticação */}
+        <GestaoConteudoPDF usuario={usuario} /> 
+      </div>
     );
   }
 
@@ -81,14 +155,8 @@ export default function DashboardConteudista({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
             {onBackToSite && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onBackToSite}
-                className="mr-2"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Voltar
+              <Button variant="ghost" size="sm" onClick={onBackToSite} className="mr-2">
+                <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
               </Button>
             )}
             <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -103,50 +171,30 @@ export default function DashboardConteudista({
           </div>
 
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}>
               <Bell className="w-5 h-5" />
             </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setMostrarPerfil(!mostrarPerfil)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setMostrarPerfil(!mostrarPerfil)}>
               <Avatar className="w-8 h-8">
                 <AvatarImage src={usuario?.avatar} />
-                <AvatarFallback>
-                  {usuario?.nome?.slice(0, 2).toUpperCase() || "CO"}
-                </AvatarFallback>
+                <AvatarFallback>{usuario?.nome?.slice(0, 2).toUpperCase() || "CO"}</AvatarFallback>
               </Avatar>
             </Button>
-
             {logout && (
               <Button onClick={logout} variant="outline" size="sm">
-                <LogOut className="w-4 h-4 mr-2" />
-                Sair
+                <LogOut className="w-4 h-4 mr-2" /> Sair
               </Button>
             )}
           </div>
         </div>
-
         {mostrarNotificacoes && (
           <div className="absolute right-4 top-16 w-80 z-50">
-            <Notificacoes
-              usuario={usuario}
-              onClose={() => setMostrarNotificacoes(false)}
-            />
+            <Notificacoes usuario={usuario} onClose={() => setMostrarNotificacoes(false)} />
           </div>
         )}
         {mostrarPerfil && (
           <div className="absolute right-4 top-16 w-80 z-50">
-            <PerfilUsuario
-              usuario={usuario}
-              onClose={() => setMostrarPerfil(false)}
-            />
+            <PerfilUsuario usuario={usuario} onClose={() => setMostrarPerfil(false)} />
           </div>
         )}
       </header>
@@ -167,81 +215,72 @@ export default function DashboardConteudista({
             onClick={() => setView("uploadPDF")}
           >
             <Upload className="w-4 h-4 mr-2" />
-            Enviar material (PDF)
+            Gerenciar Conteúdos (Upload)
           </Button>
         </div>
 
-        {/* Estatísticas (tudo 0 por enquanto) */}
+        {/* Estatísticas */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="bg-blue-600 text-white">
             <CardContent className="p-6">
               <p>Total de Conteúdos</p>
-              <h3 className="text-3xl font-bold">
-                {estatisticas.totalConteudos}
+              <h3 className="text-3xl font-bold flex items-center gap-2">
+                {loadingStats ? <Loader2 className="animate-spin w-6 h-6" /> : estatisticas.totalConteudos}
               </h3>
             </CardContent>
           </Card>
           <Card className="bg-green-600 text-white">
             <CardContent className="p-6">
               <p>Publicados</p>
-              <h3 className="text-3xl font-bold">
-                {estatisticas.conteudosPublicados}
+              <h3 className="text-3xl font-bold flex items-center gap-2">
+                {loadingStats ? <Loader2 className="animate-spin w-6 h-6" /> : estatisticas.conteudosPublicados}
               </h3>
             </CardContent>
           </Card>
           <Card className="bg-purple-600 text-white">
             <CardContent className="p-6">
               <p>Disciplinas Ativas</p>
-              <h3 className="text-3xl font-bold">
-                {estatisticas.disciplinasAtivas}
+              <h3 className="text-3xl font-bold flex items-center gap-2">
+                {loadingStats ? <Loader2 className="animate-spin w-6 h-6" /> : estatisticas.disciplinasAtivas}
               </h3>
             </CardContent>
           </Card>
           <Card className="bg-orange-500 text-white">
             <CardContent className="p-6">
-              <p>Pendentes de Revisão</p>
-              <h3 className="text-3xl font-bold">
-                {estatisticas.pendentesRevisao}
+              <p>Séries Atendidas</p>
+              <h3 className="text-3xl font-bold flex items-center gap-2">
+                {loadingStats ? <Loader2 className="animate-spin w-6 h-6" /> : estatisticas.seriesAtendidas}
               </h3>
             </CardContent>
           </Card>
         </div>
 
-        {/* Lista de séries (vazia por enquanto, mas layout pronto) */}
+        {/* Lista de séries */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FolderOpen className="w-5 h-5 text-purple-600" />
-              Séries Escolares
+              Séries com Conteúdo Publicado
             </CardTitle>
           </CardHeader>
           <CardContent>
             {series.length === 0 ? (
               <p className="text-gray-500 text-sm">
-                Nenhuma série configurada ainda. Assim que você vincular séries
-                e disciplinas no painel administrativo, elas aparecerão aqui.
+                Nenhum conteúdo publicado ainda. Faça upload de PDFs para ver as séries aqui.
               </p>
             ) : (
               series.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex justify-between items-center p-4 hover:bg-gray-50 rounded-lg"
-                >
+                <div key={s.id} className="flex justify-between items-center p-4 hover:bg-gray-50 rounded-lg border-b last:border-0">
                   <div className="flex items-center gap-4">
                     <GraduationCap className="w-6 h-6 text-purple-600" />
                     <div>
                       <p className="font-medium text-gray-900">{s.nome}</p>
                       <p className="text-sm text-gray-600">
-                        {s.disciplinas.length} disciplinas • {s.totalAlunos}{" "}
-                        alunos
+                        {s.disciplinas.length} disciplinas ativas: {s.disciplinas.join(", ")}
                       </p>
                     </div>
                   </div>
-                  <Badge
-                    variant={s.status === "ativa" ? "default" : "secondary"}
-                  >
-                    {s.status === "ativa" ? "Ativa" : "Inativa"}
-                  </Badge>
+                  <Badge variant={s.status === "ativa" ? "default" : "secondary"}>Ativa</Badge>
                 </div>
               ))
             )}

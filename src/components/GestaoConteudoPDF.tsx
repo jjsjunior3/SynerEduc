@@ -4,15 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { 
-  Upload, 
-  FileText, 
-  Trash2, 
-  Download,
+import {
+  Upload,
+  Trash2,
   Eye,
   Calendar,
   BookOpen,
@@ -20,10 +16,15 @@ import {
   AlertTriangle,
   CheckCircle,
   Plus,
-  Filter
+  Download
 } from 'lucide-react';
-import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { Usuario } from '../types/auth'; // Importando o tipo Usuario
+import { supabase } from '../supabase/supabaseClient';
+
+// ADICIONADO: Interface para receber o usuário via props
+interface GestaoConteudoPDFProps {
+  usuario?: Usuario;
+}
 
 interface ConteudoPDF {
   id: string;
@@ -31,9 +32,9 @@ interface ConteudoPDF {
   disciplina: string;
   serie: string;
   bimestre: number;
-  arquivo: string; // Nome do arquivo
-  url: string; // URL para download/visualização
-  tamanho: number; // Tamanho em bytes
+  arquivo: string;
+  url: string;
+  tamanho: number;
   dataUpload: string;
   autorId: string;
   autorNome: string;
@@ -45,7 +46,8 @@ interface UploadProgress {
   fileName: string;
 }
 
-export function GestaoConteudoPDF() {
+// ALTERADO: Recebendo usuario via props
+export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
   const [conteudos, setConteudos] = useState<ConteudoPDF[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -54,7 +56,8 @@ export function GestaoConteudoPDF() {
     progress: 0,
     fileName: ''
   });
-  const { usuario } = useAuth();
+
+  // REMOVIDO: const { usuario } = useAuth(); -> Agora usamos o que vem via props
 
   // Filtros
   const [filtroSerie, setFiltroSerie] = useState('');
@@ -118,200 +121,142 @@ export function GestaoConteudoPDF() {
       return;
     }
 
-    try {
-      console.log('[GESTAO_PDF] Iniciando upload...', {
-        arquivo: uploadData.arquivo.name,
-        serie: uploadData.serie,
-        disciplina: uploadData.disciplina,
-        bimestre: uploadData.bimestre,
-        autorId: usuario?.id
-      });
+    // Verificação de segurança
+    if (!usuario?.id) {
+      alert('Erro de sessão: Usuário não identificado. Tente fazer login novamente.');
+      return;
+    }
 
+    try {
       setUploadProgress({
         isUploading: true,
         progress: 10,
         fileName: uploadData.arquivo.name
       });
 
-      // Criar FormData para upload
-      const formData = new FormData();
-      formData.append('arquivo', uploadData.arquivo);
-      formData.append('serie', uploadData.serie);
-      formData.append('disciplina', uploadData.disciplina);
-      formData.append('bimestre', uploadData.bimestre);
-      formData.append('autorId', usuario?.id || '');
-      formData.append('autorNome', usuario?.nome || '');
+      // 1. Upload para o Storage
+      const fileExt = uploadData.arquivo.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `${usuario.id}/${fileName}`;
 
-      setUploadProgress(prev => ({ ...prev, progress: 30 }));
+      const { error: storageError } = await supabase.storage
+        .from('pdfs-conteudista')
+        .upload(filePath, uploadData.arquivo, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-c61d1ad0/conteudo-pdf/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`
-        },
-        body: formData
-      });
+      if (storageError) throw storageError;
 
-      setUploadProgress(prev => ({ ...prev, progress: 70 }));
+      setUploadProgress(prev => ({ ...prev, progress: 60 }));
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[GESTAO_PDF] Erro no upload:', errorText);
-        
-        let errorMessage = `Erro ${response.status}: ${response.statusText}`;
-        
-        try {
-          const errorData = JSON.parse(errorText);
-          if (errorData.error) {
-            errorMessage = errorData.error;
-          }
-        } catch (parseError) {
-          // Se não conseguiu fazer parse do JSON, usar texto bruto
-          if (errorText) {
-            errorMessage = errorText;
-          }
-        }
-        
-        throw new Error(errorMessage);
-      }
+      // 2. Obter URL Pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('pdfs-conteudista')
+        .getPublicUrl(filePath);
 
-      const result = await response.json();
-      console.log('[GESTAO_PDF] Upload concluído:', result);
-      
+      // 3. Salvar metadados no Banco de Dados
+      const { error: dbError } = await supabase
+        .from('pdfs_conteudista')
+        .insert({
+          nome: uploadData.arquivo.name,
+          disciplina: uploadData.disciplina,
+          serie: uploadData.serie,
+          bimestre: parseInt(uploadData.bimestre),
+          url: publicUrl,
+          arquivo: filePath,
+          tamanho: uploadData.arquivo.size,
+          autor_id: usuario.id,
+          autor_nome: usuario.nome || 'Professor Conteudista'
+        });
+
+      if (dbError) throw dbError;
+
       setUploadProgress(prev => ({ ...prev, progress: 100 }));
-      
-      // Aguardar um pouco para mostrar 100%
+
       setTimeout(() => {
-        setUploadProgress({
-          isUploading: false,
-          progress: 0,
-          fileName: ''
-        });
+        setUploadProgress({ isUploading: false, progress: 0, fileName: '' });
         setIsUploadDialogOpen(false);
-        setUploadData({
-          serie: '',
-          disciplina: '',
-          bimestre: '',
-          arquivo: null
-        });
-        alert(`✅ PDF "${uploadData.arquivo?.name}" enviado com sucesso para ${uploadData.serie} - ${uploadData.disciplina} - ${uploadData.bimestre}º Bimestre!`);
-        carregarConteudos(); // Recarregar lista
+        setUploadData({ serie: '', disciplina: '', bimestre: '', arquivo: null });
+        alert(`✅ PDF enviado com sucesso!`);
+        carregarConteudos();
       }, 1000);
 
-    } catch (error) {
-      console.error('[GESTAO_PDF] Erro ao fazer upload:', error);
-      
-      let errorMessage = 'Erro ao fazer upload do arquivo. ';
-      if (error.message.includes('Failed to fetch')) {
-        errorMessage += 'Verifique sua conexão com a internet e tente novamente.';
-      } else {
-        errorMessage += error.message;
-      }
-      
-      setError(errorMessage);
-      alert(errorMessage);
-      
-      setUploadProgress({
-        isUploading: false,
-        progress: 0,
-        fileName: ''
-      });
+    } catch (error: any) {
+      console.error('[GESTAO_PDF] Erro:', error);
+      setError(error.message || 'Erro ao fazer upload.');
+      alert('Erro ao enviar arquivo: ' + error.message);
+      setUploadProgress({ isUploading: false, progress: 0, fileName: '' });
     }
   };
 
   const handleExcluir = async (conteudo: ConteudoPDF) => {
     try {
       setLoading(true);
-      
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-c61d1ad0/conteudo-pdf/${conteudo.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
 
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+      if (conteudo.arquivo) {
+        const { error: storageError } = await supabase.storage
+          .from('pdfs-conteudista')
+          .remove([conteudo.arquivo]);
+
+        if (storageError) console.warn('Erro ao deletar do storage:', storageError);
       }
 
-      carregarConteudos(); // Recarregar lista
-      
-    } catch (error) {
-      console.error('Erro ao excluir conteúdo:', error);
-      setError('Erro ao excluir conteúdo. Tente novamente.');
+      const { error: dbError } = await supabase
+        .from('pdfs_conteudista')
+        .delete()
+        .eq('id', conteudo.id);
+
+      if (dbError) throw dbError;
+
+      carregarConteudos();
+
+    } catch (error: any) {
+      console.error('Erro ao excluir:', error);
+      alert('Erro ao excluir: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const carregarConteudos = async () => {
-    if (!usuario?.id) return;
+    if (!usuario?.id) {
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
       setError('');
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-c61d1ad0/conteudo-pdf/conteudista/${usuario.id}`, {
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const { data, error } = await supabase
+        .from('pdfs_conteudista')
+        .select('*')
+        .eq('autor_id', usuario.id)
+        .order('created_at', { ascending: false });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          setConteudos([]);
-          return;
-        }
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
-      }
+      if (error) throw error;
 
-      const data = await response.json();
-      setConteudos(data.conteudos || []);
-    } catch (error) {
-      console.error('Erro ao carregar conteúdos:', error);
-      setError('Erro ao carregar conteúdos. Tente novamente mais tarde.');
-      setConteudos([]);
+      const conteudosFormatados: ConteudoPDF[] = (data || []).map(item => ({
+        id: item.id,
+        nome: item.nome || 'Sem título',
+        disciplina: item.disciplina || 'Geral',
+        serie: item.serie || 'Geral',
+        bimestre: item.bimestre || 1,
+        arquivo: item.arquivo,
+        url: item.url,
+        tamanho: item.tamanho || 0,
+        dataUpload: item.created_at,
+        autorId: item.autor_id,
+        autorNome: item.autor_nome
+      }));
+
+      setConteudos(conteudosFormatados);
+    } catch (error: any) {
+      console.error('Erro ao carregar:', error);
+      setError('Erro ao carregar conteúdos.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const renovarURL = async (conteudoId: string) => {
-    try {
-      console.log(`[GESTAO_PDF] Renovando URL para conteúdo: ${conteudoId}`);
-      
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-c61d1ad0/conteudo-pdf/${conteudoId}/renovar-url`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[GESTAO_PDF] Erro na renovação de URL:`, errorText);
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log(`[GESTAO_PDF] URL renovada com sucesso:`, data);
-      
-      // Atualizar a URL na lista local
-      setConteudos(prev => prev.map(c => 
-        c.id === conteudoId 
-          ? { ...c, url: data.url, urlRenovadaEm: new Date().toISOString() }
-          : c
-      ));
-
-      alert('URL renovada com sucesso! O PDF pode ser acessado normalmente agora.');
-      return data.url;
-    } catch (error) {
-      console.error('[GESTAO_PDF] Erro ao renovar URL:', error);
-      alert(`Erro ao renovar URL: ${error.message}`);
-      throw error;
     }
   };
 
@@ -319,16 +264,14 @@ export function GestaoConteudoPDF() {
     carregarConteudos();
   }, [usuario?.id]);
 
-  // Filtrar conteúdos
   const conteudosFiltrados = conteudos.filter(conteudo => {
     const matchSerie = !filtroSerie || filtroSerie === 'todas' || conteudo.serie === filtroSerie;
     const matchDisciplina = !filtroDisciplina || filtroDisciplina === 'todas' || conteudo.disciplina === filtroDisciplina;
     const matchBimestre = !filtroBimestre || filtroBimestre === 'todos' || conteudo.bimestre.toString() === filtroBimestre;
-    
+
     return matchSerie && matchDisciplina && matchBimestre;
   });
 
-  // Agrupar por série e disciplina para exibição organizada
   const conteudosAgrupados = conteudosFiltrados.reduce((acc, conteudo) => {
     const chave = `${conteudo.serie}-${conteudo.disciplina}`;
     if (!acc[chave]) {
@@ -359,14 +302,10 @@ export function GestaoConteudoPDF() {
             disabled={loading}
             className="gap-2"
           >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <CheckCircle className="w-4 h-4" />
-            )}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
             Recarregar
           </Button>
-          
+
           <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -381,7 +320,7 @@ export function GestaoConteudoPDF() {
                   Selecione a série, disciplina, bimestre e faça upload do arquivo PDF
                 </DialogDescription>
               </DialogHeader>
-              
+
               <div className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="serie">Série</Label>
@@ -391,9 +330,7 @@ export function GestaoConteudoPDF() {
                     </SelectTrigger>
                     <SelectContent>
                       {series.map(serie => (
-                        <SelectItem key={serie} value={serie}>
-                          {serie}
-                        </SelectItem>
+                        <SelectItem key={serie} value={serie}>{serie}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -407,9 +344,7 @@ export function GestaoConteudoPDF() {
                     </SelectTrigger>
                     <SelectContent>
                       {disciplinas.map(disciplina => (
-                        <SelectItem key={disciplina} value={disciplina}>
-                          {disciplina}
-                        </SelectItem>
+                        <SelectItem key={disciplina} value={disciplina}>{disciplina}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -423,9 +358,7 @@ export function GestaoConteudoPDF() {
                     </SelectTrigger>
                     <SelectContent>
                       {bimestres.map(bimestre => (
-                        <SelectItem key={bimestre} value={bimestre.toString()}>
-                          {bimestre}º Bimestre
-                        </SelectItem>
+                        <SelectItem key={bimestre} value={bimestre.toString()}>{bimestre}º Bimestre</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -459,7 +392,6 @@ export function GestaoConteudoPDF() {
                         style={{ width: `${uploadProgress.progress}%` }}
                       />
                     </div>
-                    <p className="text-xs text-gray-500">{uploadProgress.progress}%</p>
                   </div>
                 )}
 
@@ -469,17 +401,7 @@ export function GestaoConteudoPDF() {
                     disabled={uploadProgress.isUploading}
                     className="flex-1"
                   >
-                    {uploadProgress.isUploading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        Enviando...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Enviar PDF
-                      </>
-                    )}
+                    {uploadProgress.isUploading ? 'Enviando...' : 'Enviar PDF'}
                   </Button>
                   <Button 
                     variant="outline" 
@@ -505,11 +427,7 @@ export function GestaoConteudoPDF() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as séries</SelectItem>
-                {series.map(serie => (
-                  <SelectItem key={serie} value={serie}>
-                    {serie}
-                  </SelectItem>
-                ))}
+                {series.map(serie => <SelectItem key={serie} value={serie}>{serie}</SelectItem>)}
               </SelectContent>
             </Select>
 
@@ -519,11 +437,7 @@ export function GestaoConteudoPDF() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as disciplinas</SelectItem>
-                {disciplinas.map(disciplina => (
-                  <SelectItem key={disciplina} value={disciplina}>
-                    {disciplina}
-                  </SelectItem>
-                ))}
+                {disciplinas.map(disc => <SelectItem key={disc} value={disc}>{disc}</SelectItem>)}
               </SelectContent>
             </Select>
 
@@ -533,11 +447,7 @@ export function GestaoConteudoPDF() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os bimestres</SelectItem>
-                {bimestres.map(bimestre => (
-                  <SelectItem key={bimestre} value={bimestre.toString()}>
-                    {bimestre}º Bimestre
-                  </SelectItem>
-                ))}
+                {bimestres.map(bi => <SelectItem key={bi} value={bi.toString()}>{bi}º Bimestre</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -556,13 +466,7 @@ export function GestaoConteudoPDF() {
             <CardContent className="p-4 text-center">
               <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-red-600" />
               <p className="text-sm text-red-700 mb-3">{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={carregarConteudos}
-              >
-                Tentar novamente
-              </Button>
+              <Button variant="outline" size="sm" onClick={carregarConteudos}>Tentar novamente</Button>
             </CardContent>
           </Card>
         ) : Object.keys(conteudosAgrupados).length === 0 ? (
@@ -572,15 +476,9 @@ export function GestaoConteudoPDF() {
               <h3 className="text-lg font-medium text-gray-900 mb-2">
                 {conteudos.length === 0 ? 'Nenhum conteúdo cadastrado' : 'Nenhum conteúdo encontrado'}
               </h3>
-              <p className="text-gray-600 mb-4">
-                {conteudos.length === 0 
-                  ? 'Comece fazendo upload do seu primeiro PDF.'
-                  : 'Não há conteúdos que correspondam aos filtros aplicados.'
-                }
-              </p>
               <Button onClick={() => setIsUploadDialogOpen(true)} className="gap-2">
                 <Plus className="w-4 h-4" />
-                {conteudos.length === 0 ? 'Adicionar Primeiro PDF' : 'Adicionar Novo PDF'}
+                Adicionar PDF
               </Button>
             </CardContent>
           </Card>
@@ -593,7 +491,7 @@ export function GestaoConteudoPDF() {
                   {grupo.disciplina} - {grupo.serie}
                 </CardTitle>
                 <CardDescription>
-                  {grupo.conteudos.length} PDF{grupo.conteudos.length !== 1 ? 's' : ''} disponível{grupo.conteudos.length !== 1 ? 'is' : ''}
+                  {grupo.conteudos.length} PDF(s) disponível(is)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -605,79 +503,37 @@ export function GestaoConteudoPDF() {
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="font-medium">{bimestre}º Bimestre</h4>
-                            {conteudo ? (
-                              <CheckCircle className="w-5 h-5 text-green-600" />
-                            ) : (
-                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
-                            )}
+                            {conteudo ? <CheckCircle className="w-5 h-5 text-green-600" /> : <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />}
                           </div>
-                          
+
                           {conteudo ? (
                             <div className="space-y-3">
                               <div>
-                                <p className="text-sm font-medium text-gray-900 truncate">
-                                  {conteudo.nome}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {formatFileSize(conteudo.tamanho)}
-                                </p>
+                                <p className="text-sm font-medium text-gray-900 truncate" title={conteudo.nome}>{conteudo.nome}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(conteudo.tamanho)}</p>
                                 <p className="text-xs text-gray-500 flex items-center gap-1">
                                   <Calendar className="w-3 h-3" />
                                   {new Date(conteudo.dataUpload).toLocaleDateString('pt-BR')}
                                 </p>
                               </div>
-                              
                               <div className="space-y-2">
-                                <div className="flex gap-2">
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => window.open(conteudo.url, '_blank')}
-                                    className="flex-1 gap-1"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    Ver
-                                  </Button>
-                                  
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => renovarURL(conteudo.id)}
-                                    className="flex-1 gap-1 text-blue-600 hover:text-blue-700"
-                                    title="Renovar URL do PDF"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                    Renovar
-                                  </Button>
-                                </div>
-                                
+                                <Button size="sm" variant="outline" onClick={() => window.open(conteudo.url, '_blank')} className="w-full gap-1">
+                                  <Eye className="w-3 h-3" /> Ver
+                                </Button>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline"
-                                      className="w-full text-red-600 hover:text-red-700"
-                                    >
-                                      <Trash2 className="w-3 h-3 mr-1" />
-                                      Excluir
+                                    <Button size="sm" variant="outline" className="w-full text-red-600 hover:text-red-700">
+                                      <Trash2 className="w-3 h-3 mr-1" /> Excluir
                                     </Button>
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>
                                       <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Tem certeza que deseja excluir o conteúdo "{conteudo.nome}"? 
-                                        Esta ação não pode ser desfeita.
-                                      </AlertDialogDescription>
+                                      <AlertDialogDescription>Tem certeza que deseja excluir "{conteudo.nome}"?</AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                      <AlertDialogAction 
-                                        onClick={() => handleExcluir(conteudo)}
-                                        className="bg-red-600 hover:bg-red-700"
-                                      >
-                                        Excluir
-                                      </AlertDialogAction>
+                                      <AlertDialogAction onClick={() => handleExcluir(conteudo)} className="bg-red-600 hover:bg-red-700">Excluir</AlertDialogAction>
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
                                 </AlertDialog>
@@ -685,24 +541,16 @@ export function GestaoConteudoPDF() {
                             </div>
                           ) : (
                             <div className="space-y-3">
-                              <p className="text-sm text-gray-500">
-                                Nenhum conteúdo adicionado
-                              </p>
+                              <p className="text-sm text-gray-500">Vazio</p>
                               <Button 
                                 size="sm" 
                                 onClick={() => {
-                                  setUploadData({
-                                    serie: grupo.serie,
-                                    disciplina: grupo.disciplina,
-                                    bimestre: bimestre.toString(),
-                                    arquivo: null
-                                  });
+                                  setUploadData({ serie: grupo.serie, disciplina: grupo.disciplina, bimestre: bimestre.toString(), arquivo: null });
                                   setIsUploadDialogOpen(true);
-                                }}
+                                }} 
                                 className="w-full gap-1"
                               >
-                                <Plus className="w-3 h-3" />
-                                Adicionar
+                                <Plus className="w-3 h-3" /> Adicionar
                               </Button>
                             </div>
                           )}

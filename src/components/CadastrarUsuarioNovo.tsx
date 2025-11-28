@@ -179,10 +179,6 @@ export function CadastrarUsuarioNovo({
       );
 
       setDisciplinasDisponiveis(disciplinasFormatadas);
-      console.log(
-        "[CADASTRO_NOVO] Disciplinas carregadas:",
-        disciplinasFormatadas.length
-      );
     } catch (err: any) {
       console.error(
         "[CADASTRO_NOVO] Erro ao carregar disciplinas:",
@@ -239,13 +235,13 @@ export function CadastrarUsuarioNovo({
       erros.push("Série é obrigatória para alunos");
     }
 
+    // CORREÇÃO: Validação de disciplinas apenas para PROFESSOR (removemos conteudista)
     if (
-      (dados.tipo === "professor" ||
-        dados.tipo === "professor_conteudista") &&
+      dados.tipo === "professor" &&
       dados.vinculacoesProfessor.length === 0
     ) {
       erros.push(
-        "Pelo menos uma disciplina deve ser vinculada ao professor / conteudista"
+        "Pelo menos uma disciplina deve ser vinculada ao professor"
       );
     }
 
@@ -360,6 +356,8 @@ export function CadastrarUsuarioNovo({
   };
 
   // Cadastro via Edge Function
+    // Cadastro via Edge Function
+    // Cadastro via Edge Function
   const criarUsuario = async () => {
     if (!formularioValido) {
       toast.error("Por favor, corrija os erros no formulário");
@@ -368,12 +366,20 @@ export function CadastrarUsuarioNovo({
 
     setSalvando(true);
     try {
+      // 1. PEGAR A SESSÃO ATUAL (O "CRACHÁ" DO ADMIN)
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("Sessão inválida. Faça login novamente.");
+      }
+
       const nome = dados.nome.trim();
       const nomeUsuario = dados.nomeUsuario.trim().toLowerCase();
       const emailFinal =
         dados.email.trim() || `${nomeUsuario || "usuario"}@escola.local`;
 
       const payload = {
+        action: 'create', // Importante para a nova função admin-manage-users
         nome,
         email: emailFinal,
         senha: dados.senha,
@@ -385,15 +391,18 @@ export function CadastrarUsuarioNovo({
             : [],
       };
 
-
-      console.log("[CADASTRO_NOVO] Enviando para admin-create-user:", payload);
+      console.log("[CADASTRO_NOVO] Enviando para admin-manage-users:", payload);
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-manage-users`,
         {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            // 2. ADICIONAR O CABEÇALHO DE AUTORIZAÇÃO AQUI
+            "Authorization": `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify(payload),
         }
       );
 
@@ -422,6 +431,8 @@ export function CadastrarUsuarioNovo({
       setSalvando(false);
     }
   };
+
+
 
   const finalizarCadastro = () => {
     setModalConfirmacao(false);
@@ -658,8 +669,8 @@ export function CadastrarUsuarioNovo({
                 </div>
               )}
 
-              {(dados.tipo === "professor" ||
-                dados.tipo === "professor_conteudista") && (
+              {/* CORREÇÃO: Exibe vinculação APENAS para professor comum */}
+              {dados.tipo === "professor" && (
                 <div className="space-y-4">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
