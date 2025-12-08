@@ -1,5 +1,6 @@
 // src/components/DashboardCoordenador.tsx
 import { lazy, Suspense, useState } from 'react';
+import { Clock } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -32,6 +33,8 @@ const FrequenciaAlunos = lazy(() => import('./FrequenciaAlunos'));
 const EnviarComunicado = lazy(() => import('./EnviarComunicado'));
 const ForumCoordenador = lazy(() => import('./ForumCoordenador'));
 const AgendaProfessores = lazy(() => import('./AgendaProfessores'));
+const GestaoHorarios = lazy(() => import('./GestaoHorarios')); 
+
 
 // ---------- Props ----------
 interface DashboardCoordenadorProps {
@@ -57,6 +60,7 @@ export default function DashboardCoordenador({
     | 'frequencia'
     | 'comunicado'
     | 'agenda'
+    | 'horarios'
     | 'forum'
   >('dashboard');
 
@@ -102,6 +106,14 @@ export default function DashboardCoordenador({
       color: 'bg-pink-200',
       iconColor: 'text-pink-600',
     },
+     {
+    id: 'horarios',
+    title: 'Gestão de Horários',
+    description: 'Cadastrar e editar grade horária das turmas',
+    icon: <Clock className="w-8 h-8" />,
+    color: 'bg-cyan-200',
+    iconColor: 'text-cyan-600',
+    },
     {
       id: 'forum',
       title: 'Fórum das Disciplinas',
@@ -128,6 +140,8 @@ export default function DashboardCoordenador({
         return <EnviarComunicado onVoltar={handleVoltar} />;
       case 'agenda':
         return <AgendaProfessores onVoltar={handleVoltar} />;
+      case 'horarios':
+        return <GestaoHorarios onVoltar={handleVoltar} />;
       case 'forum':
         return <ForumCoordenador onVoltar={handleVoltar} />;
       default:

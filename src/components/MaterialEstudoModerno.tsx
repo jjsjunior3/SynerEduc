@@ -20,11 +20,10 @@ import { supabase } from "../supabase/supabaseClient";
 import { EstatisticasEstudo } from "./EstatisticasEstudo";
 import { ConquistasEstudante } from "./ConquistasEstudante";
 
-// Interface ajustada para aceitar Professor como Objeto ou String
 interface Disciplina {
   id: string;
   nome: string;
-  professor: string | { id: string; nome: string }; // <--- Correção aqui
+  professor: string | { id: string; nome: string };
   cor?: string;
 }
 
@@ -55,14 +54,12 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper para pegar o nome do professor com segurança
   const getNomeProfessor = () => {
     if (!disciplina.professor) return "Não atribuído";
     if (typeof disciplina.professor === "string") return disciplina.professor;
     return disciplina.professor.nome;
   };
 
-  // Detectar mobile
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 1024);
@@ -73,19 +70,23 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Carregar materiais da disciplina
   useEffect(() => {
-    if (usuario?.id && disciplina.id) {
+    if (usuario?.id && disciplina.nome) {
       carregarMateriais();
     }
-  }, [usuario?.id, disciplina.id]);
+  }, [usuario?.id, disciplina.nome]);
 
   async function carregarMateriais() {
     setLoading(true);
     setError(null);
 
     try {
-      // CORREÇÃO: Buscando da tabela nova 'pdfs_conteudista'
+      console.log("Buscando materiais para:", disciplina.nome, "Série:", usuario?.serie);
+
+      // CORREÇÃO:
+      // 1. Trocamos 'arquivo_url' por 'url' (conforme seu print)
+      // 2. Buscamos pelo NOME da disciplina (ilike) pois o id_disciplina está NULL no banco
+      // 3. Filtramos pela série do usuário para não misturar turmas
       const { data, error } = await supabase
         .from("pdfs_conteudista")
         .select(`
@@ -93,43 +94,40 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
           bimestre, 
           titulo, 
           descricao, 
-          arquivo_url
+          url 
         `)
-        .eq("disciplina_id", disciplina.id)
-        // .eq("serie", usuario?.serie) // Opcional: filtrar por série se necessário
+        .ilike("disciplina", disciplina.nome) // Busca pelo nome (ex: Biologia)
+        .eq("serie", usuario?.serie || "")    // Busca pela série exata (ex: 1ª série - Ensino Médio)
         .order("bimestre", { ascending: true });
 
       if (error) throw error;
 
-      // Mapear resultado
       const mapped: MaterialPDF[] = (data || []).map((m: any) => ({
         id: m.id,
         bimestre: m.bimestre,
-        titulo: m.titulo,
+        titulo: m.titulo || `Material de ${disciplina.nome}`,
         descricao: m.descricao,
-        pdf_url: m.arquivo_url, // Mapeando arquivo_url para pdf_url
-        progresso: 0, // Placeholder enquanto não reconectamos o progresso
+        pdf_url: m.url, // Mapeando a coluna 'url' correta
+        progresso: 0,
         concluido: false,
       }));
 
       setBimestres(mapped);
 
       if (mapped.length === 0) {
-        setError("Nenhum material disponível para esta disciplina.");
+        console.log("Nenhum material encontrado. Verifique se o nome da disciplina no banco é exatamente:", disciplina.nome);
       }
 
     } catch (err: any) {
       console.error("Erro ao carregar materiais:", err.message);
-      setError("Erro ao carregar materiais de estudo.");
+      setError("Não foi possível carregar os materiais.");
     } finally {
       setLoading(false);
     }
   }
 
-  // Marcar conclusão (Simplificado)
   async function handleMarcarConcluido() {
     if (!bimestreSelecionado || !usuario?.id) return;
-
     setBimestres((prev) =>
       prev.map((bm) =>
         bm.id === bimestreSelecionado.id ? { ...bm, progresso: 100, concluido: true } : bm
@@ -151,7 +149,6 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
         darkMode ? "bg-gray-900" : "bg-gradient-to-br from-blue-50 to-white"
       }`}
     >
-      {/* Header */}
       <div
         className={`border-b ${
           darkMode
@@ -160,7 +157,6 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
         }`}
       >
         <div className="px-6 py-4 flex items-center justify-between">
-          {/* Esquerda */}
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -183,13 +179,11 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
                   darkMode ? "text-gray-400" : "text-gray-600"
                 }`}
               >
-                {/* CORREÇÃO: Usando a função segura para exibir o nome */}
                 Professor(a): {getNomeProfessor()}
               </p>
             </div>
           </div>
 
-          {/* Direita */}
           <div className="flex items-center gap-6">
             <div className="text-right">
               <span
@@ -224,9 +218,7 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
         </div>
       </div>
 
-      {/* Conteúdo */}
       <div className="flex h-full">
-        {/* Sidebar */}
         <div
           className={`${
             isMobile
@@ -270,6 +262,12 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
               <Card className="p-4 text-center bg-gray-50 border-dashed">
                 <CardContent className="pt-6 text-gray-500 text-sm">
                   {error}
+                </CardContent>
+              </Card>
+            ) : bimestres.length === 0 ? (
+               <Card className="p-4 text-center bg-gray-50 border-dashed">
+                <CardContent className="pt-6 text-gray-500 text-sm">
+                  Nenhum material encontrado para {disciplina.nome}.
                 </CardContent>
               </Card>
             ) : (
@@ -322,7 +320,6 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
           </div>
         </div>
 
-        {/* Área principal */}
         <div className="flex-1 flex flex-col bg-gray-100">
           {bimestreSelecionado ? (
             <PDFViewerModerno
@@ -350,7 +347,6 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
         </div>
       </div>
 
-      {/* Estatísticas e conquistas */}
       <div className="p-6 grid md:grid-cols-2 gap-6">
         <EstatisticasEstudo
           tempoEstudoHoje={0}
@@ -368,7 +364,6 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
         />
       </div>
 
-      {/* Botão flutuante Mobile */}
       {isMobile && !sidebarAberta && (
         <motion.div
           initial={{ scale: 0 }}

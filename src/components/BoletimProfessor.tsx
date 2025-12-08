@@ -10,7 +10,7 @@ import { Label } from './ui/label';
 import { toast } from 'sonner@2.0.3';
 import { Textarea } from './ui/textarea';
 
-interface BoletimProfessorAvancadoProps {
+interface BoletimProfessorProps {
   disciplina: any;
   serie: any;
 }
@@ -46,7 +46,7 @@ interface NotaAlunoAvancada {
   situacao: 'aprovado' | 'recuperacao' | 'reprovado';
 }
 
-export function BoletimProfessorAvancado({ disciplina, serie }: BoletimProfessorAvancadoProps) {
+export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
   const [bimestreSelecionado, setBimestreSelecionado] = useState('1');
   const [alunoEditando, setAlunoEditando] = useState<string | null>(null);
   const [notaEditando, setNotaEditando] = useState('');

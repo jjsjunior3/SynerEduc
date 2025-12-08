@@ -1,7 +1,7 @@
 // src/components/AgendaProfessor.tsx
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase/supabaseClient";
-  import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { toast } from "sonner";
 import {
   Card,
@@ -21,6 +21,8 @@ import {
   Trash2,
   Home,
   BookOpen,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Dialog,
@@ -46,7 +48,8 @@ interface Disciplina {
 interface Serie {
   id: string;
   nome: string;
-  turma: string;
+  turma?: string;
+  totalAlunos?: number;
 }
 
 interface AtividadeAgenda {
@@ -68,7 +71,7 @@ interface AgendaProfessorProps {
 }
 
 export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
-  const { user } = useAuth();
+  const { usuario } = useAuth();
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<AtividadeAgenda | null>(null);
   const [novaAtividade, setNovaAtividade] = useState({
@@ -88,12 +91,12 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
   }, [disciplina.id]);
 
   async function carregarAtividades() {
-    setregando(true);
+    setCarregando(true);
     const { data, error } = await supabase
       .from("agenda_professor")
       .select("*")
       .eq("disciplina_id", disciplina.id)
-      .eq("professor_id", user?.id)
+      .eq("professor_id", usuario?.id)
       .order("data_entrega", { ascending: true });
 
     if (error) {
@@ -124,7 +127,7 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
       tipo: novaAtividade.tipo,
       data_entrega: novaAtividade.data_entrega,
       disciplina_id: disciplina.id,
-      professor_id: user?.id,
+      professor_id: usuario?.id,
       serie_nome: serie?.nome || "",
       turma: serie?.turma || "",
     };
@@ -156,6 +159,7 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
       .from("agenda_professor")
       .delete()
       .eq("id", id);
+
     if (error) toast.error("Erro ao excluir atividade");
     else {
       toast.success("Atividade removida da agenda!");
@@ -164,14 +168,16 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
   }
 
   //--------------------------------------------------------------------
-  //  4️⃣ Utilidades
+  //  Utilidades
   //--------------------------------------------------------------------
-  const resetForm = () =>
-    setNovaAtividade      titulo: "",
+  const resetForm = () => {
+    setNovaAtividade({
+      titulo: "",
       descricao: "",
       tipo: "tarefa_casa",
       data_entrega: "",
     });
+  };
 
   const handleEditar = (atividade: AtividadeAgenda) => {
     setEditando(atividade);
@@ -278,7 +284,6 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
                   : "Adicione uma nova atividade para os alunos."}
               </DialogDescription>
             </DialogHeader>
-
             <div className="space-y-4 mt-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -292,7 +297,6 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
                     placeholder="Ex: Revisão capítulo 3"
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="tipo">Tipo de Atividade</Label>
                   <Select
@@ -314,7 +318,6 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
                   </Select>
                 </div>
               </div>
-
               <div className="space-y-2">
                 <Label>Descrição *</Label>
                 <Textarea
@@ -328,7 +331,6 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
                   placeholder="Descreva a atividade..."
                 />
               </div>
-
               <div className="space-y-2">
                 <Label>Data de Entrega / Realização *</Label>
                 <Input
@@ -342,7 +344,6 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
                   }
                 />
               </div>
-
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setModalAberto(false)}>
                   Cancelar
@@ -372,7 +373,8 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
               (dataEntrega.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
             );
             const isAtrasado = diasParaEntrega < 0;
-            const isUrgente = diasParaEntrega <= 3 &amp;&amp; diasParaEntrega >= 0;
+            const isUrgente = diasParaEntrega <= 3 && diasParaEntrega >= 0;
+
             return (
               <Card
                 key={atividade.id}
@@ -385,7 +387,7 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
                 }
               >
                 <CardContent className="p-6 flex justify-between">
-                  <divName="flex-1">
+                  <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <div
                         className={`p-2 rounded-lg ${getTipoColor(
@@ -409,9 +411,22 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
                     <p className="text-sm text-gray-500 flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
                       {dataEntrega.toLocaleDateString("pt-BR")}
+
+                      {isAtrasado && (
+                        <Badge variant="destructive" className="gap-1 ml-2">
+                          <Clock className="w-3 h-3" />
+                          Atrasado
+                        </Badge>
+                      )}
+
+                      {isUrgente && (
+                        <Badge variant="secondary" className="gap-1 ml-2 bg-orange-100 text-orange-700">
+                          <AlertTriangle className="w-3 h-3" />
+                          Urgente
+                        </Badge>
+                      )}
                     </p>
                   </div>
-
                   <div className="flex flex-col gap-2">
                     <Button
                       variant="outline"

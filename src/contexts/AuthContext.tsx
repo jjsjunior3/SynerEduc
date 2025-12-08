@@ -2,14 +2,13 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../supabase/supabaseClient";
 import { Session, User } from "@supabase/supabase-js";
 
-// Interface atualizada para incluir 'serie'
 interface UsuarioPerfil {
   id: string;
   email: string;
   nome: string;
   tipo: "administrador" | "professor" | "aluno" | "responsavel";
   avatar?: string;
-  serie?: string; // <--- Adicionado aqui
+  serie?: string;
 }
 
 interface AuthContextData {
@@ -53,38 +52,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function buscarPerfil(user: User) {
     try {
-      // AQUI ESTÁ A CORREÇÃO: Garantimos que buscamos a 'serie'
       const { data, error } = await supabase
         .from("users")
-        .select("*") // Traz todas as colunas, incluindo 'serie'
+        .select("*")
         .eq("id", user.id)
         .single();
 
       if (error) {
-        console.error("Erro ao buscar perfil:", error);
+        console.error("❌ Erro ao buscar perfil:", error);
       }
 
       if (data) {
+        console.log("✅ Perfil carregado:", data);
         setUsuario({
           id: user.id,
           email: user.email || "",
           nome: data.nome,
           tipo: data.tipo,
-          avatar: data.avatar_url, // Ajuste conforme seu banco (avatar ou avatar_url)
-          serie: data.serie, // <--- Agora a série é salva no estado global
+          avatar: data.avatar_url,
+          serie: data.serie,
         });
       }
     } catch (error) {
-      console.error("Erro fatal ao buscar perfil:", error);
+      console.error("💥 Erro fatal ao buscar perfil:", error);
     } finally {
       setLoading(false);
     }
   }
 
+  // ✅ FUNÇÃO LOGOUT (Versão Nativa - Mais Segura)
   async function logout() {
-    await supabase.auth.signOut();
-    setUsuario(null);
-    setSession(null);
+    try {
+      console.log("🚪 Iniciando logout...");
+
+      // 1. Fazer signOut no Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("❌ Erro no signOut:", error);
+      }
+
+      // 2. Limpar estados
+      setUsuario(null);
+      setSession(null);
+
+      // 3. Limpar localStorage
+      localStorage.clear();
+
+      // 4. Redirecionar para login (Forçando recarregamento limpo)
+      console.log("✅ Logout concluído! Redirecionando...");
+      window.location.href = "/login";
+
+    } catch (error) {
+      console.error("💥 Erro fatal no logout:", error);
+      // Forçar redirecionamento mesmo com erro
+      window.location.href = "/login";
+    }
   }
 
   return (

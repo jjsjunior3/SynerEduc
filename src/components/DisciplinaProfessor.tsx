@@ -1,26 +1,37 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Progress } from './ui/progress';
-import { ArrowLeft, Users, FileText, MessageSquare, Calendar, Upload, Clock, CheckCircle, Edit, BarChart3, Video, Calculator, Download } from 'lucide-react';
-import { PDFViewerProfessor } from './PDFViewerProfessor';
-import { ForumProfessor } from './ForumProfessor';
-import { FrequenciaProfessor } from './FrequenciaProfessor';
-import { AgendaProfessor } from './AgendaProfessor';
-import { BoletimProfessor } from './BoletimProfessor';
-import { BoletimProfessorAvancado } from './BoletimProfessorAvancado';
-import { AgendamentoAulasVivo } from './AgendamentoAulasVivo';
-import { AtividadesProfessor } from './AtividadesProfessor';
+import { useState, useEffect } from "react";
+import { supabase } from "../supabase/supabaseClient";
+import {
+  ArrowLeft,
+  FileText,
+  CheckCircle,
+  BookOpen,
+  MessageSquare,
+  BarChart3,
+  Video,
+  Loader2,
+  AlertCircle,
+  PanelLeftClose,
+  PanelLeftOpen
+} from "lucide-react";
+
+import { Button } from "./ui/button";
+import { Card, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Progress } from "./ui/progress";
+
+import { PDFViewerProfessor } from "./PDFViewerProfessor";
+import { AtividadesProfessor } from "./AtividadesProfessor";
+import { FrequenciaProfessor } from "./FrequenciaProfessor"; // Importar FrequenciaProfessor
 
 interface DisciplinaProfessorProps {
-  disciplina: any;
-  serie: any;
+  disciplina: { id: string; nome: string; cor?: string };
+  serie: { id: string; nome: string }; // serie.id pode vir com prefixo "serie_"
   onVoltar: () => void;
 }
 
-interface BimestrePDF {
+interface BimestreData {
   id: string;
+  numero: number;
   nome: string;
   descricao: string;
   pdfUrl?: string;
@@ -29,60 +40,74 @@ interface BimestrePDF {
   progresso: number;
 }
 
-export function DisciplinaProfessor({ disciplina, serie, onVoltar }: DisciplinaProfessorProps) {
-  const [abaAtiva, setAbaAtiva] = useState<'conteudo' | 'atividades' | 'forum' | 'frequencia' | 'agenda' | 'boletim' | 'aulas-vivo'>('conteudo');
-  const [bimestreSelecionado, setBimestreSelecionado] = useState<BimestrePDF | null>(null);
+export function DisciplinaProfessor({
+  disciplina,
+  serie,
+  onVoltar
+}: DisciplinaProfessorProps) {
+  const [abaAtiva, setAbaAtiva] = useState<
+    "conteudo" | "atividades" | "forum" | "frequencia" | "agenda" | "boletim" | "aulas-vivo"
+  >("conteudo");
+
+  const [bimestres, setBimestres] = useState<BimestreData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [bimestreSelecionado, setBimestreSelecionado] = useState<BimestreData | null>(null);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
-  const [tipoBoletim, setTipoBoletim] = useState<'simples' | 'avancado'>('avancado');
 
-  // Dados dos bimestres para o professor
-  const bimestres: BimestrePDF[] = [
-    {
-      id: 'bim1',
-      nome: '1º Bimestre',
-      descricao: 'Fundamentos e conceitos básicos da disciplina',
-      totalAlunos: serie?.totalAlunos || 30,
-      alunosVisualizaram: 28,
-      progresso: 85,
-      pdfUrl: 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf'
-    },
-    {
-      id: 'bim2',
-      nome: '2º Bimestre',
-      descricao: 'Aprofundamento teórico e aplicações práticas',
-      totalAlunos: serie?.totalAlunos || 30,
-      alunosVisualizaram: 25,
-      progresso: 60
-    },
-    {
-      id: 'bim3',
-      nome: '3º Bimestre',
-      descricao: 'Projetos integradores e estudos de caso',
-      totalAlunos: serie?.totalAlunos || 30,
-      alunosVisualizaram: 0,
-      progresso: 0
-    },
-    {
-      id: 'bim4',
-      nome: '4º Bimestre',
-      descricao: 'Síntese, avaliação final e revisão geral',
-      totalAlunos: serie?.totalAlunos || 30,
-      alunosVisualizaram: 0,
-      progresso: 0
+  // controla a visibilidade da barra lateral (sidebar)
+  const [sidebarAberta, setSidebarAberta] = useState(true);
+
+  /* -------------------------------------------------------------------------- */
+  /*                               BUSCAR DADOS                               */
+  /* -------------------------------------------------------------------------- */
+  useEffect(() => {
+    async function buscarConteudos() {
+      setLoading(true);
+      try {
+        const { data: conteudos, error } = await supabase
+          .from("pdfs_conteudista")
+          .select("*")
+          .ilike("disciplina", `%${disciplina.nome}%`)
+          .ilike("serie", `%${serie.nome}%`);
+
+        if (error) throw error;
+
+        const estruturaBase = [1, 2, 3, 4].map((num) => {
+          const conteudoSalvo = conteudos?.find(
+            (c) => c.bimestre === num || c.bimestre_numero === num
+          );
+
+          return {
+            id: conteudoSalvo?.id || `vazio_${num}`,
+            numero: num,
+            nome: `${num}º Bimestre`,
+            descricao:
+              conteudoSalvo?.descricao ||
+              conteudoSalvo?.nome ||
+              "Nenhum material disponível.",
+            pdfUrl: conteudoSalvo?.url || undefined,
+            totalAlunos: 0,
+            alunosVisualizaram: 0,
+            progresso: 0
+          };
+        });
+
+        setBimestres(estruturaBase);
+      } catch (err) {
+        console.error("Erro ao buscar conteúdos:", err);
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
 
-  const abas = [
-    { id: 'conteudo', label: 'Conteúdo', icon: FileText },
-    { id: 'atividades', label: 'Atividades', icon: Upload },
-    { id: 'forum', label: 'Fórum', icon: MessageSquare },
-    { id: 'frequencia', label: 'Frequência', icon: Users },
-    { id: 'agenda', label: 'Agenda', icon: Calendar },
-    { id: 'boletim', label: 'Boletim', icon: BarChart3 },
-    { id: 'aulas-vivo', label: 'Aulas ao Vivo', icon: Video },
-  ];
+    buscarConteudos();
+  }, [disciplina.nome, serie.nome]);
 
-  const handleBimestreClick = (bimestre: BimestrePDF) => {
+  /* -------------------------------------------------------------------------- */
+  /*                               HANDLERS                                    */
+  /* -------------------------------------------------------------------------- */
+  const handleBimestreClick = (bimestre: BimestreData) => {
     setBimestreSelecionado(bimestre);
     setMostrarConteudo(true);
   };
@@ -90,105 +115,70 @@ export function DisciplinaProfessor({ disciplina, serie, onVoltar }: DisciplinaP
   const handleFecharConteudo = () => {
     setMostrarConteudo(false);
     setBimestreSelecionado(null);
+    setSidebarAberta(true); // reabre a sidebar ao fechar o PDF
   };
 
-  const handleUploadPDF = (bimestreId: string, file: File) => {
-    // Implementar upload do PDF
-    console.log('Fazendo upload do PDF para o bimestre:', bimestreId, file);
-    // Aqui você integraria com o backend para fazer upload do arquivo
-  };
+  // Estas funções não estão sendo usadas no PDFViewerProfessor, mas mantidas para referência
+  const handleUploadPDF = async (file: File) => console.log("Upload:", file);
+  const handleRemoverPDF = async () => console.log("Remover");
+  const handleEditarDescricao = async (txt: string) => console.log("Desc:", txt);
 
-  const handleEditarDescricao = (bimestreId: string, descricao: string) => {
-    // Implementar edição da descrição
-    console.log('Editando descrição do bimestre:', bimestreId, descricao);
-    // Aqui você atualizaria a descrição no backend
-  };
-
-  const handleRemoverPDF = (bimestreId: string) => {
-    // Implementar remoção do PDF
-    console.log('Removendo PDF do bimestre:', bimestreId);
-    // Aqui você removeria o PDF do backend
-  };
-
-  const handleProximoBimestre = () => {
-    if (!bimestreSelecionado) return;
-    const currentIndex = bimestres.findIndex(b => b.id === bimestreSelecionado.id);
-    if (currentIndex < bimestres.length - 1) {
-      setBimestreSelecionado(bimestres[currentIndex + 1]);
-    }
-  };
-
-  const handleAnteriorBimestre = () => {
-    if (!bimestreSelecionado) return;
-    const currentIndex = bimestres.findIndex(b => b.id === bimestreSelecionado.id);
-    if (currentIndex > 0) {
-      setBimestreSelecionado(bimestres[currentIndex - 1]);
-    }
-  };
-
-  const currentIndex = bimestreSelecionado ? 
-    bimestres.findIndex(b => b.id === bimestreSelecionado.id) : -1;
-
-  const calcularProgresso = () => {
-    return Math.round(bimestres.reduce((acc, bim) => acc + bim.progresso, 0) / bimestres.length);
-  };
-
+  /* -------------------------------------------------------------------------- */
+  /*                               RENDER                                        */
+  /* -------------------------------------------------------------------------- */
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header da Disciplina */}
-      <div className={`${disciplina.cor} border-b`}>
-        <div className="px-6 py-8">
-          <div className="flex items-center gap-4 mb-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+    // altura fixa da tela e impede rolagem da página inteira
+    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+      {/* HEADER */}
+      <div className={`${disciplina.cor || "bg-blue-600"} border-b transition-colors duration-300 shrink-0`}>
+        <div className="px-6 py-6">
+          <div className="flex items-center gap-4 mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onVoltar}
-              className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
+              className="flex items-center gap-2 text-white hover:text-white/80 hover:bg-white/10"
             >
               <ArrowLeft className="w-4 h-4" />
-              Voltar
+              Voltar ao Painel
             </Button>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-gray-700">
-              {disciplina.icone}
+
+          <div className="flex justify-between items-end text-white">
+            <div>
+              <h1 className="text-2xl font-bold">{disciplina.nome}</h1>
+              <p className="text-white/80 text-sm">{serie.nome}</p>
             </div>
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">{disciplina.nome}</h1>
-              <p className="text-gray-700 mb-4">
-                {serie?.nome} - Turma {serie?.turma} • {serie?.totalAlunos} alunos
-              </p>
-              <div className="flex items-center gap-4">
-                <div className="flex-1 max-w-xs">
-                  <div className="flex justify-between text-sm text-gray-700 mb-1">
-                    <span>Progresso do Conteúdo</span>
-                    <span>{calcularProgresso()}%</span>
-                  </div>
-                  <Progress value={calcularProgresso()} className="h-2" />
-                </div>
-                <Badge variant="secondary">
-                  Professor: {disciplina.professor}
-                </Badge>
-              </div>
+            <div className="flex gap-3">
+              <Badge className="bg-white/20 hover:bg-white/30 text-white border-0">
+                <BookOpen className="w-4 h-4 mr-2" />
+                Material Didático
+              </Badge>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Navegação por Abas */}
-      <div className="bg-white border-b border-gray-200">
+      {/* ABAS */}
+      <div className="bg-white border-b border-gray-200 shrink-0 z-10">
         <div className="px-6">
-          <div className="flex space-x-8">
-            {abas.map((aba) => {
+          <div className="flex space-x-6 overflow-x-auto">
+            {[
+              { id: "conteudo", label: "Conteúdo", icon: FileText },
+              { id: "atividades", label: "Atividades", icon: FileText },
+              { id: "frequencia", label: "Frequência", icon: BarChart3 }, // Ícone alterado para BarChart3
+              { id: "forum", label: "Fórum", icon: MessageSquare },
+              { id: "aulas-vivo", label: "Aulas ao Vivo", icon: Video }
+            ].map((aba) => {
               const Icon = aba.icon;
               return (
                 <button
                   key={aba.id}
                   onClick={() => setAbaAtiva(aba.id as any)}
-                  className={`flex items-center gap-2 py-4 border-b-2 font-medium transition-colors ${
+                  className={`flex items-center gap-2 py-4 border-b-2 font-medium transition-colors whitespace-nowrap ${
                     abaAtiva === aba.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -200,146 +190,136 @@ export function DisciplinaProfessor({ disciplina, serie, onVoltar }: DisciplinaP
         </div>
       </div>
 
-      {/* Conteúdo das Abas */}
-      <div className="flex">
-        {/* Lista Principal */}
-        <div className={`${mostrarConteudo ? 'w-1/3' : 'w-full'} transition-all duration-300`}>
-          <div className="p-6">
-            {abaAtiva === 'conteudo' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Material de Estudo por Bimestre</h2>
-                  <Badge variant="outline" className="gap-1">
-                    <FileText className="w-3 h-3" />
-                    Sistema PDF
-                  </Badge>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {bimestres.map((bimestre) => (
-                    <Card 
-                      key={bimestre.id} 
-                      className={`cursor-pointer transition-all hover:shadow-md ${
-                        bimestreSelecionado?.id === bimestre.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                      }`}
-                      onClick={() => handleBimestreClick(bimestre)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-5 h-5 text-red-500" />
-                            <span className="font-medium">{bimestre.nome}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
+      {/* ÁREA PRINCIPAL */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Usamos um Fragment para agrupar os blocos condicionais */}
+        <>
+          {/* ==================== COLUNA DA ESQUERDA (lista de bimestres) ==================== */}
+          {abaAtiva === "conteudo" && (
+            <div
+              className={`
+                bg-gray-50 overflow-y-auto transition-all duration-300 border-r border-gray-200
+                ${!mostrarConteudo ? "w-full" : sidebarAberta ? "w-1/4 min-w-[280px]" : "w-0 overflow-hidden"}
+              `}
+            >
+              <div className="p-6">
+                {/* CONTEÚDO – lista de bimestres */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900 whitespace-nowrap">
+                      Bimestres
+                    </h2>
+                    {loading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
+                  </div>
+
+                  <div
+                    className={`grid ${
+                      mostrarConteudo ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-4"
+                    } gap-4`}
+                  >
+                    {bimestres.map((bimestre) => (
+                      <Card
+                        key={bimestre.numero}
+                        className={`cursor-pointer transition-all hover:shadow-md border-l-4 ${
+                          bimestreSelecionado?.numero === bimestre.numero
+                            ? "border-l-blue-600 ring-2 ring-blue-100"
+                            : bimestre.pdfUrl
+                            ? "border-l-green-500"
+                            : "border-l-gray-300"
+                        }`}
+                        onClick={() => handleBimestreClick(bimestre)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="font-bold text-gray-700">{bimestre.nome}</span>
                             {bimestre.pdfUrl ? (
-                              <Badge variant="default" className="gap-1">
-                                <CheckCircle className="w-3 h-3" />
-                                PDF
+                              <Badge
+                                variant="secondary"
+                                className="bg-green-100 text-green-700 hover:bg-green-200 text-[10px]"
+                              >
+                                <CheckCircle className="w-3 h-3 mr-1" /> PDF
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="gap-1">
-                                <Upload className="w-3 h-3" />
-                                Enviar
+                              <Badge variant="outline" className="text-gray-400 border-gray-200 text-[10px]">
+                                <AlertCircle className="w-3 h-3 mr-1" /> Vazio
                               </Badge>
                             )}
                           </div>
-                        </div>
-                        <p className="text-xs text-gray-600 mb-3">{bimestre.descricao}</p>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Progress value={bimestre.progresso} className="flex-1 h-2" />
-                            <span className="text-xs text-gray-600">{bimestre.progresso}%</span>
+                          <p className="text-xs text-gray-500 line-clamp-2 mb-4">{bimestre.descricao}</p>
+                          <div className="space-y-1 opacity-50">
+                            <Progress value={bimestre.progresso} className="h-1" />
                           </div>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>👥 {bimestre.alunosVisualizaram}/{bimestre.totalAlunos} visualizaram</span>
-                            <span>{Math.round((bimestre.alunosVisualizaram / bimestre.totalAlunos) * 100)}%</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {abaAtiva === 'atividades' && (
-              <AtividadesProfessor disciplina={disciplina} serie={serie} />
-            )}
-
-            {abaAtiva === 'forum' && (
-              <ForumProfessor disciplina={disciplina} serie={serie} />
-            )}
-
-            {abaAtiva === 'frequencia' && (
-              <FrequenciaProfessor disciplina={disciplina} serie={serie} />
-            )}
-
-            {abaAtiva === 'agenda' && (
-              <AgendaProfessor disciplina={disciplina} serie={serie} />
-            )}
-
-            {abaAtiva === 'boletim' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Sistema de Avaliação</h2>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={tipoBoletim === 'simples' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setTipoBoletim('simples')}
-                      className="gap-2"
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                      Simples
-                    </Button>
-                    <Button
-                      variant={tipoBoletim === 'avancado' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setTipoBoletim('avancado')}
-                      className="gap-2"
-                    >
-                      <Calculator className="w-4 h-4" />
-                      AV1/AV2/REC
-                    </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 </div>
-                
-                {tipoBoletim === 'simples' && (
-                  <BoletimProfessor disciplina={disciplina} serie={serie} />
-                )}
-                
-                {tipoBoletim === 'avancado' && (
-                  <BoletimProfessorAvancado disciplina={disciplina} serie={serie} />
-                )}
               </div>
-            )}
+            </div>
+          )}
 
-            {abaAtiva === 'aulas-vivo' && (
-              <AgendamentoAulasVivo 
-                disciplinaId={disciplina.id}
-                nomeDisciplina={disciplina.nome}
-                professorId="professor-1"
+          {/* ==================== COLUNA DA DIREITA (PDF VIEWER) ==================== */}
+          {abaAtiva === "conteudo" && mostrarConteudo && (
+            <div className="flex-1 w-full bg-white overflow-hidden relative shadow-xl">
+              <PDFViewerProfessor
+                bimestre={bimestreSelecionado}
+                onClose={handleFecharConteudo}
+                sidebarAberta={sidebarAberta}
+                onToggleSidebar={() => setSidebarAberta(!sidebarAberta)}
+                hasProximo={bimestreSelecionado ? bimestreSelecionado.numero < 4 : false}
+                hasAnterior={bimestreSelecionado ? bimestreSelecionado.numero > 1 : false}
+                onProximo={() => {
+                  if (bimestreSelecionado && bimestreSelecionado.numero < 4) {
+                    const prox = bimestres.find((b) => b.numero === bimestreSelecionado.numero + 1);
+                    if (prox) setBimestreSelecionado(prox);
+                  }
+                }}
+                onAnterior={() => {
+                  if (bimestreSelecionado && bimestreSelecionado.numero > 1) {
+                    const ant = bimestres.find((b) => b.numero === bimestreSelecionado.numero - 1);
+                    if (ant) setBimestreSelecionado(ant);
+                  }
+                }}
               />
-            )}
-          </div>
-        </div>
+            </div>
+          )}
 
-        {/* Viewer de PDF */}
-        {mostrarConteudo && bimestreSelecionado && (
-          <div className="w-2/3 border-l border-gray-200">
-            <PDFViewerProfessor 
-              bimestre={bimestreSelecionado}
-              onClose={handleFecharConteudo}
-              onProximo={handleProximoBimestre}
-              onAnterior={handleAnteriorBimestre}
-              hasProximo={currentIndex >= 0 && currentIndex < bimestres.length - 1}
-              hasAnterior={currentIndex > 0}
-              onUploadPDF={handleUploadPDF}
-              onEditarDescricao={handleEditarDescricao}
-              onRemoverPDF={handleRemoverPDF}
-            />
-          </div>
-        )}
+          {/* ========================================
+              ABA ATIVIDADES - COMPONENTE ATIVIDADES
+          ======================================== */}
+          {abaAtiva === "atividades" && (
+            <div className="flex-1 w-full bg-white overflow-y-auto">
+              <AtividadesProfessor
+                disciplina={disciplina}
+                serie={serie}
+              />
+            </div>
+          )}
+
+          {/* ========================================
+              ABA FREQUÊNCIA - COMPONENTE FREQUÊNCIA
+          ======================================== */}
+          {abaAtiva === "frequencia" && (
+            <div className="flex-1 w-full bg-white overflow-y-auto">
+              <FrequenciaProfessor
+                disciplina={disciplina}
+                serie={serie} // Passando o objeto serie completo
+              />
+            </div>
+          )}
+
+          {/* ========================================
+              OUTRAS ABAS - EM DESENVOLVIMENTO
+          ======================================== */}
+          {abaAtiva !== "conteudo" && abaAtiva !== "atividades" && abaAtiva !== "frequencia" && (
+            <div className="flex-1 w-full flex items-center justify-center text-center py-12 text-gray-500 bg-white">
+              <div>
+                <p className="text-lg">Funcionalidade da aba <strong>{abaAtiva}</strong> em desenvolvimento.</p>
+                <p className="text-sm text-gray-400 mt-2">Em breve você poderá acessar este recurso.</p>
+              </div>
+            </div>
+          )}
+        </>
       </div>
     </div>
   );

@@ -1,33 +1,22 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
+import { useState, useEffect } from 'react';
+import { supabase } from '../supabase/supabaseClient'; // Importar supabase
+import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
+import { Bell, CheckCircle, Clock, MessageSquare, AlertCircle, Award, X, Check, Info, BookOpen } from 'lucide-react'; // Adicionar Check, Info, BookOpen
 import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { Separator } from './ui/separator';
-import { 
-  Bell, 
-  Check, 
-  X, 
-  Calendar, 
-  BookOpen, 
-  MessageSquare, 
-  AlertTriangle,
-  Info,
-  CheckCircle,
-  Clock
-} from 'lucide-react';
+import { Separator } from './ui/separator'; // Importar Separator
+import { toast } from 'sonner'; // ✅ Corrigido para 'sonner'
 
 interface Notificacao {
   id: string;
-  tipo: 'atividade' | 'prazo' | 'forum' | 'sistema' | 'avaliacao';
+  tipo: 'atividade' | 'prazo' | 'forum' | 'sistema' | 'avaliacao' | 'nota'; // Adicionado 'nota'
   titulo: string;
   descricao: string;
-  data: string;
+  created_at: string; // ✅ Usando created_at da sua tabela
   lida: boolean;
-  acao?: {
-    texto: string;
-    link: string;
-  };
+  acao_texto?: string; // ✅ Usando acao_texto
+  acao_link?: string; // ✅ Usando acao_link
 }
 
 interface NotificacoesProps {
@@ -35,129 +24,116 @@ interface NotificacoesProps {
 }
 
 export function Notificacoes({ onClose }: NotificacoesProps) {
-  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([
-    {
-      id: '1',
-      tipo: 'prazo',
-      titulo: 'Entrega Próxima',
-      descricao: 'O trabalho em grupo de Matemática deve ser entregue até amanhã.',
-      data: '2025-01-10T14:30:00Z',
-      lida: false,
-      acao: {
-        texto: 'Ver Atividade',
-        link: '/atividade/1'
-      }
-    },
-    {
-      id: '2',
-      tipo: 'forum',
-      titulo: 'Nova Resposta',
-      descricao: 'Prof. João Santos respondeu sua pergunta sobre "Conceitos Fundamentais".',
-      data: '2025-01-10T10:15:00Z',
-      lida: false,
-      acao: {
-        texto: 'Ver Resposta',
-        link: '/forum/pergunta/1'
-      }
-    },
-    {
-      id: '3',
-      tipo: 'atividade',
-      titulo: 'Nova Atividade Disponível',
-      descricao: 'Lista de Exercícios 3 foi publicada na disciplina de Química.',
-      data: '2025-01-09T16:45:00Z',
-      lida: true,
-      acao: {
-        texto: 'Acessar',
-        link: '/disciplina/quimica'
-      }
-    },
-    {
-      id: '4',
-      tipo: 'avaliacao',
-      titulo: 'Resultado da Prova',
-      descricao: 'As notas da prova de História já estão disponíveis.',
-      data: '2025-01-09T09:00:00Z',
-      lida: true,
-      acao: {
-        texto: 'Ver Notas',
-        link: '/boletim'
-      }
-    },
-    {
-      id: '5',
-      tipo: 'sistema',
-      titulo: 'Manutenção Programada',
-      descricao: 'O sistema ficará offline para manutenção no sábado das 2h às 4h.',
-      data: '2025-01-08T12:00:00Z',
-      lida: true
-    },
-    {
-      id: '6',
-      tipo: 'forum',
-      titulo: 'Nova Pergunta',
-      descricao: 'Ana Silva fez uma pergunta na disciplina de Biologia.',
-      data: '2025-01-08T08:30:00Z',
-      lida: true,
-      acao: {
-        texto: 'Ver Pergunta',
-        link: '/forum/pergunta/2'
-      }
-    }
-  ]);
+  const { usuario } = useAuth();
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // ========================================
+  // CARREGAR NOTIFICAÇÕES DO BANCO
+  // ========================================
+  useEffect(() => {
+    carregarNotificacoes();
+
+    // Atualizar a cada 30 segundos
+    const interval = setInterval(carregarNotificacoes, 30000);
+    return () => clearInterval(interval);
+  }, [usuario?.id]);
+
+  async function carregarNotificacoes() {
+    if (!usuario?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('notificacoes')
+        .select('id, tipo, titulo, descricao, created_at, lida, acao_texto, acao_link') // ✅ Selecionando suas colunas
+        .eq('user_id', usuario.id) // ✅ Usando user_id (ou usuario_id se não renomear)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      setNotificacoes(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar notificações:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ========================================
+  // MARCAR COMO LIDA
+  // ========================================
+  async function marcarComoLida(id: string) {
+    try {
+      const { error } = await supabase
+        .from('notificacoes')
+        .update({ lida: true })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setNotificacoes(prev =>
+        prev.map(n => (n.id === id ? { ...n, lida: true } : n))
+      );
+    } catch (error) {
+      console.error('Erro ao marcar como lida:', error);
+    }
+  }
+
+  // ========================================
+  // MARCAR TODAS COMO LIDAS
+  // ========================================
+  async function marcarTodasComoLidas() {
+    if (!usuario?.id) return;
+
+    try {
+      const { error } = await supabase
+        .from('notificacoes')
+        .update({ lida: true })
+        .eq('user_id', usuario.id) // ✅ Usando user_id (ou usuario_id)
+        .eq('lida', false);
+
+      if (error) throw error;
+
+      setNotificacoes(prev =>
+        prev.map(n => ({ ...n, lida: true }))
+      );
+    } catch (error) {
+      console.error('Erro ao marcar todas como lidas:', error);
+    }
+  }
+
+  // ========================================
+  // EXCLUIR NOTIFICAÇÃO
+  // ========================================
+  async function excluirNotificacao(id: string) {
+    try {
+      const { error } = await supabase
+        .from('notificacoes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setNotificacoes(prev => prev.filter(n => n.id !== id));
+    } catch (error) {
+      console.error('Erro ao excluir notificação:', error);
+    }
+  }
+
+  // ========================================
+  // HELPERS
+  // ========================================
   const getIcone = (tipo: string) => {
     switch (tipo) {
-      case 'atividade':
-        return <BookOpen className="w-5 h-5 text-blue-500" />;
-      case 'prazo':
-        return <Clock className="w-5 h-5 text-red-500" />;
-      case 'forum':
-        return <MessageSquare className="w-5 h-5 text-green-500" />;
-      case 'avaliacao':
-        return <CheckCircle className="w-5 h-5 text-purple-500" />;
-      case 'sistema':
-        return <Info className="w-5 h-5 text-orange-500" />;
-      default:
-        return <Bell className="w-5 h-5 text-gray-500" />;
+      case 'atividade': return <CheckCircle className="w-5 h-5 text-blue-500" />;
+      case 'prazo': return <Clock className="w-5 h-5 text-orange-500" />;
+      case 'forum': return <MessageSquare className="w-5 h-5 text-purple-500" />;
+      case 'avaliacao': return <Award className="w-5 h-5 text-yellow-500" />;
+      case 'nota': return <Award className="w-5 h-5 text-green-500" />;
+      case 'sistema': return <Info className="w-5 h-5 text-gray-500" />; // Adicionado sistema
+      default: return <AlertCircle className="w-5 h-5 text-gray-500" />;
     }
-  };
-
-  const getCorFundo = (tipo: string, lida: boolean) => {
-    if (lida) return 'bg-white';
-    
-    switch (tipo) {
-      case 'prazo':
-        return 'bg-red-50';
-      case 'atividade':
-        return 'bg-blue-50';
-      case 'forum':
-        return 'bg-green-50';
-      case 'avaliacao':
-        return 'bg-purple-50';
-      case 'sistema':
-        return 'bg-orange-50';
-      default:
-        return 'bg-gray-50';
-    }
-  };
-
-  const marcarComoLida = (id: string) => {
-    setNotificacoes(prev => 
-      prev.map(notif => 
-        notif.id === id ? { ...notif, lida: true } : notif
-      )
-    );
-  };
-
-  const removerNotificacao = (id: string) => {
-    setNotificacoes(prev => prev.filter(notif => notif.id !== id));
-  };
-
-  const marcarTodasComoLidas = () => {
-    setNotificacoes(prev => 
-      prev.map(notif => ({ ...notif, lida: true }))
-    );
   };
 
   const naoLidas = notificacoes.filter(n => !n.lida).length;
@@ -182,18 +158,21 @@ export function Notificacoes({ onClose }: NotificacoesProps) {
   };
 
   return (
-    <Card className="w-96 max-h-96">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-end p-4">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-md mt-16 animate-in slide-in-from-right">
+
+        {/* HEADER */}
+        <div className="p-4 border-b flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-lg">Notificações</CardTitle>
+            <Bell className="w-5 h-5 text-blue-600" />
+            <h3 className="font-semibold text-lg">Notificações</h3>
             {naoLidas > 0 && (
-              <Badge variant="destructive" className="rounded-full px-2 py-1 text-xs">
+              <Badge variant="destructive" className="ml-2">
                 {naoLidas}
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {naoLidas > 0 && (
               <Button
                 variant="ghost"
@@ -204,99 +183,95 @@ export function Notificacoes({ onClose }: NotificacoesProps) {
                 Marcar todas como lidas
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-            >
+            <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-4 h-4" />
             </Button>
           </div>
         </div>
-      </CardHeader>
-      
-      <CardContent className="p-0">
-        <ScrollArea className="h-80">
-          {notificacoes.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">
+
+        {/* LISTA */}
+        <ScrollArea className="h-[500px]">
+          {loading ? (
+            <div className="p-8 text-center text-gray-500">
+              Carregando notificações...
+            </div>
+          ) : notificacoes.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
               <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p>Nenhuma notificação</p>
-              <p className="text-sm">Você está em dia!</p>
+              <p className="font-medium">Nenhuma notificação</p>
+              <p className="text-sm mt-1">Você está em dia!</p>
             </div>
           ) : (
-            <div className="space-y-1">
-              {notificacoes.map((notificacao, index) => (
-                <div key={notificacao.id}>
-                  <div 
-                    className={`p-4 hover:bg-gray-50 transition-colors ${getCorFundo(notificacao.tipo, notificacao.lida)}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 mt-0.5">
-                        {getIcone(notificacao.tipo)}
+            <div className="divide-y">
+              {notificacoes.map((notif, index) => (
+                <div
+                  key={notif.id}
+                  className={`p-4 hover:bg-gray-50 transition-colors ${
+                    !notif.lida ? 'bg-blue-50/50' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 mt-1">
+                      {getIcone(notif.tipo)}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className={`text-sm font-medium ${notif.lida ? 'text-gray-700' : 'text-gray-900'}`}>
+                          {notif.titulo}
+                        </h4>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => excluirNotificacao(notif.id)}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
                       </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className={`text-sm ${notificacao.lida ? 'font-medium' : 'font-semibold'} text-gray-900`}>
-                                {notificacao.titulo}
-                              </h4>
-                              {!notificacao.lida && (
-                                <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-600 mt-1">
-                              {notificacao.descricao}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-2">
-                              {formatarData(notificacao.data)}
-                            </p>
-                            
-                            {notificacao.acao && (
-                              <Button
-                                variant="link"
-                                size="sm"
-                                className="p-0 h-auto mt-2 text-blue-600"
-                              >
-                                {notificacao.acao.texto}
-                              </Button>
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {!notificacao.lida && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => marcarComoLida(notificacao.id)}
-                                className="p-1 h-auto"
-                                title="Marcar como lida"
-                              >
-                                <Check className="w-3 h-3" />
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removerNotificacao(notificacao.id)}
-                              className="p-1 h-auto"
-                              title="Remover notificação"
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
+
+                      <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                        {notif.descricao}
+                      </p>
+
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="text-xs text-gray-500">
+                          {formatarData(notif.created_at)}
+                        </span>
+
+                        {notif.acao_texto && notif.acao_link && (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-xs text-blue-600"
+                            onClick={() => {
+                              window.location.href = notif.acao_link!;
+                              marcarComoLida(notif.id);
+                            }}
+                          >
+                            {notif.acao_texto}
+                          </Button>
+                        )}
+
+                        {!notif.lida && (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-xs text-gray-500"
+                            onClick={() => marcarComoLida(notif.id)}
+                          >
+                            Marcar como lida
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
-                  {index < notificacoes.length - 1 && <Separator />}
                 </div>
               ))}
             </div>
           )}
         </ScrollArea>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

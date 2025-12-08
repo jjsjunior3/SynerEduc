@@ -13,7 +13,6 @@ import {
   BookOpen,
   AlertTriangle,
   Loader2,
-  Clock,
   Play,
   ChevronRight,
   Settings,
@@ -22,13 +21,18 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { Notificacoes } from "./Notificacoes";
 import { PerfilUsuario } from "./PerfilUsuario";
-import { HorarioEscolar } from "./HorarioEscolar";
+import HorarioEscolar from "./HorarioEscolar";
 import { MaterialEstudoModerno } from "./MaterialEstudoModerno";
-import { AtividadesAluno } from "./AtividadesAluno";
+import {AtividadesAluno} from "./AtividadesAluno";
 import Boletim from "./Boletim";
 import { Forum } from "./Forum";
-import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../supabase/supabaseClient";
+import { Usuario } from "../types/auth";
+
+interface DashboardAlunoProps {
+  usuario: Usuario;
+  logout: () => void;
+}
 
 interface DisciplinaDashboard {
   id: string;
@@ -58,9 +62,7 @@ type ViewType =
   | "forum"
   | "horarios";
 
-export default function DashboardAluno() {
-  const { usuario, logout } = useAuth();
-
+export default function DashboardAluno({ usuario, logout }: DashboardAlunoProps) {
   const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
 
@@ -71,6 +73,8 @@ export default function DashboardAluno() {
 
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  // Estado local para garantir que temos a série, mesmo que falhe no login
+  const [serieUsuario, setSerieUsuario] = useState<string>(usuario.serie || "");
 
   const carregarDados = useCallback(async () => {
     if (!usuario?.id) return;
@@ -79,38 +83,44 @@ export default function DashboardAluno() {
     setErro(null);
 
     try {
-      // 1. PEGAR A SÉRIE DO CONTEXTO
-      const nomeSerieUsuario = usuario.serie;
+      // 1. GARANTIR QUE TEMOS A SÉRIE
+      let nomeSerieAtual = usuario.serie;
 
-      if (!nomeSerieUsuario) {
-        throw new Error("Série não identificada no seu perfil.");
+      // Se não veio no login (props), busca no banco agora (Fallback)
+      if (!nomeSerieAtual) {
+        console.log("[DASHBOARD] Série não veio no login, buscando no banco...");
+        const { data: userProfile, error: profileError } = await supabase
+          .from('users')
+          .select('serie')
+          .eq('id', usuario.id)
+          .single();
+
+        if (profileError || !userProfile?.serie) {
+          throw new Error("Série não identificada no seu cadastro. Contate a secretaria.");
+        }
+
+        nomeSerieAtual = userProfile.serie;
+        setSerieUsuario(nomeSerieAtual); // Atualiza visualmente
       }
 
-      // --- CORREÇÃO AQUI ---
-      // Limpar o nome da série. Se for "8º ano (Fundamental)", vira "8º ano"
-      // Isso resolve a incompatibilidade com a tabela 'series'
-      const termoBusca = nomeSerieUsuario.split('(')[0].trim();
+      // Limpeza do nome da série
+      const termoBusca = nomeSerieAtual
+        .split('(')[0]
+        .split('-')[0]
+        .trim();
 
-      console.log(`[DASHBOARD] Buscando série: "${termoBusca}" (Original: "${nomeSerieUsuario}")`);
+      console.log(`[DASHBOARD] Buscando série: "${termoBusca}"`);
 
       // 2. BUSCAR O ID DA SÉRIE
       const { data: dadosSerie, error: serieError } = await supabase
         .from('series')
         .select('id')
-        .ilike('nome', termoBusca) // Busca pelo termo limpo
+        .ilike('nome', termoBusca)
         .maybeSingle();
 
-      if (serieError) {
-        console.error("[DASHBOARD] Erro ao buscar ID da série:", serieError);
-      }
+      if (serieError) console.error("[DASHBOARD] Erro ID série:", serieError);
 
       const serieIdUUID = dadosSerie?.id;
-
-      if (!serieIdUUID) {
-        console.warn(`[DASHBOARD] Série "${termoBusca}" não encontrada na tabela 'series'.`);
-      } else {
-        console.log("[DASHBOARD] ID da Série encontrado:", serieIdUUID);
-      }
 
       // 3. BUSCAR TURMAS
       const { data: turmasAluno } = await supabase
@@ -120,7 +130,7 @@ export default function DashboardAluno() {
 
       const turmaIds = turmasAluno?.map((t) => t.turma_id) || [];
 
-      // 4. BUSCAR DISCIPLINAS
+      // 4. BUSCAR DISCIPLINAS (VÍNCULOS)
       let query = supabase
         .from("professores_disciplinas_series")
         .select(`
@@ -130,7 +140,8 @@ export default function DashboardAluno() {
           serie_id,
           disciplinas ( id, nome, cor ),
           professor:users!professor_id ( id, nome )
-        `);
+        `)
+        .limit(100);
 
       const condicoes = [];
 
@@ -143,10 +154,9 @@ export default function DashboardAluno() {
       }
 
       if (condicoes.length === 0) {
-        // Se não achou ID nem turma, paramos aqui mas sem erro fatal
         console.warn("[DASHBOARD] Sem ID de série válido e sem turmas.");
         setDisciplinas([]);
-        return; 
+        return;
       }
 
       query = query.or(condicoes.join(","));
@@ -243,10 +253,18 @@ export default function DashboardAluno() {
   if (viewAtual === "material" && disciplinaSelecionada) {
     return <MaterialEstudoModerno disciplina={disciplinaSelecionada} onVoltar={voltarDashboard} />;
   }
-  if (viewAtual === "atividades") return <AtividadesAluno onVoltar={voltarDashboard} />;
+  if (viewAtual === "atividades") {
+    return (
+      <AtividadesAluno 
+        disciplinaId={disciplinaSelecionada?.id || ''} // ID da disciplina
+        nomeDisciplina={disciplinaSelecionada?.nome || ''} // Nome da disciplina
+        serieNome={serieUsuario} // Nome da série do aluno (TEXT)
+      />
+    );
+  }
   if (viewAtual === "boletim") return <Boletim onVoltar={voltarDashboard} />;
   if (viewAtual === "forum") return <Forum onVoltar={voltarDashboard} />;
-  if (viewAtual === "horarios") return <HorarioEscolar onVoltar={voltarDashboard} />;
+  if (viewAtual === "horarios") return <HorarioEscolar usuario={{ ...usuario, serie: serieUsuario }} onVoltar={voltarDashboard} />;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -298,7 +316,8 @@ export default function DashboardAluno() {
           <p className="text-gray-600">
             Bem-vindo de volta!{" "}
             <span className="font-medium text-blue-600">
-              {usuario?.serie ? `Série: ${usuario.serie}` : "Série não identificada"}
+              {/* Usamos o estado local serieUsuario que pode ter sido recuperado */}
+              {serieUsuario ? `Série: ${serieUsuario}` : "Série não identificada"}
             </span>
           </p>
         </div>
@@ -352,7 +371,7 @@ export default function DashboardAluno() {
               <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-400" />
               <p className="text-gray-600 mb-2 font-medium">Nenhuma disciplina encontrada.</p>
               <p className="text-sm text-gray-500">
-                Não encontramos disciplinas para a série: <strong>{usuario?.serie || "Não identificada"}</strong>.
+                Não encontramos disciplinas para a série: <strong>{serieUsuario || "Não identificada"}</strong>.
               </p>
             </div>
           ) : (

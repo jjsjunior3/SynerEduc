@@ -1,242 +1,204 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent } from './ui/card';
+import { useState, useEffect, Fragment } from 'react';
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { X, Calendar, Clock, Loader2, AlertTriangle } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { Calendar, Clock, Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { Usuario } from '../types/auth';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { supabase } from '../supabase/supabaseClient';
 
 interface HorarioAula {
-  horario: string;
-  segunda?: string;
-  terca?: string;
-  quarta?: string;
-  quinta?: string;
-  sexta?: string;
+  id: string;
+  dia_semana: string;
+  horario_inicio: string;
+  horario_fim: string;
+  disciplina: string;
+  professor: string;
+  sala: string;
 }
 
 interface HorarioEscolarProps {
   className?: string;
   usuario: Usuario;
+  onVoltar?: () => void;
 }
 
-export function HorarioEscolar({ className, usuario }: HorarioEscolarProps) {
-  const [modalAberto, setModalAberto] = useState(false);
-  const [horario, setHorario] = useState<HorarioAula[]>([]);
+export default function HorarioEscolar({ className, usuario, onVoltar }: HorarioEscolarProps) {
+  const [horarios, setHorarios] = useState<HorarioAula[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
-  if (!usuario) {
-    return null;
-  }
+  const diasOrdem = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
+
+  // Ordena os horários únicos para montar as linhas
+  const horariosUnicos = Array.from(new Set(horarios.map(h => `${h.horario_inicio} - ${h.horario_fim}`))).sort();
+
+  // Mapa de cores fixas para evitar confusão
+  const coresDisciplinas: Record<string, string> = {
+    'Matemática': 'bg-blue-100 text-blue-800 border-blue-200',
+    'Português': 'bg-red-100 text-red-800 border-red-200',
+    'Gram/Lit': 'bg-red-50 text-red-900 border-red-100',
+    'Literatura': 'bg-pink-100 text-pink-800 border-pink-200',
+    'Redação': 'bg-rose-100 text-rose-800 border-rose-200',
+
+    'História': 'bg-amber-100 text-amber-800 border-amber-200',
+    'Geografia': 'bg-orange-100 text-orange-800 border-orange-200',
+    'Filosofia': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    'Sociologia': 'bg-lime-100 text-lime-800 border-lime-200',
+
+    'Biologia': 'bg-green-100 text-green-800 border-green-200',
+    'Física': 'bg-blue-100 text-blue-800 border-blue-200',
+    'Química': 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+    'Ciências': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+
+    'Inglês': 'bg-purple-100 text-purple-800 border-purple-200',
+    'Espanhol': 'bg-teal-100 text-teal-800 border-teal-200',
+
+    'Arte': 'bg-red-50 text-red-900 border-red-100',
+    'Ed. Física': 'bg-stone-200 text-stone-800 border-stone-300',
+  };
 
   useEffect(() => {
-    if (modalAberto && horario.length === 0) {
+    if (usuario?.serie) {
       carregarHorario();
     }
-  }, [modalAberto]);
+  }, [usuario]);
 
   const carregarHorario = async () => {
-    if (!usuario) return;
-
     try {
       setLoading(true);
       setError('');
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-c61d1ad0/horario/${usuario.serie}/${usuario.turma || 'A'}`, {
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Limpeza do nome da série (ex: "1ª série - Ensino Médio" vira "1ª série")
+      const termoBusca = usuario.serie.split('-')[0].trim();
 
-      if (!response.ok) {
-        // Se não encontrou horário específico, usar horário padrão
-        setHorario(getHorarioPadrao());
-        return;
-      }
+      const { data, error } = await supabase
+        .from('horarios_escolar')
+        .select('*')
+        .ilike('serie', `%${termoBusca}%`)
+        .order('ordem', { ascending: true });
 
-      const data = await response.json();
-      
-      if (data.horario && data.horario.length > 0) {
-        setHorario(data.horario.map((item: any) => item.value));
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setHorarios(data);
       } else {
-        setHorario(getHorarioPadrao());
+        setHorarios([]);
       }
-    } catch (error) {
-      console.error('Erro ao carregar horário:', error);
-      setError('Erro ao carregar horário. Exibindo horário padrão.');
-      setHorario(getHorarioPadrao());
+    } catch (err: any) {
+      console.error('Erro ao carregar horário:', err);
+      setError('Não foi possível carregar o horário escolar.');
     } finally {
       setLoading(false);
     }
   };
 
-  const getHorarioPadrao = (): HorarioAula[] => {
-    // Retorna array vazio para forçar uso de dados reais do backend
-    return [];
+  const getDisciplinaDoDia = (horarioLabel: string, dia: string) => {
+    const [inicio] = horarioLabel.split(' - ');
+    return horarios.find(h => h.dia_semana === dia && h.horario_inicio.startsWith(inicio));
   };
 
-  const getCorDisciplina = (disciplina: string) => {
-    if (disciplina === 'INTERVALO') {
-      return 'bg-slate-100 text-slate-600 font-semibold';
-    }
-    
-    if (disciplina?.startsWith('Aula ') || !disciplina) {
-      return 'bg-gray-100 text-gray-600 italic';
-    }
-
-    const cores: { [key: string]: string } = {
-      'Matemática': 'bg-blue-100 text-blue-800',
-      'Português': 'bg-orange-100 text-orange-800',
-      'Química': 'bg-green-100 text-green-800',
-      'Física': 'bg-indigo-100 text-indigo-800',
-      'História': 'bg-red-100 text-red-800',
-      'Biologia': 'bg-yellow-100 text-yellow-800',
-      'Literatura': 'bg-purple-100 text-purple-800',
-      'Geografia': 'bg-teal-100 text-teal-800',
-      'Inglês': 'bg-pink-100 text-pink-800',
-      'Arte': 'bg-rose-100 text-rose-800',
-      'Ed. Física': 'bg-emerald-100 text-emerald-800',
-      'Filosofia': 'bg-gray-100 text-gray-800',
-      'Sociologia': 'bg-cyan-100 text-cyan-800',
-      'Redação': 'bg-amber-100 text-amber-800'
-    };
-    return cores[disciplina] || 'bg-gray-100 text-gray-800';
+  const getCorDisciplina = (disciplina?: string) => {
+    if (!disciplina) return 'bg-gray-50';
+    // Retorna a cor específica ou um cinza padrão se não achar
+    return coresDisciplinas[disciplina] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
+
+  if (!usuario) return null;
 
   return (
-    <>
-      {/* Componente pequeno para o Dashboard */}
-      <Card className={className}>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Calendar className="w-4 h-4 text-blue-500" />
-            <h3 className="font-semibold">HORÁRIO ESCOLAR</h3>
+    <div className={`space-y-6 animate-in fade-in duration-500 ${className}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-100 rounded-full">
+            <Clock className="w-6 h-6 text-blue-600" />
           </div>
-          <div 
-            className="flex justify-center cursor-pointer hover:opacity-80 transition-opacity"
-            onClick={() => setModalAberto(true)}
-          >
-            <ImageWithFallback
-              src="https://images.unsplash.com/photo-1610888662651-05dbdec7cfae?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzY2hvb2wlMjB0aW1ldGFibGUlMjBzY2hlZHVsZXxlbnwxfHx8fDE3NTY1NjE0MjV8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-              alt="Horário Escolar"
-              className="w-16 h-12 object-cover rounded border-2 border-dashed border-gray-300"
-            />
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Grade Horária</h2>
+            <p className="text-gray-500">Série: {usuario.serie}</p>
           </div>
-          <p className="text-xs text-gray-500 text-center mt-2">Clique para ampliar</p>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Modal com horário completo */}
-      <Dialog open={modalAberto} onOpenChange={setModalAberto}>
-        <DialogContent className="max-w-6xl w-[95vw] max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              Horário Escolar - {usuario?.serie || 'Série não informada'} - Turma {usuario?.turma || 'A'}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="mt-4 max-h-[calc(90vh-120px)] overflow-y-auto">
-            {loading ? (
-              <div className="flex items-center justify-center p-8">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-2" />
-                <span className="text-gray-600">Carregando horário...</span>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {error && (
-                  <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                    <span className="text-sm text-yellow-700">{error}</span>
-                  </div>
-                )}
+        {onVoltar && (
+          <Button variant="outline" onClick={onVoltar}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar
+          </Button>
+        )}
+      </div>
 
-                {horario.length === 0 ? (
-                  <div className="text-center p-8">
-                    <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                    <h3 className="text-lg font-semibold mb-2 text-gray-700">Horário não disponível</h3>
-                    <p className="text-sm text-gray-600">
-                      O horário escolar ainda não foi definido para sua turma.
-                      Entre em contato com a secretaria.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse min-w-[600px]">
-                        <thead>
-                          <tr className="bg-gray-50">
-                            <th className="border border-gray-300 p-3 text-left font-semibold">
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4" />
-                                Horário
+      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="flex justify-center p-12">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        ) : error ? (
+          <div className="flex items-center gap-2 text-red-600 bg-red-50 p-6 m-4 rounded-md">
+            <AlertTriangle className="w-5 h-5" /> {error}
+          </div>
+        ) : horarios.length === 0 ? (
+          <div className="text-center p-12 text-gray-500">
+            <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <p>Nenhum horário cadastrado para esta série ainda.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b">
+                  <th className="p-4 text-left font-semibold text-gray-600 w-32">Horário</th>
+                  {diasOrdem.map(dia => (
+                    <th key={dia} className="p-4 text-center font-semibold text-gray-600 border-l">
+                      {dia}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {horariosUnicos.map((horarioLabel, idx) => (
+                  <Fragment key={idx}>
+                    {/* Lógica para inserir o INTERVALO após a 3ª aula (índice 2) e antes da 4ª (índice 3) */}
+                    {idx === 3 && (
+                      <tr className="bg-yellow-50 border-b">
+                        <td className="p-2 text-center font-bold text-yellow-700 text-xs border-r border-yellow-100">
+                          10:05 - 10:20
+                        </td>
+                        <td className="p-2 text-center font-bold text-yellow-700 text-xs" colSpan={5}>
+                          INTERVALO
+                        </td>
+                      </tr>
+                    )}
+
+                    <tr className="border-b last:border-0 hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 font-medium text-gray-700 bg-gray-50/30 whitespace-nowrap border-r">
+                        {horarioLabel}
+                      </td>
+                      {diasOrdem.map(dia => {
+                        const aula = getDisciplinaDoDia(horarioLabel, dia);
+                        return (
+                          <td key={dia} className="p-2 border-l align-top h-24 w-1/5">
+                            {aula ? (
+                              <div className={`h-full p-3 rounded-md flex flex-col justify-center items-center text-center gap-1 shadow-sm border ${getCorDisciplina(aula.disciplina)}`}>
+                                <div className="font-bold leading-tight">{aula.disciplina}</div>
+                                {aula.sala && (
+                                  <div className="text-[10px] mt-1 pt-1 border-t border-black/10 w-full opacity-70">
+                                    {aula.sala}
+                                  </div>
+                                )}
                               </div>
-                            </th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold">Segunda</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold">Terça</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold">Quarta</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold">Quinta</th>
-                            <th className="border border-gray-300 p-3 text-center font-semibold">Sexta</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {horario.map((linha, index) => (
-                            <tr key={index} className="hover:bg-gray-50">
-                              <td className="border border-gray-300 p-3 font-medium bg-gray-50">
-                                {linha.horario}
-                              </td>
-                              <td className="border border-gray-300 p-2">
-                                <div className={`p-2 rounded text-center text-sm ${getCorDisciplina(linha.segunda || '')}`}>
-                                  {linha.segunda || 'Livre'}
-                                </div>
-                              </td>
-                              <td className="border border-gray-300 p-2">
-                                <div className={`p-2 rounded text-center text-sm ${getCorDisciplina(linha.terca || '')}`}>
-                                  {linha.terca || 'Livre'}
-                                </div>
-                              </td>
-                              <td className="border border-gray-300 p-2">
-                                <div className={`p-2 rounded text-center text-sm ${getCorDisciplina(linha.quarta || '')}`}>
-                                  {linha.quarta || 'Livre'}
-                                </div>
-                              </td>
-                              <td className="border border-gray-300 p-2">
-                                <div className={`p-2 rounded text-center text-sm ${getCorDisciplina(linha.quinta || '')}`}>
-                                  {linha.quinta || 'Livre'}
-                                </div>
-                              </td>
-                              <td className="border border-gray-300 p-2">
-                                <div className={`p-2 rounded text-center text-sm ${getCorDisciplina(linha.sexta || '')}`}>
-                                  {linha.sexta || 'Livre'}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    
-                    <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                      <h4 className="font-semibold mb-2 text-blue-800">Informações Importantes:</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-blue-700">
-                        <p>• Início das aulas: 07:00</p>
-                        <p>• Término das aulas: 12:20</p>
-                        <p>• Intervalo: 08:40 às 09:00</p>
-                        <p>• Tolerância: 10 minutos</p>
-                        <p>• Total de aulas: 6 por dia</p>
-                        <p>• Duração de cada aula: 50 minutos</p>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                            ) : (
+                              <div className="h-full flex items-center justify-center text-gray-300">
+                                -
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+        )}
+      </div>
+    </div>
   );
 }
