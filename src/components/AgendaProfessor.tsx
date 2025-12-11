@@ -1,4 +1,3 @@
-// src/components/AgendaProfessor.tsx
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase/supabaseClient";
 import { useAuth } from '../contexts/AuthContext';
@@ -60,7 +59,7 @@ interface AtividadeAgenda {
   data_entrega: string;
   disciplina_id: string;
   professor_id: string;
-  serie_nome: string;
+  serie: string; // ✅ CORRIGIDO: Nome da coluna no banco é 'serie'
   turma: string;
   criado_em?: string;
 }
@@ -87,7 +86,9 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
   //  1️⃣  Carregar atividades reais do Supabase
   //--------------------------------------------------------------------
   useEffect(() => {
-    carregarAtividades();
+    if (disciplina.id) {
+      carregarAtividades();
+    }
   }, [disciplina.id]);
 
   async function carregarAtividades() {
@@ -121,6 +122,7 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
       return;
     }
 
+    // ⚠️ ATENÇÃO AQUI: A chave deve ser 'serie', não 'serie_nome'
     const atividadeData = {
       titulo: novaAtividade.titulo,
       descricao: novaAtividade.descricao,
@@ -128,7 +130,7 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
       data_entrega: novaAtividade.data_entrega,
       disciplina_id: disciplina.id,
       professor_id: usuario?.id,
-      serie_nome: serie?.nome || "",
+      serie: serie?.nome || "", // ✅ CORRIGIDO: Enviando para a coluna 'serie'
       turma: serie?.turma || "",
     };
 
@@ -141,7 +143,7 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
 
     if (error) {
       toast.error("Erro ao salvar atividade");
-      console.error(error);
+      console.error("Erro Supabase:", error);
     } else {
       toast.success(editando ? "Atividade atualizada!" : "Atividade adicionada!");
       carregarAtividades();
@@ -155,6 +157,8 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
   //  3️⃣  Excluir
   //--------------------------------------------------------------------
   async function handleExcluir(id: string) {
+    if (!confirm("Tem certeza que deseja excluir esta atividade?")) return;
+
     const { error } = await supabase
       .from("agenda_professor")
       .delete()
@@ -369,8 +373,13 @@ export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
           {atividadesOrdenadas.map((atividade) => {
             const dataEntrega = new Date(atividade.data_entrega);
             const hoje = new Date();
+            // Ajuste para comparar apenas datas (ignorando horas)
+            hoje.setHours(0, 0, 0, 0);
+            const dataEntregaSemHora = new Date(dataEntrega);
+            dataEntregaSemHora.setHours(0, 0, 0, 0);
+
             const diasParaEntrega = Math.ceil(
-              (dataEntrega.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
+              (dataEntregaSemHora.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
             );
             const isAtrasado = diasParaEntrega < 0;
             const isUrgente = diasParaEntrega <= 3 && diasParaEntrega >= 0;

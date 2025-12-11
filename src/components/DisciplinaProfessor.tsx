@@ -9,9 +9,7 @@ import {
   BarChart3,
   Video,
   Loader2,
-  AlertCircle,
-  PanelLeftClose,
-  PanelLeftOpen
+  AlertCircle
 } from "lucide-react";
 
 import { Button } from "./ui/button";
@@ -19,13 +17,16 @@ import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
 
+// Importação dos componentes das abas
 import { PDFViewerProfessor } from "./PDFViewerProfessor";
 import { AtividadesProfessor } from "./AtividadesProfessor";
-import { FrequenciaProfessor } from "./FrequenciaProfessor"; // Importar FrequenciaProfessor
+import { FrequenciaProfessor } from "./FrequenciaProfessor";
+import { ForumProfessor } from "./ForumProfessor";
+import { AulasAoVivoProfessor } from "./AulasAoVivoProfessor"; // ✅ Importado
 
 interface DisciplinaProfessorProps {
   disciplina: { id: string; nome: string; cor?: string };
-  serie: { id: string; nome: string }; // serie.id pode vir com prefixo "serie_"
+  serie: { id: string; nome: string };
   onVoltar: () => void;
 }
 
@@ -54,8 +55,6 @@ export function DisciplinaProfessor({
 
   const [bimestreSelecionado, setBimestreSelecionado] = useState<BimestreData | null>(null);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
-
-  // controla a visibilidade da barra lateral (sidebar)
   const [sidebarAberta, setSidebarAberta] = useState(true);
 
   /* -------------------------------------------------------------------------- */
@@ -115,19 +114,13 @@ export function DisciplinaProfessor({
   const handleFecharConteudo = () => {
     setMostrarConteudo(false);
     setBimestreSelecionado(null);
-    setSidebarAberta(true); // reabre a sidebar ao fechar o PDF
+    setSidebarAberta(true);
   };
-
-  // Estas funções não estão sendo usadas no PDFViewerProfessor, mas mantidas para referência
-  const handleUploadPDF = async (file: File) => console.log("Upload:", file);
-  const handleRemoverPDF = async () => console.log("Remover");
-  const handleEditarDescricao = async (txt: string) => console.log("Desc:", txt);
 
   /* -------------------------------------------------------------------------- */
   /*                               RENDER                                        */
   /* -------------------------------------------------------------------------- */
   return (
-    // altura fixa da tela e impede rolagem da página inteira
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* HEADER */}
       <div className={`${disciplina.cor || "bg-blue-600"} border-b transition-colors duration-300 shrink-0`}>
@@ -166,7 +159,7 @@ export function DisciplinaProfessor({
             {[
               { id: "conteudo", label: "Conteúdo", icon: FileText },
               { id: "atividades", label: "Atividades", icon: FileText },
-              { id: "frequencia", label: "Frequência", icon: BarChart3 }, // Ícone alterado para BarChart3
+              { id: "frequencia", label: "Frequência", icon: BarChart3 },
               { id: "forum", label: "Fórum", icon: MessageSquare },
               { id: "aulas-vivo", label: "Aulas ao Vivo", icon: Video }
             ].map((aba) => {
@@ -192,9 +185,8 @@ export function DisciplinaProfessor({
 
       {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Usamos um Fragment para agrupar os blocos condicionais */}
         <>
-          {/* ==================== COLUNA DA ESQUERDA (lista de bimestres) ==================== */}
+          {/* ==================== ABA CONTEÚDO (Lista de Bimestres) ==================== */}
           {abaAtiva === "conteudo" && (
             <div
               className={`
@@ -203,7 +195,6 @@ export function DisciplinaProfessor({
               `}
             >
               <div className="p-6">
-                {/* CONTEÚDO – lista de bimestres */}
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-gray-900 whitespace-nowrap">
@@ -258,9 +249,9 @@ export function DisciplinaProfessor({
             </div>
           )}
 
-          {/* ==================== COLUNA DA DIREITA (PDF VIEWER) ==================== */}
+          {/* ==================== ABA CONTEÚDO (Visualizador de PDF) ==================== */}
           {abaAtiva === "conteudo" && mostrarConteudo && (
-            <div className="flex-1 w-full bg-white overflow-hidden relative shadow-xl">
+            <div className="flex-1 w-full bg-white overflow-hidden relative shadow-xl flex flex-col [&>*]:h-full">
               <PDFViewerProfessor
                 bimestre={bimestreSelecionado}
                 onClose={handleFecharConteudo}
@@ -284,9 +275,7 @@ export function DisciplinaProfessor({
             </div>
           )}
 
-          {/* ========================================
-              ABA ATIVIDADES - COMPONENTE ATIVIDADES
-          ======================================== */}
+          {/* ==================== ABA ATIVIDADES ==================== */}
           {abaAtiva === "atividades" && (
             <div className="flex-1 w-full bg-white overflow-y-auto">
               <AtividadesProfessor
@@ -296,22 +285,42 @@ export function DisciplinaProfessor({
             </div>
           )}
 
-          {/* ========================================
-              ABA FREQUÊNCIA - COMPONENTE FREQUÊNCIA
-          ======================================== */}
+          {/* ==================== ABA FREQUÊNCIA ==================== */}
           {abaAtiva === "frequencia" && (
             <div className="flex-1 w-full bg-white overflow-y-auto">
               <FrequenciaProfessor
                 disciplina={disciplina}
-                serie={serie} // Passando o objeto serie completo
+                serie={serie}
               />
             </div>
           )}
 
-          {/* ========================================
-              OUTRAS ABAS - EM DESENVOLVIMENTO
-          ======================================== */}
-          {abaAtiva !== "conteudo" && abaAtiva !== "atividades" && abaAtiva !== "frequencia" && (
+          {/* ==================== ABA FÓRUM ==================== */}
+          {abaAtiva === "forum" && (
+            <div className="flex-1 w-full bg-white overflow-y-auto">
+              <ForumProfessor
+                disciplina={disciplina}
+                serie={serie}
+              />
+            </div>
+          )}
+
+          {/* ==================== ABA AULAS AO VIVO (NOVO) ==================== */}
+          {abaAtiva === "aulas-vivo" && (
+            <div className="flex-1 w-full bg-white overflow-y-auto">
+              <AulasAoVivoProfessor
+                disciplina={disciplina}
+                serie={serie}
+              />
+            </div>
+          )}
+
+          {/* ==================== OUTRAS ABAS (Em breve) ==================== */}
+          {abaAtiva !== "conteudo" && 
+           abaAtiva !== "atividades" && 
+           abaAtiva !== "frequencia" && 
+           abaAtiva !== "forum" && 
+           abaAtiva !== "aulas-vivo" && (
             <div className="flex-1 w-full flex items-center justify-center text-center py-12 text-gray-500 bg-white">
               <div>
                 <p className="text-lg">Funcionalidade da aba <strong>{abaAtiva}</strong> em desenvolvimento.</p>

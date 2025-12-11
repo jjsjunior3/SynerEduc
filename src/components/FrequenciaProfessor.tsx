@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 interface FrequenciaProfessorProps {
   disciplina: { id: string; nome: string };
-  serie: { id: string; nome: string }; // serie.id pode vir com prefixo "serie_"
+  serie: { id: string; nome: string };
 }
 
 interface Aluno {
@@ -37,10 +37,8 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
   const [historicoFrequencia, setHistoricoFrequencia] = useState<RegistroFrequenciaHistorico[]>([]);
   const [turmaId, setTurmaId] = useState<string | null>(null);
 
-  // ✅ CORREÇÃO CRÍTICA: Extrair o UUID puro da série
-  // Garante que o prefixo "serie_" seja removido antes de usar o ID em queries Supabase
-  // A expressão regular foi corrigida para ficar em uma única linha.
-  const serieIdPuro = typeof serie.id === 'string' ? serie.id.replace(/^serie_/, '') : serie.id;
+  // ✅ CORREÇÃO: Regex em uma única linha para evitar erro de sintaxe
+  const serieIdPuro = typeof serie.id === 'string' ? serie.id.replace(/serie_/, '') : serie.id;
   const serieNome = serie.nome;
 
   // ========================================
@@ -54,16 +52,14 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
 
     setLoadingAlunos(true);
     try {
-      // 1. Buscar a turma padrão para esta série (ou a primeira que encontrar)
-      //    A tabela 'turmas' tem uma coluna 'serie_id' (UUID)
       const { data: turmaData, error: turmaError } = await supabase
         .from('turmas')
         .select('id')
-        .eq('serie_id', serieIdPuro) // ✅ Usando o UUID puro da série
+        .eq('serie_id', serieIdPuro)
         .limit(1)
         .single();
 
-      if (turmaError && turmaError.code !== 'PGRST116') { // PGRST116 = No rows found
+      if (turmaError && turmaError.code !== 'PGRST116') {
         console.error('Erro ao buscar turma:', turmaError);
         toast.error('Erro ao buscar turma para a série.');
         setLoadingAlunos(false);
@@ -76,14 +72,13 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
         setLoadingAlunos(false);
         return;
       }
-      setTurmaId(turmaData.id); // turmas.id é um UUID
+      setTurmaId(turmaData.id);
 
-      // 2. Buscar alunos vinculados a esta turma (filtrando pela coluna 'serie' TEXT na tabela 'users')
       const { data: alunosData, error: alunosError } = await supabase
         .from('users')
         .select('id, nome')
         .eq('tipo', 'aluno')
-        .eq('serie', serieNome) // ✅ Usando o NOME da série (TEXT) para filtrar na tabela 'users'
+        .eq('serie', serieNome)
         .order('nome', { ascending: true });
 
       if (alunosError) throw alunosError;
@@ -116,7 +111,6 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
     setLoadingFrequencia(true);
 
     try {
-      // Buscar registros de frequência para a data, disciplina e turma
       const { data: frequenciaData, error: frequenciaError } = await supabase
         .from('frequencia_diaria')
         .select('aluno_id, presente, observacao')
@@ -148,7 +142,6 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
     if (!disciplina?.id || !turmaId) return;
 
     try {
-      // Agrupar por data e contar presenças/faltas por data
       const { data, error } = await supabase.rpc('get_frequencia_resumo_por_data', {
         p_disciplina_id: disciplina.id,
         p_turma_id: turmaId

@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 // Icons
 import {
   Bell,
-  MessageSquare,
+  MessageSquare, // Mantido caso queira usar, mas troquei o ícone da Agenda para Calendar
   Calendar,
   ArrowLeft,
   Settings,
@@ -23,21 +23,24 @@ import {
   BookOpen,
   Video,
   GraduationCap,
-  LogOut
+  LogOut,
+  Book
 } from "lucide-react";
 
 // Sub-components
 import { Notificacoes } from "./Notificacoes";
 import { PerfilUsuario } from "./PerfilUsuario";
 import HorarioEscolar from "./HorarioEscolar";
-import { Forum } from "./Forum";
+// import { Forum } from "./Forum"; // Removido pois foi substituído pela Agenda
 import { AgendamentoAulasVivo } from "./AgendamentoAulasVivo"; 
 import { BoletimProfessor } from "./BoletimProfessor"; 
-// ✅ NOVO IMPORT: Componente de Conteúdo da Disciplina
 import { DisciplinaProfessor } from "./DisciplinaProfessor"; 
+import { AgendaProfessor } from "./AgendaProfessor"; // ✅ Importado
+import { AtividadesProfessor } from "./AtividadesProfessor";
+import { SchoolHeader } from "./SchoolHeader";
 
-// ✅ Adicionado "disciplina" aos tipos de visualização
-type ViewType = "dashboard" | "atividades" | "boletim" | "forum" | "horarios" | "aulas-vivo" | "disciplina";
+// ✅ "forum" substituído por "agenda"
+type ViewType = "dashboard" | "atividades" | "boletim" | "agenda" | "horarios" | "aulas-vivo" | "disciplina";
 
 interface SerieTurmaResumo {
   id: string;
@@ -71,7 +74,6 @@ export default function DashboardProfessor() {
     if (!usuario?.id) return;
     try {
       setCarregando(true);
-
       const { data: vinculos, error } = await supabase
         .from("professores_disciplinas_series")
         .select(`
@@ -137,27 +139,14 @@ export default function DashboardProfessor() {
       disciplinas: [disciplina]
     };
     setTurmaSelecionada(turmaFocada);
-    // ✅ MUDANÇA: Agora abre a view "disciplina" (Conteúdo) em vez de "boletim"
     setViewAtual("disciplina"); 
   };
 
   // --- RENDERIZAÇÃO DAS VIEWS ---
 
-  if (mostrarPerfil) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <Button variant="ghost" onClick={() => setMostrarPerfil(false)} className="mb-4">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
-        </Button>
-        <PerfilUsuario />
-      </div>
-    );
-  }
-
-  // ✅ NOVA VIEW: CONTEÚDO DA DISCIPLINA
+  
   if (viewAtual === "disciplina" && turmaSelecionada) {
     return (
-      // Renderiza o componente de conteúdo, passando a função de voltar
       <DisciplinaProfessor 
         disciplina={turmaSelecionada.disciplinas[0]}
         serie={{ id: turmaSelecionada.id, nome: turmaSelecionada.nomeSerie }}
@@ -300,7 +289,6 @@ export default function DashboardProfessor() {
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setTurmaSelecionada(null)}>Trocar Turma</Button>
               </div>
-
               <BoletimProfessor 
                 disciplina={{ 
                   id: turmaSelecionada.disciplinas[0]?.id, 
@@ -318,6 +306,7 @@ export default function DashboardProfessor() {
     );
   }
 
+  // ✅ CÓDIGO CORRETO:
   if (viewAtual === "atividades") {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -325,25 +314,133 @@ export default function DashboardProfessor() {
           <Button variant="ghost" onClick={() => setViewAtual("dashboard")} className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
           </Button>
-          <Card>
-            <CardContent className="p-12 text-center">
-              <FileText className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-900">Gestão de Atividades</h2>
-              <p className="text-gray-500">O componente de criar atividades será carregado aqui.</p>
-            </CardContent>
-          </Card>
+
+          {/* Se não tiver turma selecionada, mostra seletor */}
+          {!turmaSelecionada ? (
+            <Card className="max-w-md mx-auto mt-10">
+              <CardContent className="p-6 space-y-4">
+                <div className="text-center">
+                  <FileText className="w-12 h-12 mx-auto text-blue-600 mb-2" />
+                  <h2 className="text-xl font-bold">Selecionar Turma / Disciplina</h2>
+                  <p className="text-gray-500 text-sm">
+                    Escolha a turma para gerenciar as atividades.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Turma / Disciplina</label>
+                  <Select
+                    onValueChange={(val) =>
+                      setTurmaSelecionada(turmas.find((t) => t.id === val) || null)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {turmas.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.nomeSerie} - {t.nomeTurma} ({t.disciplinas.map((d) => d.nome).join(", ")})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            /* Turma selecionada → renderiza o componente de atividades */
+            <AtividadesProfessor
+              disciplina={{
+                id: turmaSelecionada.disciplinas[0].id,
+                nome: turmaSelecionada.disciplinas[0].nome,
+              }}
+              serie={{
+                id: turmaSelecionada.id,
+                nome: turmaSelecionada.nomeSerie,
+              }}
+            />
+          )}
         </div>
       </div>
     );
   }
 
-  if (viewAtual === "forum") {
+
+  // ❌ CÓDIGO ATUAL (INCORRETO):
+  if (mostrarPerfil) {
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <Button variant="ghost" onClick={() => setMostrarPerfil(false)} className="mb-4">
+        <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
+      </Button>
+      <PerfilUsuario
+        open={mostrarPerfil}
+        onOpenChange={setMostrarPerfil}
+        usuario={usuario}
+        logout={logout}
+      />
+    </div>
+  );
+}
+
+
+  // ✅ NOVA VIEW: AGENDA (Substituindo Fórum)
+  if (viewAtual === "agenda") {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
-        <Button variant="ghost" onClick={() => setViewAtual("dashboard")} className="mb-4">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Painel
-        </Button>
-        <Forum />
+        <div className="max-w-6xl mx-auto">
+          <Button variant="ghost" onClick={() => { setViewAtual("dashboard"); setTurmaSelecionada(null); }} className="mb-4">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Painel
+          </Button>
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">Agenda da Turma</h1>
+
+          {!turmaSelecionada ? (
+            <Card className="max-w-md mx-auto mt-10">
+              <CardContent className="p-6 space-y-4">
+                <div className="text-center">
+                  <Book className="w-12 h-12 mx-auto text-purple-600 mb-2" />
+                  <h2 className="text-xl font-bold">Selecionar Agenda</h2>
+                  <p className="text-gray-500 text-sm">Escolha a turma para visualizar ou adicionar itens na agenda.</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Turma / Disciplina</label>
+                  <Select onValueChange={(val) => setTurmaSelecionada(turmas.find(t => t.id === val) || null)}>
+                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectContent>
+                      {turmas.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.nomeSerie} - {t.nomeTurma} ({t.disciplinas.map(d => d.nome).join(", ")})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
+                <div>
+                  <h3 className="font-bold text-gray-900">{turmaSelecionada.nomeSerie}</h3>
+                  <p className="text-sm text-gray-500">Disciplina: {turmaSelecionada.disciplinas[0]?.nome}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setTurmaSelecionada(null)}>Trocar Turma</Button>
+              </div>
+              <AgendaProfessor 
+                disciplina={{ 
+                  id: turmaSelecionada.disciplinas[0]?.id, 
+                  nome: turmaSelecionada.disciplinas[0]?.nome 
+                }}
+                serie={{ 
+                  id: turmaSelecionada.id, 
+                  nome: turmaSelecionada.nomeSerie,
+                  turma: turmaSelecionada.nomeTurma
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -352,15 +449,7 @@ export default function DashboardProfessor() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">AVA Conexão EAD</h1>
-              <p className="text-xs text-gray-500">Portal do Professor</p>
-            </div>
-          </div>
+          <SchoolHeader subtitle="Portal do Professor" />
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" className="relative text-gray-500 hover:bg-gray-100" onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}>
               <Bell className="w-5 h-5" />
@@ -407,10 +496,13 @@ export default function DashboardProfessor() {
             <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center"><Video className="w-5 h-5 text-rose-600" /></div>
             <span className="text-sm font-medium text-gray-700">Aulas ao Vivo</span>
           </Button>
-          <Button onClick={() => setViewAtual("forum")} variant="outline" className="p-6 h-auto flex flex-col items-center gap-3 hover:bg-purple-50 border-purple-100 shadow-sm hover:shadow-md transition-all">
-            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center"><MessageSquare className="w-5 h-5 text-purple-600" /></div>
-            <span className="text-sm font-medium text-gray-700">Fórum</span>
+
+          {/* ✅ BOTÃO AGENDA (Substituindo Fórum) */}
+          <Button onClick={() => setViewAtual("agenda")} variant="outline" className="p-6 h-auto flex flex-col items-center gap-3 hover:bg-purple-50 border-purple-100 shadow-sm hover:shadow-md transition-all">
+            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center"><Book className="w-5 h-5 text-purple-600" /></div>
+            <span className="text-sm font-medium text-gray-700">Agenda</span>
           </Button>
+
           <Button onClick={() => setViewAtual("horarios")} variant="outline" className="p-6 h-auto flex flex-col items-center gap-3 hover:bg-orange-50 border-orange-100 shadow-sm hover:shadow-md transition-all">
             <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center"><Calendar className="w-5 h-5 text-orange-600" /></div>
             <span className="text-sm font-medium text-gray-700">Horários</span>
@@ -446,7 +538,6 @@ export default function DashboardProfessor() {
                       </div>
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50"><Users className="w-5 h-5 text-blue-600" /></div>
                     </div>
-
                     <div className="space-y-4">
                       <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 mt-4">
                         {t.disciplinas.map((d) => (

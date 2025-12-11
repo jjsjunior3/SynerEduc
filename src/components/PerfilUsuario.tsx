@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../supabase/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -6,13 +8,13 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { 
-  User, 
-  Mail, 
-  BookOpen, 
-  Users, 
-  GraduationCap, 
-  Settings, 
+import {
+  User,
+  Mail,
+  BookOpen,
+  Users,
+  GraduationCap,
+  Settings,
   LogOut,
   Edit,
   School,
@@ -23,19 +25,19 @@ import {
   Loader2
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { toast } from 'sonner@2.0.3';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
-import { Usuario } from '../types/auth';
+import { toast } from 'sonner';
 
 interface PerfilUsuarioProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  usuario?: Usuario;
+  usuario?: any; // Usuario passado como prop (opcional)
   logout?: () => void;
-  atualizarUsuario?: (usuario: Usuario) => void;
 }
 
-export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUsuario }: PerfilUsuarioProps) {
+export function PerfilUsuario({ open, onOpenChange, usuario: usuarioProp, logout }: PerfilUsuarioProps) {
+  const { usuario: usuarioContext, atualizarPerfil } = useAuth();
+  const usuario = usuarioProp || usuarioContext;
+
   const [editando, setEditando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -45,7 +47,7 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
     avatar: ''
   });
 
-  // Update state when usuario changes
+  // Atualiza o estado quando o usuário muda
   useEffect(() => {
     if (usuario) {
       setDadosEditados({
@@ -59,8 +61,10 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
   if (!usuario) return null;
 
   const handleLogout = () => {
-    logout();
-    onOpenChange(false);
+    if (logout) {
+      logout();
+      onOpenChange(false);
+    }
   };
 
   const handleEditarPerfil = () => {
@@ -81,6 +85,9 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
     });
   };
 
+  // ========================================
+  // SALVAR PERFIL NO SUPABASE
+  // ========================================
   const handleSalvarPerfil = async () => {
     if (!dadosEditados.nome.trim()) {
       toast.error('Nome é obrigatório');
@@ -89,30 +96,28 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
 
     setSalvando(true);
     try {
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-c61d1ad0/usuarios/perfil`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          usuarioId: usuario?.id,
+      const { data, error } = await supabase
+        .from('users')
+        .update({
           nome: dadosEditados.nome,
           email: dadosEditados.email,
-          avatar: dadosEditados.avatar
+          avatar: dadosEditados.avatar,
+          updated_at: new Date().toISOString()
         })
-      });
+        .eq('id', usuario.id)
+        .select()
+        .single();
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      if (error) throw error;
+
+      // Atualizar contexto de autenticação
+      if (atualizarPerfil) {
+        atualizarPerfil(data);
       }
 
-      const usuarioAtualizado = await response.json();
-      atualizarUsuario(usuarioAtualizado);
       setEditando(false);
       toast.success('Perfil atualizado com sucesso!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar perfil:', error);
       toast.error(`Erro ao atualizar perfil: ${error.message}`);
     } finally {
@@ -120,17 +125,20 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
     }
   };
 
+  // ========================================
+  // UPLOAD DE AVATAR PARA O SUPABASE STORAGE
+  // ========================================
   const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validar tamanho (máximo 2MB)
+    // Validação de tamanho (máx 2 MB)
     if (file.size > 2 * 1024 * 1024) {
       toast.error('Imagem muito grande. Máximo 2MB.');
       return;
     }
 
-    // Validar tipo
+    // Validação de tipo
     if (!file.type.startsWith('image/')) {
       toast.error('Apenas imagens são permitidas');
       return;
@@ -138,34 +146,49 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
 
     setUploadingAvatar(true);
     try {
-      const formData = new FormData();
-      formData.append('avatar', file);
-      formData.append('usuarioId', usuario?.id || '');
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${usuario.id}.${fileExt}`;
+      const filePath = `${usuario.id}/${fileName}`;
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-c61d1ad0/usuarios/avatar`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`
-        },
-        body: formData
-      });
+      // 1. Upload para o bucket 'avatars'
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true // Substitui se já existir
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao fazer upload da imagem');
+      if (uploadError) throw uploadError;
+
+      // 2. Obter URL pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // 3. Atualizar avatar na tabela users
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          avatar: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', usuario.id);
+
+      if (updateError) throw updateError;
+
+      // Atualizar estado local
+      setDadosEditados(prev => ({ ...prev, avatar: publicUrl }));
+
+      // Atualizar contexto de autenticação
+      if (atualizarPerfil) {
+        atualizarPerfil({
+          ...usuario,
+          avatar: publicUrl
+        });
       }
 
-      const { avatarUrl } = await response.json();
-      setDadosEditados(prev => ({ ...prev, avatar: avatarUrl }));
-      
-      // Atualizar imediatamente o avatar do usuário
-      atualizarUsuario({
-        ...usuario,
-        avatar: avatarUrl
-      });
-      
       toast.success('Foto atualizada com sucesso!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
       toast.error(`Erro ao fazer upload da foto: ${error.message}`);
     } finally {
@@ -175,52 +198,37 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
 
   const getTipoIcon = () => {
     switch (usuario?.tipo) {
-      case 'aluno':
-        return <BookOpen className="w-4 h-4" />;
-      case 'professor':
-        return <GraduationCap className="w-4 h-4" />;
-      case 'coordenador':
-        return <Users className="w-4 h-4" />;
-      case 'administrador':
-        return <Settings className="w-4 h-4" />;
-      default:
-        return <User className="w-4 h-4" />;
+      case 'aluno':        return <BookOpen className="w-4 h-4" />;
+      case 'professor':    return <GraduationCap className="w-4 h-4" />;
+      case 'coordenador':  return <Users className="w-4 h-4" />;
+      case 'administrador':return <Settings className="w-4 h-4" />;
+      default:             return <User className="w-4 h-4" />;
     }
   };
 
   const getTipoCor = () => {
     switch (usuario?.tipo) {
-      case 'aluno':
-        return 'bg-blue-100 text-blue-800';
-      case 'professor':
-        return 'bg-green-100 text-green-800';
-      case 'coordenador':
-        return 'bg-orange-100 text-orange-800';
-      case 'administrador':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'aluno':         return 'bg-blue-100 text-blue-800';
+      case 'professor':     return 'bg-green-100 text-green-800';
+      case 'coordenador':   return 'bg-orange-100 text-orange-800';
+      case 'administrador': return 'bg-red-100 text-red-800';
+      default:              return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getTipoNome = () => {
     switch (usuario?.tipo) {
-      case 'aluno':
-        return 'Aluno';
-      case 'professor':
-        return 'Professor';
-      case 'coordenador':
-        return 'Coordenador';
-      case 'administrador':
-        return 'Administrador';
-      default:
-        return 'Usuário';
+      case 'aluno':         return 'Aluno';
+      case 'professor':     return 'Professor';
+      case 'coordenador':   return 'Coordenador';
+      case 'administrador': return 'Administrador';
+      default:              return 'Usuário';
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
@@ -235,20 +243,20 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
           {/* Header do perfil */}
           <div className="flex items-start gap-4 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg">
             <div className="relative">
-              <Avatar className="w-20 h-20">
+              <Avatar className="w-20 h-20 border-4 border-white shadow-lg">
                 <AvatarImage src={editando ? dadosEditados.avatar : usuario?.avatar} alt={usuario?.nome || 'Usuario'} />
-                <AvatarFallback className="text-lg font-semibold">
+                <AvatarFallback className="text-lg font-semibold bg-blue-600 text-white">
                   {(() => {
                     const nome = editando ? dadosEditados.nome : usuario?.nome;
                     if (!nome) return 'U';
-                    return nome.split(' ').map(n => n[0]).join('').toUpperCase();
+                    return nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
                   })()}
                 </AvatarFallback>
               </Avatar>
               {editando && (
                 <div className="absolute bottom-0 right-0">
                   <label htmlFor="avatar-upload" className="cursor-pointer">
-                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors">
+                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors shadow-lg">
                       {uploadingAvatar ? (
                         <Loader2 className="w-4 h-4 text-white animate-spin" />
                       ) : (
@@ -267,23 +275,24 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
                 </div>
               )}
             </div>
-            
+
             <div className="flex-1 space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-4">
                 {editando ? (
-                  <div className="flex-1 mr-4">
-                    <Label htmlFor="nome">Nome</Label>
+                  <div className="flex-1">
+                    <Label htmlFor="nome" className="text-sm font-medium">Nome Completo</Label>
                     <Input
                       id="nome"
                       value={dadosEditados.nome}
                       onChange={(e) => setDadosEditados(prev => ({ ...prev, nome: e.target.value }))}
                       className="mt-1"
+                      placeholder="Digite seu nome completo"
                     />
                   </div>
                 ) : (
                   <h2 className="text-2xl font-bold text-gray-900">{usuario?.nome || 'Usuário'}</h2>
                 )}
-                
+
                 {!editando ? (
                   <Button variant="outline" size="sm" onClick={handleEditarPerfil}>
                     <Edit className="w-4 h-4 mr-2" />
@@ -306,138 +315,113 @@ export function PerfilUsuario({ open, onOpenChange, usuario, logout, atualizarUs
                   </div>
                 )}
               </div>
-              
+
               <div className="flex items-center gap-2">
                 <Badge className={getTipoCor()}>
                   {getTipoIcon()}
                   <span className="ml-1">{getTipoNome()}</span>
                 </Badge>
               </div>
-              
-              <div className="flex items-center gap-2 text-gray-600">
-                <Mail className="w-4 h-4" />
-                {editando ? (
-                  <div className="flex-1">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={dadosEditados.email}
-                      onChange={(e) => setDadosEditados(prev => ({ ...prev, email: e.target.value }))}
-                      className="mt-1"
-                    />
-                  </div>
-                ) : (
+
+              {editando ? (
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-medium">E-mail</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={dadosEditados.email}
+                    onChange={(e) => setDadosEditados(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="seu.email@exemplo.com"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Mail className="w-4 h-4" />
                   <span>{usuario?.email || 'Email não informado'}</span>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Informações específicas por tipo de usuário */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <School className="w-4 h-4" />
-                  Informações Acadêmicas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {usuario?.tipo === 'aluno' && (
-                  <>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Série</p>
-                      <p className="font-medium">{usuario?.serie || 'Não informado'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Turma</p>
-                      <p className="font-medium">{usuario?.turma || 'Não informado'}</p>
-                    </div>
-                  </>
-                )}
-                
-                {(usuario?.tipo === 'professor' || usuario?.tipo === 'coordenador') && (
-                  <>
-                    {usuario?.disciplinas && (
-                      <div>
-                        <p className="text-sm font-medium text-gray-500 mb-2">Disciplinas</p>
-                        <div className="flex flex-wrap gap-1">
-                          {usuario?.disciplinas?.map((disciplina, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
-                              {disciplina}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {usuario?.turmas && (
-                      <div>
-                        <p className="text-sm font-medium text-gray-500 mb-2">Turmas</p>
-                        <div className="flex flex-wrap gap-1">
-                          {usuario?.turmas?.map((turma, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
-                              {turma}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-                
-                {usuario?.tipo === 'administrador' && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Permissões</p>
-                    <p className="font-medium">Acesso total ao sistema</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          <Separator />
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Informações da Conta
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">ID do Usuário</p>
-                  <p className="font-mono text-sm">{usuario?.id || 'N/A'}</p>
+          {/* Informações Acadêmicas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <School className="w-5 h-5" />
+                Informações Acadêmicas
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {usuario?.serie && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Série:</span>
+                  <Badge variant="outline">{usuario.serie}</Badge>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Último acesso</p>
-                  <p>Hoje, {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+              )}
+              {usuario?.turma && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Turma:</span>
+                  <Badge variant="outline">{usuario.turma}</Badge>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Status</p>
-                  <Badge className="bg-green-100 text-green-800">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                    Online
-                  </Badge>
+              )}
+              {usuario?.tipo === 'professor' && usuario?.disciplinas && usuario.disciplinas.length > 0 && (
+                <div className="flex justify-between items-start">
+                  <span className="text-sm text-gray-600">Disciplinas:</span>
+                  <div className="flex flex-wrap gap-1 justify-end max-w-xs">
+                    {usuario.disciplinas.map((disc: string, idx: number) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">
+                        {disc}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Separator />
+
+          {/* Informações da Conta */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Informações da Conta
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Status:</span>
+                <Badge variant={usuario?.status === 'ativo' ? 'default' : 'destructive'}>
+                  {usuario?.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                </Badge>
+              </div>
+              {usuario?.criado_em && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Membro desde:</span>
+                  <span className="text-sm text-gray-900">
+                    {new Date(usuario.criado_em).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Separator />
 
           {/* Ações */}
-          <div className="flex items-center justify-between pt-4 border-t">
-            <div className="text-sm text-gray-500">
-              Membro desde Janeiro 2024
-            </div>
-            
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Fechar
-              </Button>
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Fechar
+            </Button>
+            {logout && (
               <Button variant="destructive" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Sair
               </Button>
-            </div>
+            )}
           </div>
         </div>
       </DialogContent>

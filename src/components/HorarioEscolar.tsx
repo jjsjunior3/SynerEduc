@@ -16,72 +16,63 @@ interface HorarioAula {
 
 interface HorarioEscolarProps {
   className?: string;
-  usuario: Usuario;
+  usuario?: Usuario; // Opcional (usado pelo aluno)
+  turmaSelecionada?: string; // Opcional (usado pelo professor)
   onVoltar?: () => void;
 }
 
-export default function HorarioEscolar({ className, usuario, onVoltar }: HorarioEscolarProps) {
+export default function HorarioEscolar({ className, usuario, turmaSelecionada, onVoltar }: HorarioEscolarProps) {
   const [horarios, setHorarios] = useState<HorarioAula[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
   const diasOrdem = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
 
-  // Ordena os horários únicos para montar as linhas
+  // Lógica inteligente: Se o professor selecionou uma turma, usa ela. 
+  // Se não, tenta usar a série do usuário logado (caso seja aluno).
+  const serieAlvo = turmaSelecionada || usuario?.serie;
+
+  // Ordena os horários únicos para montar as linhas da tabela
   const horariosUnicos = Array.from(new Set(horarios.map(h => `${h.horario_inicio} - ${h.horario_fim}`))).sort();
 
-  // Mapa de cores fixas para evitar confusão
+  // Cores para deixar o horário visualmente organizado
   const coresDisciplinas: Record<string, string> = {
     'Matemática': 'bg-blue-100 text-blue-800 border-blue-200',
     'Português': 'bg-red-100 text-red-800 border-red-200',
-    'Gram/Lit': 'bg-red-50 text-red-900 border-red-100',
-    'Literatura': 'bg-pink-100 text-pink-800 border-pink-200',
-    'Redação': 'bg-rose-100 text-rose-800 border-rose-200',
-
     'História': 'bg-amber-100 text-amber-800 border-amber-200',
     'Geografia': 'bg-orange-100 text-orange-800 border-orange-200',
-    'Filosofia': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    'Sociologia': 'bg-lime-100 text-lime-800 border-lime-200',
-
-    'Biologia': 'bg-green-100 text-green-800 border-green-200',
-    'Física': 'bg-blue-100 text-blue-800 border-blue-200',
-    'Química': 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
     'Ciências': 'bg-emerald-100 text-emerald-800 border-emerald-200',
-
     'Inglês': 'bg-purple-100 text-purple-800 border-purple-200',
-    'Espanhol': 'bg-teal-100 text-teal-800 border-teal-200',
-
-    'Arte': 'bg-red-50 text-red-900 border-red-100',
+    'Arte': 'bg-pink-100 text-pink-800 border-pink-200',
     'Ed. Física': 'bg-stone-200 text-stone-800 border-stone-300',
   };
 
   useEffect(() => {
-    if (usuario?.serie) {
+    if (serieAlvo) {
       carregarHorario();
     }
-  }, [usuario]);
+  }, [serieAlvo]);
 
   const carregarHorario = async () => {
+    if (!serieAlvo) return;
+
     try {
       setLoading(true);
       setError('');
 
-      // Limpeza do nome da série (ex: "1ª série - Ensino Médio" vira "1ª série")
-      const termoBusca = usuario.serie.split('-')[0].trim();
+      // Limpa o nome da série para busca (ex: "1ª Série A" -> busca por "1ª Série")
+      // Isso ajuda a encontrar o horário mesmo se o nome da turma for um pouco diferente
+      const termoBusca = serieAlvo.split('-')[0].trim();
 
       const { data, error } = await supabase
         .from('horarios_escolar')
         .select('*')
-        .ilike('serie', `%${termoBusca}%`)
+        .ilike('serie', `%${termoBusca}%`) // Busca flexível pelo nome da série
         .order('ordem', { ascending: true });
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        setHorarios(data);
-      } else {
-        setHorarios([]);
-      }
+      setHorarios(data || []);
     } catch (err: any) {
       console.error('Erro ao carregar horário:', err);
       setError('Não foi possível carregar o horário escolar.');
@@ -92,16 +83,17 @@ export default function HorarioEscolar({ className, usuario, onVoltar }: Horario
 
   const getDisciplinaDoDia = (horarioLabel: string, dia: string) => {
     const [inicio] = horarioLabel.split(' - ');
+    // Encontra a aula que bate com o dia e o horário de início
     return horarios.find(h => h.dia_semana === dia && h.horario_inicio.startsWith(inicio));
   };
 
   const getCorDisciplina = (disciplina?: string) => {
     if (!disciplina) return 'bg-gray-50';
-    // Retorna a cor específica ou um cinza padrão se não achar
-    return coresDisciplinas[disciplina] || 'bg-gray-100 text-gray-800 border-gray-200';
+    // Retorna a cor mapeada ou um cinza padrão se não tiver cor definida
+    return coresDisciplinas[disciplina] || 'bg-indigo-50 text-indigo-800 border-indigo-200';
   };
 
-  if (!usuario) return null;
+  if (!serieAlvo) return null;
 
   return (
     <div className={`space-y-6 animate-in fade-in duration-500 ${className}`}>
@@ -112,7 +104,7 @@ export default function HorarioEscolar({ className, usuario, onVoltar }: Horario
           </div>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Grade Horária</h2>
-            <p className="text-gray-500">Série: {usuario.serie}</p>
+            <p className="text-gray-500">Visualizando: {serieAlvo}</p>
           </div>
         </div>
 
@@ -136,7 +128,7 @@ export default function HorarioEscolar({ className, usuario, onVoltar }: Horario
         ) : horarios.length === 0 ? (
           <div className="text-center p-12 text-gray-500">
             <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>Nenhum horário cadastrado para esta série ainda.</p>
+            <p>Nenhum horário encontrado para <strong>{serieAlvo}</strong>.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -154,14 +146,14 @@ export default function HorarioEscolar({ className, usuario, onVoltar }: Horario
               <tbody>
                 {horariosUnicos.map((horarioLabel, idx) => (
                   <Fragment key={idx}>
-                    {/* Lógica para inserir o INTERVALO após a 3ª aula (índice 2) e antes da 4ª (índice 3) */}
+                    {/* Exemplo de Intervalo Fixo (opcional, pode remover se quiser) */}
                     {idx === 3 && (
                       <tr className="bg-yellow-50 border-b">
                         <td className="p-2 text-center font-bold text-yellow-700 text-xs border-r border-yellow-100">
-                          10:05 - 10:20
+                          Intervalo
                         </td>
                         <td className="p-2 text-center font-bold text-yellow-700 text-xs" colSpan={5}>
-                          INTERVALO
+                          RECREIO
                         </td>
                       </tr>
                     )}
@@ -177,9 +169,12 @@ export default function HorarioEscolar({ className, usuario, onVoltar }: Horario
                             {aula ? (
                               <div className={`h-full p-3 rounded-md flex flex-col justify-center items-center text-center gap-1 shadow-sm border ${getCorDisciplina(aula.disciplina)}`}>
                                 <div className="font-bold leading-tight">{aula.disciplina}</div>
+                                {aula.professor && (
+                                  <div className="text-[10px] opacity-80">{aula.professor}</div>
+                                )}
                                 {aula.sala && (
-                                  <div className="text-[10px] mt-1 pt-1 border-t border-black/10 w-full opacity-70">
-                                    {aula.sala}
+                                  <div className="text-[9px] mt-1 pt-1 border-t border-black/10 w-full opacity-60">
+                                    Sala {aula.sala}
                                   </div>
                                 )}
                               </div>
