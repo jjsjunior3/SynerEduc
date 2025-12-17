@@ -1,353 +1,260 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Progress } from './ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Separator } from './ui/separator';
-import { PDFViewer } from './PDFViewer';
-import { Forum } from './Forum';
-import { AulasAoVivo } from './AulasAoVivo';
-import { AtividadesAluno } from './AtividadesAluno';
-import { 
-  ArrowLeft, 
-  CheckCircle, 
-  Clock, 
-  AlertCircle, 
-  FileText, 
+// src/components/DisciplinaPage.tsx
+/**
+ * Componente para visualizar o conteúdo de uma disciplina específica para o ALUNO.
+ * Contém abas para Conteúdo, Atividades, Frequência, Agenda, Aulas ao Vivo e Fórum.
+ *
+ * CORREÇÕES:
+ * - Ajuste na interface DisciplinaPageProps para receber serie e turma como objetos com IDs e nomes.
+ * - Passagem correta das props disciplina, serie e turma para AgendaAluno e FrequenciaAluno.
+ * - Renderiza AgendaAluno e FrequenciaAluno (novos componentes).
+ * - REMOVIDAS todas as referências a ThemeContext e Dark Mode.
+ */
+
+import { useState, useEffect } from "react";
+import { supabase } from "../supabase/supabaseClient";
+import {
+  ArrowLeft,
+  FileText,
+  CheckCircle,
+  BookOpen,
   MessageSquare,
-  Calendar,
-  User,
-  Book,
-  Target,
-  Menu,
-  X,
-  Download,
-  Loader2
-} from 'lucide-react';
-import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+  BarChart3,
+  Video,
+  Loader2,
+  AlertCircle,
+  Calendar as CalendarIcon,
+} from "lucide-react";
 
-interface Disciplina {
+import { Button } from "./ui/button";
+import { Card, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Progress } from "./ui/progress";
+// import { useTheme } from "../contexts/ThemeContext"; // REMOVIDO
+
+// Sub‑componentes das abas
+import { PDFViewerModerno } from "./PDFViewerModerno"; // Assumindo que você terá um PDFViewerAluno
+import { AtividadesAluno } from "./AtividadesAluno";
+import  {FrequenciaAluno}  from "./FrequenciaAluno"; // ✅ NOVO: Componente para Frequência do Aluno
+import { Forum } from "./Forum"; // Assumindo que você terá um ForumAluno
+import { AulasAoVivo } from "./AulasAoVivo"; // Assumindo que você terá um AulasAoVivoAluno
+import { AgendaAluno } from "./AgendaAluno"; // ✅ NOVO: Componente para Agenda do Aluno
+
+/* ============================================================= */
+/* ====================== TIPOS DE DADOS ====================== */
+interface DisciplinaProps {
   id: string;
   nome: string;
-  professor: string;
-  cor: string;
-  icone: React.ReactNode;
-  progresso: number;
+  cor?: string;
 }
 
-interface Atividade {
-  id: string;
-  titulo: string;
-  descricao: string;
-  dataEntrega: string;
-  status: 'pendente' | 'concluido' | 'atrasado';
-  tipo: 'exercicio' | 'prova' | 'trabalho';
+interface SerieProps {
+  id: string; // ID real da série (UUID)
+  nome: string; // Nome da série (string)
 }
 
-interface BimestrePDF {
-  id: string;
-  nome: string;
-  progresso: number;
-  pdfUrl?: string;
-  descricao: string;
-  atividades: Atividade[];
+interface TurmaProps {
+  id: string; // ID da turma (UUID)
+  nome: string; // Nome da turma (string)
 }
 
+// ✅ AJUSTADO: Interface de props para DisciplinaPage
 interface DisciplinaPageProps {
-  disciplina: Disciplina;
+  disciplina: DisciplinaProps;
+  serie: SerieProps; // ✅ ID real da série e nome da série
+  turma: TurmaProps; // ✅ ID da turma e nome da turma
   onVoltar: () => void;
 }
 
-export function DisciplinaPage({ disciplina, onVoltar }: DisciplinaPageProps) {
-  const [activeTab, setActiveTab] = useState('conteudo');
-  const [bimestreSelecionado, setBimestreSelecionado] = useState<BimestrePDF | null>(null);
-  const [sidebarAberta, setSidebarAberta] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
-  const [bimestres, setBimestres] = useState<BimestrePDF[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
-  const { usuario } = useAuth();
+/* ============================================================= */
 
-  // Detectar se é mobile
+export function DisciplinaPage({
+  disciplina,
+  serie,
+  turma,
+  onVoltar,
+}: DisciplinaPageProps) {
+  // const { theme } = useTheme(); // REMOVIDO
+  const [abaAtiva, setAbaAtiva] = useState<
+    "conteudo" | "atividades" | "forum" | "frequencia" | "agenda" | "aulas-vivo"
+  >("conteudo");
+
+  const [loadingConteudo, setLoadingConteudo] = useState(false);
+  const [conteudo, setConteudo] = useState<any>(null);
+
   useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-      if (window.innerWidth < 1024) {
-        setSidebarAberta(false);
-      }
-    };
-    
-    checkIsMobile();
-    window.addEventListener('resize', checkIsMobile);
-    return () => window.removeEventListener('resize', checkIsMobile);
-  }, []);
-
-  // Carregar dados da disciplina
-  useEffect(() => {
-    carregarConteudoDisciplina();
-  }, [disciplina.id, usuario?.id]);
-
-  const carregarConteudoDisciplina = async () => {
-    if (!usuario?.id || !disciplina.id) return;
-
-    try {
-      setLoading(true);
-      setError('');
-
-      // NOVA ROTA: Usar a rota correta que implementamos no servidor
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-c61d1ad0/conteudo-pdf/usuario/${usuario.id}/disciplina/${disciplina.id}`, {
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setBimestres([]);
-          setError('Conteúdo da disciplina ainda não foi disponibilizado.');
-        } else {
-          throw new Error(`Erro ${response.status}: ${response.statusText}`);
-        }
-        return;
-      }
-
-      const data = await response.json();
-      console.log('[DISCIPLINA_PAGE] Resposta do servidor:', data);
-      
-      // A nova API retorna diretamente { disciplina, serie, bimestres }
-      const bimestresData = data.bimestres || [];
-      
-      setBimestres(bimestresData);
-      
-      // Se não há bimestres, mostrar mensagem apropriada
-      if (bimestresData.length === 0) {
-        setError('Nenhum conteúdo disponível para esta disciplina no momento.');
-      }
-    } catch (error) {
-      console.error('Erro ao carregar conteúdo da disciplina:', error);
-      setError('Erro ao carregar o conteúdo da disciplina. Tente novamente mais tarde.');
-      setBimestres([]);
-    } finally {
-      setLoading(false);
+    if (abaAtiva === "conteudo" && disciplina?.id) {
+      setLoadingConteudo(true);
+      setTimeout(() => {
+        setConteudo({
+          titulo: `Conteúdo de ${disciplina.nome}`,
+          descricao: `Este é o material didático para a disciplina de ${disciplina.nome} da ${serie.nome} - Turma ${turma.nome}.`,
+        });
+        setLoadingConteudo(false);
+      }, 500);
     }
-  };
+  }, [abaAtiva, disciplina, serie, turma]);
 
-  const progressoGeral = bimestres.length > 0 
-    ? bimestres.reduce((acc, bim) => acc + bim.progresso, 0) / bimestres.length 
-    : 0;
+  /* ============================================================= */
+  /* ==================== RENDERIZAÇÃO DAS ABAS ==================== */
 
-  const handleBimestreClick = (bimestre: BimestrePDF) => {
-    setBimestreSelecionado(bimestre);
-    if (isMobile) {
-      setSidebarAberta(false);
-    }
-  };
+  if (abaAtiva === "conteudo") {
+    return (
+      <div className="flex-1 w-full bg-gray-50 p-6 overflow-y-auto"> {/* REMOVIDO dark: classes */}
+        {loadingConteudo ? (
+          <div className="flex items-center justify-center p-12">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" /> {/* REMOVIDO dark: classes */}
+            <span className="ml-2 text-gray-600">Carregando conteúdo...</span> {/* REMOVIDO dark: classes */}
+          </div>
+        ) : (
+          <Card className="max-w-4xl mx-auto bg-white text-gray-900"> {/* REMOVIDO dark: classes */}
+            <CardHeader>
+              <CardTitle>Conteúdo da Disciplina: {disciplina.nome}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-700">{conteudo?.descricao}</p> {/* REMOVIDO dark: classes */}
+              {/* <PDFViewerAluno pdfUrl="https://example.com/sample.pdf" /> */}
+              <div className="p-4 border border-dashed rounded-md text-center text-gray-500"> {/* REMOVIDO dark: classes */}
+                Conteúdo da disciplina será exibido aqui.
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
 
-  const handleProximoBimestre = () => {
-    if (!bimestreSelecionado) return;
-    
-    const currentIndex = bimestres.findIndex(b => b.id === bimestreSelecionado.id);
-    if (currentIndex < bimestres.length - 1) {
-      setBimestreSelecionado(bimestres[currentIndex + 1]);
-    }
-  };
+  if (abaAtiva === "atividades") {
+    return (
+      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
+        <AtividadesAluno
+          onVoltar={onVoltar}
+          disciplina={disciplina}
+          serie={serie}
+          turma={turma}
+        />
+      </div>
+    );
+  }
 
-  const handleAnteriorBimestre = () => {
-    if (!bimestreSelecionado) return;
-    
-    const currentIndex = bimestres.findIndex(b => b.id === bimestreSelecionado.id);
-    if (currentIndex > 0) {
-      setBimestreSelecionado(bimestres[currentIndex - 1]);
-    }
-  };
+  if (abaAtiva === "frequencia") {
+    return (
+      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
+        <FrequenciaAluno
+          onVoltar={onVoltar}
+          disciplina={disciplina}
+          serie={serie}
+          turma={turma}
+        />
+      </div>
+    );
+  }
 
-  const currentIndex = bimestreSelecionado ? 
-    bimestres.findIndex(b => b.id === bimestreSelecionado.id) : -1;
+  if (abaAtiva === "agenda") {
+    return (
+      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
+        <AgendaAluno
+          onVoltar={onVoltar}
+          disciplina={disciplina}
+          serie={serie}
+          turma={turma}
+        />
+      </div>
+    );
+  }
 
+  if (abaAtiva === "aulas-vivo") {
+    return (
+      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
+        <AulasAoVivo
+          onVoltar={onVoltar}
+          disciplina={disciplina}
+          serie={serie}
+          turma={turma}
+        />
+      </div>
+    );
+  }
+
+  if (abaAtiva === "forum") {
+    return (
+      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
+        <Forum
+          onVoltar={onVoltar}
+          disciplina={disciplina}
+          serie={serie}
+          turma={turma}
+        />
+      </div>
+    );
+  }
+
+  /* ============================================================= */
+  /* ==================== LAYOUT PRINCIPAL DO COMPONENTE ==================== */
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header da Disciplina */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={onVoltar}>
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-              <div className="flex items-center gap-3">
-                {disciplina.icone}
-                <div>
-                  <h1 className="text-xl font-semibold text-gray-900">{disciplina.nome}</h1>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <User className="w-4 h-4" />
-                    <span>{disciplina.professor}</span>
-                  </div>
-                </div>
-              </div>
+    <div className="h-screen flex flex-col bg-gray-50 text-gray-900 overflow-hidden"> {/* REMOVIDO dark: classes */}
+      {/* HEADER */}
+      <div className={`${disciplina.cor || "bg-blue-600"} border-b shrink-0`}>
+        <div className="px-6 py-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onVoltar}
+            className="flex items-center gap-2 text-white hover:text-white/80 hover:bg-white/10"
+          >
+            <ArrowLeft className="w-4 h-4" /> Voltar ao Painel
+          </Button>
+
+          <div className="flex justify-between items-end text-white mt-4">
+            <div>
+              <h1 className="text-2xl font-bold">{disciplina.nome}</h1>
+              <p className="text-white/80 text-sm">
+                {serie.nome} - Turma {turma.nome}
+              </p>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-600 mb-1">Progresso Geral</div>
-              <div className="flex items-center gap-2">
-                <Progress value={progressoGeral} className="w-32" />
-                <span className="text-sm font-medium">{Math.round(progressoGeral)}%</span>
-              </div>
-            </div>
+            <Badge className="bg-white/20 text-white border-0">
+              <BookOpen className="w-4 h-4 mr-2" /> Material Didático
+            </Badge>
           </div>
         </div>
       </div>
 
-      <div className="flex h-full">
-        {/* Sidebar - Lista de Bimestres */}
-        <div className={`
-          ${isMobile ? 'fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-lg transform transition-transform duration-300' : 'relative'}
-          ${isMobile && !sidebarAberta ? '-translate-x-full' : 'translate-x-0'}
-          ${!isMobile ? (sidebarAberta ? 'w-80' : 'w-16') : ''}
-          border-r border-gray-200 flex flex-col transition-all duration-300
-        `}>
-          
-          {/* Header da Sidebar */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              {(!isMobile || sidebarAberta) && (
-                <h3 className="font-semibold text-gray-900">Material de Estudo</h3>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSidebarAberta(!sidebarAberta)}
-                className={isMobile ? '' : 'ml-auto'}
-              >
-                {isMobile ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              </Button>
-            </div>
+      {/* ABAS DE NAVEGAÇÃO */}
+      <div className="bg-white border-b border-gray-200 shrink-0 z-10"> {/* REMOVIDO dark: classes */}
+        <div className="px-6">
+          <div className="flex space-x-6 overflow-x-auto">
+            {[
+              { id: "conteudo", label: "Conteúdo", icon: FileText },
+              { id: "atividades", label: "Atividades", icon: FileText },
+              { id: "frequencia", label: "Frequência", icon: BarChart3 },
+              { id: "agenda", label: "Agenda", icon: CalendarIcon },
+              { id: "aulas-vivo", label: "Aulas ao Vivo", icon: Video },
+              { id: "forum", label: "Fórum", icon: MessageSquare },
+            ].map((aba) => {
+              const Icon = aba.icon;
+              return (
+                <button
+                  key={aba.id}
+                  onClick={() => setAbaAtiva(aba.id as any)}
+                  className={`flex items-center gap-2 py-4 border-b-2 font-medium whitespace-nowrap ${
+                    abaAtiva === aba.id
+                      ? "border-blue-600 text-blue-600" // REMOVIDO dark: classes
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" // REMOVIDO dark: classes
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {aba.label}
+                </button>
+              );
+            })}
           </div>
-
-          {/* Conteúdo da Sidebar */}
-          {(!isMobile || sidebarAberta) && (
-            <div className="flex-1 overflow-y-auto p-4">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="conteudo">Conteúdo</TabsTrigger>
-                  <TabsTrigger value="atividades">Atividades</TabsTrigger>
-                  <TabsTrigger value="forum">Fórum</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="conteudo" className="space-y-4">
-                  {loading ? (
-                    <div className="flex items-center justify-center p-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-2" />
-                      <span className="text-gray-600 text-sm">Carregando conteúdo...</span>
-                    </div>
-                  ) : error ? (
-                    <Card className="border-yellow-200 bg-yellow-50">
-                      <CardContent className="p-4 text-center">
-                        <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-600" />
-                        <p className="text-sm text-yellow-700">{error}</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={carregarConteudoDisciplina}
-                          className="mt-3"
-                        >
-                          Tentar novamente
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ) : bimestres.length === 0 ? (
-                    <Card>
-                      <CardContent className="p-6 text-center">
-                        <Book className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                        <h3 className="font-semibold text-gray-700 mb-2">Nenhum conteúdo disponível</h3>
-                        <p className="text-sm text-gray-600">
-                          O material de estudo desta disciplina ainda não foi disponibilizado.
-                          Entre em contato com o professor para mais informações.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="space-y-2">
-                      {bimestres.map((bimestre) => (
-                        <Card 
-                          key={bimestre.id} 
-                          className={`cursor-pointer transition-all hover:shadow-md ${
-                            bimestreSelecionado?.id === bimestre.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                          }`}
-                          onClick={() => handleBimestreClick(bimestre)}
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <FileText className="w-5 h-5 text-red-500" />
-                                <span className="font-medium text-sm">{bimestre.nome}</span>
-                              </div>
-                              <Download className="w-4 h-4 text-gray-400" />
-                            </div>
-                            <p className="text-xs text-gray-600 mb-3">{bimestre.descricao}</p>
-                            <div className="flex items-center gap-2">
-                              <Progress value={bimestre.progresso} className="flex-1 h-2" />
-                              <span className="text-xs text-gray-600">{bimestre.progresso}%</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* Aulas ao Vivo - após os bimestres */}
-                  <AulasAoVivo 
-                    disciplinaId={disciplina.id} 
-                    nomeDisciplina={disciplina.nome} 
-                  />
-                </TabsContent>
-
-                <TabsContent value="atividades" className="space-y-4">
-                  <AtividadesAluno 
-                    disciplinaId={disciplina.id} 
-                    nomeDisciplina={disciplina.nome} 
-                  />
-                </TabsContent>
-
-                <TabsContent value="forum" className="space-y-4">
-                  <Forum />
-                </TabsContent>
-              </Tabs>
-            </div>
-          )}
         </div>
+      </div>
 
-        {/* Área de Visualização do PDF */}
-        <div className="flex-1 flex flex-col">
-          <PDFViewer
-            bimestre={bimestreSelecionado}
-            onClose={() => setBimestreSelecionado(null)}
-            onProximo={handleProximoBimestre}
-            onAnterior={handleAnteriorBimestre}
-            hasProximo={currentIndex >= 0 && currentIndex < bimestres.length - 1}
-            hasAnterior={currentIndex > 0}
-          />
+      {/* ÁREA PRINCIPAL (conteúdo das abas) */}
+      <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex items-center justify-center w-full h-full text-gray-500"> {/* REMOVIDO dark: classes */}
+          Selecione uma aba para visualizar o conteúdo.
         </div>
-
-        {/* Botão Flutuante Mobile */}
-        {isMobile && !sidebarAberta && (
-          <Button
-            onClick={() => setSidebarAberta(true)}
-            className="fixed bottom-6 left-6 z-40 rounded-full w-14 h-14 shadow-lg"
-            size="lg"
-          >
-            <Menu className="w-6 h-6" />
-          </Button>
-        )}
-
-        {/* Overlay Mobile */}
-        {isMobile && sidebarAberta && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
-            onClick={() => setSidebarAberta(false)}
-          />
-        )}
       </div>
     </div>
   );

@@ -75,38 +75,38 @@ interface DisciplinaDisponivel {
 
 const seriesPorSegmento: Record<SegmentoDisciplina, string[]> = {
   "Fundamental 1": [
-    "1º ano - Ensino Fundamental",
-    "2º ano - Ensino Fundamental",
-    "3º ano - Ensino Fundamental",
-    "4º ano - Ensino Fundamental",
-    "5º ano - Ensino Fundamental",
+    "1º ano",
+    "2º ano",
+    "3º ano",
+    "4º ano",
+    "5º ano",
   ],
   "Fundamental 2": [
-    "6º ano - Ensino Fundamental",
-    "7º ano - Ensino Fundamental",
-    "8º ano - Ensino Fundamental",
-    "9º ano - Ensino Fundamental",
+    "6º ano",
+    "7º ano",
+    "8º ano",
+    "9º ano",
   ],
   "Ensino Médio": [
-    "1ª série - Ensino Médio",
-    "2ª série - Ensino Médio",
-    "3ª série - Ensino Médio",
+    "1ª série",
+    "2ª série",
+    "3ª série",
   ],
 };
 
 const seriesDisponiveis = [
-  "1º ano - Ensino Fundamental",
-  "2º ano - Ensino Fundamental",
-  "3º ano - Ensino Fundamental",
-  "4º ano - Ensino Fundamental",
-  "5º ano - Ensino Fundamental",
-  "6º ano - Ensino Fundamental",
-  "7º ano - Ensino Fundamental",
-  "8º ano - Ensino Fundamental",
-  "9º ano - Ensino Fundamental",
-  "1ª série - Ensino Médio",
-  "2ª série - Ensino Médio",
-  "3ª série - Ensino Médio",
+  "1º ano",
+  "2º ano",
+  "3º ano",
+  "4º ano",
+  "5º ano",
+  "6º ano",
+  "7º ano",
+  "8º ano",
+  "9º ano",
+  "1ª série",
+  "2ª série",
+  "3ª série",
 ];
 
 export function CadastrarUsuarioNovo({

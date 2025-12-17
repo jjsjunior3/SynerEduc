@@ -1,56 +1,115 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import { Card, CardContent } from './ui/card';
+
+// UI Components
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Badge } from './ui/badge'; // ✅ ADICIONADO AQUI
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Video, Calendar, Clock, Plus, Trash2, ExternalLink, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { 
+  Video, 
+  Calendar, 
+  Clock, 
+  Link as LinkIcon, 
+  Trash2, 
+  Plus, 
+  Loader2, 
+  AlertCircle,
+  ExternalLink
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from './ui/badge';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface AulasAoVivoProfessorProps {
-  disciplina: { id: string; nome: string };
-  serie: { id: string; nome: string };
+  disciplina: {
+    id: string;
+    nome: string;
+    cor?: string;
+  };
+  serie: any; // Pode ser string ("6º ano") ou objeto
 }
 
 interface AulaAoVivo {
   id: string;
   titulo: string;
   data_hora: string;
-  duracao: number;
-  plataforma: 'google-meet' | 'zoom' | 'youtube' | 'outro';
+  plataforma: string;
   link: string;
   status: string;
+  serie_id: string;
 }
 
 export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessorProps) {
   const { usuario } = useAuth();
+
+  // Estados
   const [aulas, setAulas] = useState<AulaAoVivo[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
-  // Estado do formulário
+  // Estado para o ID resolvido (UUID)
+  const [serieIdResolvido, setSerieIdResolvido] = useState<string | null>(null);
+
+  // Form State
   const [novaAula, setNovaAula] = useState({
     titulo: '',
     data: '',
     hora: '',
-    duracao: '60',
-    plataforma: 'google-meet',
+    plataforma: 'Google Meet',
     link: ''
   });
 
-  // ✅ CORREÇÃO: Regex em uma única linha para evitar o erro de sintaxe
-  const serieIdPuro = typeof serie.id === 'string' ? serie.id.replace(/serie_/, '') : serie.id;
+  // Helpers
+  const serieNome = typeof serie === 'string' ? serie : serie?.nome;
+  const serieIdProp = typeof serie === 'object' ? serie?.id : null;
 
-  // ========================================
-  // CARREGAR AULAS
-  // ========================================
+  // =========================================================
+  // 1. RESOLVER O ID DA SÉRIE/TURMA
+  // =========================================================
+  useEffect(() => {
+    const resolverSerieId = async () => {
+      if (serieIdProp) {
+        setSerieIdResolvido(serieIdProp);
+        return;
+      }
+
+      if (serieNome) {
+        try {
+          const { data } = await supabase
+            .from('turmas')
+            .select('id')
+            .ilike('nome', `%${serieNome}%`)
+            .limit(1)
+            .maybeSingle();
+
+          if (data) {
+            console.log("ID da série resolvido:", data.id);
+            setSerieIdResolvido(data.id);
+          } else {
+            console.error("Não foi possível encontrar o ID para a série:", serieNome);
+            toast.error(`Não foi possível identificar o ID da turma "${serieNome}".`);
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error("Erro ao buscar ID da turma:", error);
+        }
+      }
+    };
+
+    resolverSerieId();
+  }, [serieIdProp, serieNome]);
+
+  // =========================================================
+  // 2. CARREGAR AULAS
+  // =========================================================
   const carregarAulas = useCallback(async () => {
-    if (!disciplina.id) return;
+    if (!usuario?.id || !disciplina?.id || !serieIdResolvido) return;
 
     setLoading(true);
     try {
@@ -58,70 +117,78 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
         .from('aulas_ao_vivo')
         .select('*')
         .eq('disciplina_id', disciplina.id)
-        .eq('serie_id', serieIdPuro)
+        .eq('serie_id', serieIdResolvido)
         .order('data_hora', { ascending: true });
 
       if (error) throw error;
 
       setAulas(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar aulas:', error);
       toast.error('Erro ao carregar aulas.');
     } finally {
       setLoading(false);
     }
-  }, [disciplina.id, serieIdPuro]);
+  }, [usuario?.id, disciplina?.id, serieIdResolvido]);
 
   useEffect(() => {
-    carregarAulas();
-  }, [carregarAulas]);
+    if (serieIdResolvido) {
+      carregarAulas();
+    }
+  }, [serieIdResolvido, carregarAulas]);
 
-  // ========================================
-  // CRIAR AULA
-  // ========================================
-  const handleCriarAula = async () => {
+  // =========================================================
+  // 3. SALVAR NOVA AULA
+  // =========================================================
+  const handleSalvar = async () => {
     if (!novaAula.titulo || !novaAula.data || !novaAula.hora || !novaAula.link) {
-      toast.error('Preencha todos os campos obrigatórios.');
+      toast.warning("Preencha todos os campos obrigatórios.");
+      return;
+    }
+
+    if (!serieIdResolvido) {
+      toast.error("Erro: ID da série não identificado.");
       return;
     }
 
     setSalvando(true);
     try {
-      const dataInicioISO = new Date(`${novaAula.data}T${novaAula.hora}:00`).toISOString();
+      const dataHoraISO = `${novaAula.data}T${novaAula.hora}:00`;
 
       const { error } = await supabase
         .from('aulas_ao_vivo')
         .insert({
           titulo: novaAula.titulo,
-          data_hora: dataInicioISO,
-          duracao: parseInt(novaAula.duracao),
+          data_hora: dataHoraISO,
           plataforma: novaAula.plataforma,
           link: novaAula.link,
           disciplina_id: disciplina.id,
-          serie_id: serieIdPuro,
           professor_id: usuario?.id,
-          status: 'agendada'
+          serie_id: serieIdResolvido,
+          status: 'agendada',
+          criado_em: new Date().toISOString()
         });
 
       if (error) throw error;
 
-      toast.success('Aula agendada com sucesso!');
+      toast.success("Aula agendada com sucesso!");
       setModalAberto(false);
-      setNovaAula({ titulo: '', data: '', hora: '', duracao: '60', plataforma: 'google-meet', link: '' });
+      setNovaAula({ titulo: '', data: '', hora: '', plataforma: 'Google Meet', link: '' });
       carregarAulas();
-    } catch (error) {
-      console.error('Erro ao criar aula:', error);
-      toast.error('Erro ao agendar aula.');
+
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Erro ao agendar aula: " + error.message);
     } finally {
       setSalvando(false);
     }
   };
 
-  // ========================================
-  // EXCLUIR AULA
-  // ========================================
-  const handleExcluirAula = async (id: string) => {
-    if (!confirm('Tem certeza que deseja cancelar esta aula?')) return;
+  // =========================================================
+  // 4. EXCLUIR AULA
+  // =========================================================
+  const handleExcluir = async (id: string) => {
+    if (!confirm("Tem certeza que deseja cancelar esta aula?")) return;
 
     try {
       const { error } = await supabase
@@ -131,47 +198,37 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
 
       if (error) throw error;
 
-      toast.success('Aula cancelada.');
-      carregarAulas();
+      toast.success("Aula cancelada.");
+      setAulas(prev => prev.filter(a => a.id !== id));
     } catch (error) {
-      console.error('Erro ao excluir:', error);
-      toast.error('Erro ao cancelar aula.');
+      toast.error("Erro ao excluir aula.");
     }
   };
 
-  // ========================================
-  // HELPERS
-  // ========================================
-  const formatarDataHora = (isoString: string) => {
-    if (!isoString) return { dia: '--', hora: '--', passou: false };
-    const data = new Date(isoString);
-    return {
-      dia: data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }),
-      hora: data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      passou: new Date() > data
-    };
-  };
-
-  const getPlataformaIcon = (plataforma: string) => {
-    switch (plataforma) {
-      case 'google-meet': return <div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center text-white text-xs font-bold">M</div>;
-      case 'zoom': return <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">Z</div>;
-      case 'youtube': return <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center text-white text-xs font-bold">Y</div>;
-      default: return <Video className="w-6 h-6 text-gray-600" />;
+  const formatarDataExibicao = (isoString: string) => {
+    try {
+      return format(new Date(isoString), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
+    } catch {
+      return isoString;
     }
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-1">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Aulas ao Vivo</h2>
-          <p className="text-sm text-gray-500">Gerencie as videoconferências para {disciplina.nome}</p>
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <Video className="w-6 h-6 text-blue-600" />
+            Aulas ao Vivo
+          </h2>
+          <p className="text-sm text-gray-500">
+            Gerencie as videoconferências para {serieNome}
+          </p>
         </div>
 
         <Dialog open={modalAberto} onOpenChange={setModalAberto}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="w-4 h-4 mr-2" />
               Agendar Aula
             </Button>
@@ -179,19 +236,19 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Agendar Nova Aula</DialogTitle>
-              <DialogDescription>Preencha os dados da videoconferência.</DialogDescription>
+              <DialogDescription>
+                Preencha os dados abaixo para criar uma nova sala de aula virtual.
+              </DialogDescription>
             </DialogHeader>
-
-            <div className="space-y-4 mt-2">
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Título da Aula</Label>
                 <Input 
-                  placeholder="Ex: Revisão para a Prova" 
+                  placeholder="Ex: Revisão de Matemática" 
                   value={novaAula.titulo}
                   onChange={e => setNovaAula({...novaAula, titulo: e.target.value})}
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Data</Label>
@@ -202,7 +259,7 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Hora</Label>
+                  <Label>Horário</Label>
                   <Input 
                     type="time" 
                     value={novaAula.hora}
@@ -210,35 +267,23 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
                   />
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Duração (min)</Label>
-                  <Input 
-                    type="number" 
-                    value={novaAula.duracao}
-                    onChange={e => setNovaAula({...novaAula, duracao: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Plataforma</Label>
-                  <Select 
-                    value={novaAula.plataforma} 
-                    onValueChange={val => setNovaAula({...novaAula, plataforma: val as any})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="google-meet">Google Meet</SelectItem>
-                      <SelectItem value="zoom">Zoom</SelectItem>
-                      <SelectItem value="youtube">YouTube Live</SelectItem>
-                      <SelectItem value="outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label>Plataforma</Label>
+                <Select 
+                  value={novaAula.plataforma} 
+                  onValueChange={val => setNovaAula({...novaAula, plataforma: val})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Google Meet">Google Meet</SelectItem>
+                    <SelectItem value="Zoom">Zoom</SelectItem>
+                    <SelectItem value="Microsoft Teams">Microsoft Teams</SelectItem>
+                    <SelectItem value="YouTube">YouTube</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
               <div className="space-y-2">
                 <Label>Link da Reunião</Label>
                 <div className="relative">
@@ -251,13 +296,13 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
                   />
                 </div>
               </div>
-
-              <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setModalAberto(false)}>Cancelar</Button>
-                <Button onClick={handleCriarAula} disabled={salvando}>
-                  {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Agendar'}
-                </Button>
-              </div>
+              <Button 
+                className="w-full bg-blue-600 hover:bg-blue-700 mt-4" 
+                onClick={handleSalvar}
+                disabled={salvando}
+              >
+                {salvando ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Confirmar Agendamento"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -267,73 +312,60 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
         <div className="flex justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
         </div>
+      ) : !serieIdResolvido ? (
+        <div className="text-center py-12 bg-red-50 rounded-xl border border-red-100">
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-600 font-medium">Não foi possível identificar a turma no sistema.</p>
+        </div>
       ) : aulas.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <Video className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="font-medium text-gray-900 mb-2">Nenhuma aula agendada</h3>
-            <p className="text-gray-600 mb-4">
-              Agende aulas ao vivo para interagir com seus alunos em tempo real.
-            </p>
-            <Button onClick={() => setModalAberto(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Agendar Primeira Aula
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+          <Video className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 font-medium">Nenhuma aula agendada.</p>
+          <p className="text-sm text-gray-400">Agende aulas ao vivo para interagir com seus alunos.</p>
+        </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {aulas.map((aula) => {
-            const { dia, hora, passou } = formatarDataHora(aula.data_hora);
-            return (
-              <Card key={aula.id} className={`border-l-4 ${passou ? 'border-l-gray-300 opacity-75' : 'border-l-green-500'}`}>
-                <CardContent className="p-5">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-2">
-                      {getPlataformaIcon(aula.plataforma)}
-                      <Badge variant={passou ? "secondary" : "default"} className={!passou ? "bg-green-100 text-green-700 hover:bg-green-200" : ""}>
-                        {passou ? 'Finalizada' : 'Agendada'}
-                      </Badge>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-gray-400 hover:text-red-500"
-                      onClick={() => handleExcluirAula(aula.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <h3 className="font-bold text-gray-900 mb-1 line-clamp-1" title={aula.titulo}>
-                    {aula.titulo}
-                  </h3>
-
-                  <div className="space-y-2 text-sm text-gray-600 mt-3">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span>{dia}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-gray-400" />
-                      <span>{hora} • {aula.duracao} min</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {aulas.map((aula) => (
+            <Card key={aula.id} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+              <CardContent className="p-5">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg">{aula.titulo}</h3>
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                      <Calendar className="w-4 h-4" />
+                      {formatarDataExibicao(aula.data_hora)}
                     </div>
                   </div>
+                  {/* ✅ O Badge agora funcionará corretamente */}
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    {aula.plataforma}
+                  </Badge>
+                </div>
 
-                  <div className="mt-4 pt-4 border-t">
-                    <Button 
-                      className="w-full" 
-                      variant={passou ? "outline" : "default"}
-                      onClick={() => window.open(aula.link, '_blank')}
-                    >
+                <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-100">
+                  <a 
+                    href={aula.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex-1"
+                  >
+                    <Button variant="outline" className="w-full text-blue-600 hover:bg-blue-50 border-blue-200">
                       <ExternalLink className="w-4 h-4 mr-2" />
-                      {passou ? 'Acessar Link' : 'Iniciar Aula'}
+                      Acessar Aula
                     </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  </a>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                    onClick={() => handleExcluir(aula.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </div>

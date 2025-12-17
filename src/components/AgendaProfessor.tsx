@@ -1,463 +1,281 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../supabase/supabaseClient";
-import { useAuth } from '../contexts/AuthContext';
-import { toast } from "sonner";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
+import { useAuth } from "../contexts/AuthContext";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Badge } from "./ui/badge";
-import {
-  Calendar,
-  Plus,
-  Edit2,
-  Trash2,
-  Home,
-  BookOpen,
-  Clock,
-  AlertTriangle,
-} from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-} from "./ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
+import { Loader2, Calendar, Plus, Edit2, Trash2 } from "lucide-react";
+import { toast } from "react-hot-toast";
 
-interface Disciplina {
-  id: string;
-  nome: string;
-}
-
-interface Serie {
-  id: string;
-  nome: string;
-  turma?: string;
-  totalAlunos?: number;
-}
-
-interface AtividadeAgenda {
-  id: string;
-  titulo: string;
-  descricao: string;
-  tipo: "tarefa_casa" | "estudo" | "trabalho" | "prova" | "projeto";
-  data_entrega: string;
-  disciplina_id: string;
-  professor_id: string;
-  serie: string; // ✅ CORRIGIDO: Nome da coluna no banco é 'serie'
-  turma: string;
-  criado_em?: string;
-}
-
-interface AgendaProfessorProps {
-  disciplina: Disciplina;
-  serie: Serie;
-}
-
-export function AgendaProfessor({ disciplina, serie }: AgendaProfessorProps) {
+export function AgendaProfessor({ disciplina, serie, turma }) {
   const { usuario } = useAuth();
-  const [modalAberto, setModalAberto] = useState(false);
-  const [editando, setEditando] = useState<AtividadeAgenda | null>(null);
-  const [novaAtividade, setNovaAtividade] = useState({
-    titulo: "",
-    descricao: "",
-    tipo: "tarefa_casa" as AtividadeAgenda["tipo"],
-    data_entrega: "",
-  });
-  const [atividades, setAtividades] = useState<AtividadeAgenda[]>([]);
+
+  const nomeSerie = typeof serie === "string" ? serie : serie?.nome ?? "";
+  const nomeTurma = typeof turma === "string" ? turma : turma?.nome ?? "";
+
   const [carregando, setCarregando] = useState(true);
+  const [atividades, setAtividades] = useState([]);
 
-  //--------------------------------------------------------------------
-  //  1️⃣  Carregar atividades reais do Supabase
-  //--------------------------------------------------------------------
-  useEffect(() => {
-    if (disciplina.id) {
-      carregarAtividades();
-    }
-  }, [disciplina.id]);
+  const [modoEdicao, setModoEdicao] = useState(null);
+  const [atividadeSelecionada, setAtividadeSelecionada] = useState(null);
 
-  async function carregarAtividades() {
-    setCarregando(true);
-    const { data, error } = await supabase
-      .from("agenda_professor")
-      .select("*")
-      .eq("disciplina_id", disciplina.id)
-      .eq("professor_id", usuario?.id)
-      .order("data_entrega", { ascending: true });
+  const [titulo, setTitulo] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [dataEntrega, setDataEntrega] = useState("");
 
-    if (error) {
-      toast.error("Erro ao carregar atividades");
-      console.error(error);
-    } else {
-      setAtividades(data || []);
-    }
-    setCarregando(false);
-  }
-
-  //--------------------------------------------------------------------
-  //  2️⃣  Salvar (criar/editar) uma atividade
-  //--------------------------------------------------------------------
-  async function handleSalvarAtividade() {
-    if (
-      !novaAtividade.titulo ||
-      !novaAtividade.descricao ||
-      !novaAtividade.data_entrega
-    ) {
-      toast.error("Preencha todos os campos obrigatórios");
+  // ================================
+  //   CARREGAR ATIVIDADES
+  // ================================
+  const carregar = async () => {
+    if (!usuario?.id || !disciplina?.id || !nomeSerie) {
+      setCarregando(false);
       return;
     }
 
-    // ⚠️ ATENÇÃO AQUI: A chave deve ser 'serie', não 'serie_nome'
-    const atividadeData = {
-      titulo: novaAtividade.titulo,
-      descricao: novaAtividade.descricao,
-      tipo: novaAtividade.tipo,
-      data_entrega: novaAtividade.data_entrega,
+    setCarregando(true);
+    try {
+      const { data, error } = await supabase
+        .from("agenda_professor")
+        .select("*")
+        .eq("professor_id", usuario.id)
+        .eq("disciplina_id", disciplina.id)
+        .eq("serie", nomeSerie)
+        .eq("turma", nomeTurma)
+        .order("criado_em", { ascending: false }); // <- CORRETO
+
+      if (error) throw error;
+      setAtividades(data || []);
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao carregar a agenda.");
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  useEffect(() => {
+    carregar();
+  }, [usuario?.id, disciplina?.id, nomeSerie, nomeTurma]);
+
+  // ================================
+  //   NOVA ATIVIDADE
+  // ================================
+  const iniciarNovo = () => {
+    setModoEdicao("novo");
+    setTitulo("");
+    setDescricao("");
+    setDataEntrega("");
+  };
+
+  // ================================
+  //   EDITAR
+  // ================================
+  const iniciarEdicao = (atv) => {
+    setModoEdicao("editar");
+    setAtividadeSelecionada(atv);
+    setTitulo(atv.titulo);
+    setDescricao(atv.descricao);
+    setDataEntrega(atv.data_entrega ?? "");
+  };
+
+  // ================================
+  //   SALVAR (INSERT / UPDATE)
+  // ================================
+  const handleSalvar = async () => {
+    if (!titulo.trim()) {
+      toast.error("Informe um título.");
+      return;
+    }
+
+    const payload = {
+      titulo: titulo.trim(),
+      descricao: descricao.trim(),
       disciplina_id: disciplina.id,
-      professor_id: usuario?.id,
-      serie: serie?.nome || "", // ✅ CORRIGIDO: Enviando para a coluna 'serie'
-      turma: serie?.turma || "",
+      professor_id: usuario.id,
+      serie: nomeSerie,
+      turma: nomeTurma,
+      data_entrega: dataEntrega || null,
     };
 
-    const { error } = editando
-      ? await supabase
+    try {
+      if (modoEdicao === "novo") {
+        const { error } = await supabase
           .from("agenda_professor")
-          .update(atividadeData)
-          .eq("id", editando.id)
-      : await supabase.from("agenda_professor").insert([atividadeData]);
+          .insert([payload]);
 
-    if (error) {
-      toast.error("Erro ao salvar atividade");
-      console.error("Erro Supabase:", error);
-    } else {
-      toast.success(editando ? "Atividade atualizada!" : "Atividade adicionada!");
-      carregarAtividades();
-      setModalAberto(false);
-      setEditando(null);
-      resetForm();
-    }
-  }
+        if (error) throw error;
+        toast.success("Atividade cadastrada!");
+      } else if (modoEdicao === "editar") {
+        const { error } = await supabase
+          .from("agenda_professor")
+          .update(payload)
+          .eq("id", atividadeSelecionada.id);
 
-  //--------------------------------------------------------------------
-  //  3️⃣  Excluir
-  //--------------------------------------------------------------------
-  async function handleExcluir(id: string) {
-    if (!confirm("Tem certeza que deseja excluir esta atividade?")) return;
+        if (error) throw error;
+        toast.success("Atividade atualizada!");
+      }
 
-    const { error } = await supabase
-      .from("agenda_professor")
-      .delete()
-      .eq("id", id);
-
-    if (error) toast.error("Erro ao excluir atividade");
-    else {
-      toast.success("Atividade removida da agenda!");
-      carregarAtividades();
-    }
-  }
-
-  //--------------------------------------------------------------------
-  //  Utilidades
-  //--------------------------------------------------------------------
-  const resetForm = () => {
-    setNovaAtividade({
-      titulo: "",
-      descricao: "",
-      tipo: "tarefa_casa",
-      data_entrega: "",
-    });
-  };
-
-  const handleEditar = (atividade: AtividadeAgenda) => {
-    setEditando(atividade);
-    setNovaAtividade({
-      titulo: atividade.titulo,
-      descricao: atividade.descricao,
-      tipo: atividade.tipo,
-      data_entrega: atividade.data_entrega,
-    });
-    setModalAberto(true);
-  };
-
-  //--------------------------------------------------------------------
-  //  5️⃣  Cores / Ícones / Rótulos
-  //--------------------------------------------------------------------
-  const getTipoColor = (tipo: string) => {
-    switch (tipo) {
-      case "tarefa_casa":
-        return "bg-blue-100 text-blue-700";
-      case "estudo":
-        return "bg-green-100 text-green-700";
-      case "trabalho":
-        return "bg-purple-100 text-purple-700";
-      case "prova":
-        return "bg-red-100 text-red-700";
-      case "projeto":
-        return "bg-orange-100 text-orange-700";
-      default:
-        return "bg-gray-100 text-gray-700";
+      setModoEdicao(null);
+      setAtividadeSelecionada(null);
+      carregar();
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao salvar atividade.");
     }
   };
 
-  const getTipoIcon = (tipo: string) => {
-    switch (tipo) {
-      case "tarefa_casa":
-        return <Home className="w-4 h-4" />;
-      case "estudo":
-        return <BookOpen className="w-4 h-4" />;
-      case "trabalho":
-        return <BookOpen className="w-4 h-4" />;
-      case "prova":
-        return <Calendar className="w-4 h-4" />;
-      case "projeto":
-        return <BookOpen className="w-4 h-4" />;
-      default:
-        return <Calendar className="w-4 h-4" />;
+  // ================================
+  //   EXCLUIR
+  // ================================
+  const excluir = async (atv) => {
+    if (!confirm("Excluir esta atividade?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("agenda_professor")
+        .delete()
+        .eq("id", atv.id);
+
+      if (error) throw error;
+
+      toast.success("Atividade removida!");
+      carregar();
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao excluir.");
     }
   };
 
-  const getTipoTexto = (tipo: string) => {
-    switch (tipo) {
-      case "tarefa_casa":
-        return "Tarefa de Casa";
-      case "estudo":
-        return "Estudo";
-      case "trabalho":
-        return "Trabalho";
-      case "prova":
-        return "Prova";
-      case "projeto":
-        return "Projeto";
-      default:
-        return "Atividade";
-    }
-  };
-
-  const atividadesOrdenadas = [...atividades].sort((a, b) =>
-    new Date(a.data_entrega).getTime() - new Date(b.data_entrega).getTime()
-  );
-
-  //--------------------------------------------------------------------
-  //  6️⃣  Renderização
-  //--------------------------------------------------------------------
-  if (carregando) {
-    return (
-      <div className="py-10 text-center text-gray-500">
-        Carregando atividades...
-      </div>
-    );
-  }
-
+  // ================================
+  //   RENDER
+  // ================================
   return (
-    <div className="space-y-6">
-      {/* Cabeçalho e botão */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Agenda de Atividades
-        </h2>
-        <Dialog open={modalAberto} onOpenChange={setModalAberto}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Atividade
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {editando ? "Editar Atividade" : "Nova Atividade na Agenda"}
-              </DialogTitle>
-              <DialogDescription>
-                {editando
-                  ? "Atualize as informações da atividade existente."
-                  : "Adicione uma nova atividade para os alunos."}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="titulo">Título *</Label>
-                  <Input
-                    id="titulo"
-                    value={novaAtividade.titulo}
-                    onChange={(e) =>
-                      setNovaAtividade((p) => ({ ...p, titulo: e.target.value }))
-                    }
-                    placeholder="Ex: Revisão capítulo 3"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tipo">Tipo de Atividade</Label>
-                  <Select
-                    value={novaAtividade.tipo}
-                    onValueChange={(value) =>
-                      setNovaAtividade((p) => ({ ...p, tipo: value as any }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="tarefa_casa">Tarefa de Casa</SelectItem>
-                      <SelectItem value="estudo">Estudo</SelectItem>
-                      <SelectItem value="trabalho">Trabalho</SelectItem>
-                      <SelectItem value="prova">Prova</SelectItem>
-                      <SelectItem value="projeto">Projeto</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Descrição *</Label>
-                <Textarea
-                  value={novaAtividade.descricao}
-                  onChange={(e) =>
-                    setNovaAtividade((p) => ({
-                      ...p,
-                      descricao: e.target.value,
-                    }))
-                  }
-                  placeholder="Descreva a atividade..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Data de Entrega / Realização *</Label>
-                <Input
-                  type="date"
-                  value={novaAtividade.data_entrega}
-                  onChange={(e) =>
-                    setNovaAtividade((p) => ({
-                      ...p,
-                      data_entrega: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setModalAberto(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleSalvarAtividade}>
-                  {editando ? "Atualizar" : "Adicionar"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+    <div className="h-full flex flex-col gap-4">
+
+      {/* Cabeçalho moderno da agenda */}
+     <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-blue-600" />
+            Agenda da Disciplina
+          </h2>
+
+          <p className="text-xs text-gray-500 mt-1">
+            Série: {nomeSerie} • Turma: {nomeTurma}
+          </p>
+        </div>
+
+        <Button
+          size="sm"
+          onClick={iniciarNovo}
+          className="bg-yellow-400 hover:bg-yellow-500 text-black font-medium"
+        >
+          <Plus className="w-4 h-4 mr-1" />
+          Nova Atividade
+        </Button>
       </div>
 
-      {/* Lista de atividades */}
-      {atividades.length === 0 ? (
-        <Card>
-          <CardContent className="p-10 text-center text-gray-500">
-            <p>Nenhuma atividade cadastrada.</p>
+
+      {/* Formulário */}
+      {modoEdicao && (
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">
+              {modoEdicao === "novo" ? "Nova Atividade" : "Editar Atividade"}
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Título</label>
+              <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Descrição</label>
+              <Textarea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Prazo (opcional)</label>
+              <Input type="date" value={dataEntrega} onChange={(e) => setDataEntrega(e.target.value)} />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setModoEdicao(null)}>
+                Cancelar
+              </Button>
+              <Button size="sm" className="bg-[#0B0B3B] text-white" onClick={handleSalvar}>
+                Salvar
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {atividadesOrdenadas.map((atividade) => {
-            const dataEntrega = new Date(atividade.data_entrega);
-            const hoje = new Date();
-            // Ajuste para comparar apenas datas (ignorando horas)
-            hoje.setHours(0, 0, 0, 0);
-            const dataEntregaSemHora = new Date(dataEntrega);
-            dataEntregaSemHora.setHours(0, 0, 0, 0);
+      )}
 
-            const diasParaEntrega = Math.ceil(
-              (dataEntregaSemHora.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
-            );
-            const isAtrasado = diasParaEntrega < 0;
-            const isUrgente = diasParaEntrega <= 3 && diasParaEntrega >= 0;
+      {/* LISTA */}
+      <div className="flex-1 overflow-y-auto">
+        {carregando ? (
+          <div className="text-center py-10 text-gray-500 text-sm">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin inline-block" />
+            Carregando agenda...
+          </div>
+        ) : atividades.length === 0 ? (
+          <p className="text-center py-10 text-gray-400 text-sm">
+            Nenhuma atividade cadastrada.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {atividades.map((atv) => (
+              <Card key={atv.id} className="border border-gray-200 shadow-sm">
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex justify-between">
 
-            return (
-              <Card
-                key={atividade.id}
-                className={
-                  isAtrasado
-                    ? "border-red-300"
-                    : isUrgente
-                    ? "border-yellow-300"
-                    : ""
-                }
-              >
-                <CardContent className="p-6 flex justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div
-                        className={`p-2 rounded-lg ${getTipoColor(
-                          atividade.tipo
-                        )}`}
-                      >
-                        {getTipoIcon(atividade.tipo)}
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-900">
-                          {atividade.titulo}
-                        </h3>
-                        <Badge className={getTipoColor(atividade.tipo)}>
-                          {getTipoTexto(atividade.tipo)}
+                    <div>
+                      <h3 className="font-semibold text-sm">{atv.titulo}</h3>
+                      {atv.descricao && (
+                        <p className="text-xs text-gray-600 whitespace-pre-line mt-1">
+                          {atv.descricao}
+                        </p>
+                      )}
+
+                      <div className="flex gap-2 mt-2">
+                        <Badge className="bg-blue-100 text-blue-700 text-[11px]">
+                          Envio: {format(new Date(atv.criado_em), "dd/MM/yyyy", { locale: ptBR })}
                         </Badge>
+
+                        {atv.data_entrega && (
+                          <Badge className="bg-yellow-100 text-yellow-800 text-[11px]">
+                            Prazo: {format(new Date(atv.data_entrega), "dd/MM/yyyy", { locale: ptBR })}
+                          </Badge>
+                        )}
                       </div>
                     </div>
-                    <p className="text-gray-600 mb-2">
-                      {atividade.descricao}
-                    </p>
-                    <p className="text-sm text-gray-500 flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      {dataEntrega.toLocaleDateString("pt-BR")}
 
-                      {isAtrasado && (
-                        <Badge variant="destructive" className="gap-1 ml-2">
-                          <Clock className="w-3 h-3" />
-                          Atrasado
-                        </Badge>
-                      )}
+                    <div className="flex flex-col gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => iniciarEdicao(atv)}>
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
 
-                      {isUrgente && (
-                        <Badge variant="secondary" className="gap-1 ml-2 bg-orange-100 text-orange-700">
-                          <AlertTriangle className="w-3 h-3" />
-                          Urgente
-                        </Badge>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditar(atividade)}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleExcluir(atividade.id)}
-                    >
-                      <Trash2 className="w-4 h-4 text-red-600" />
-                    </Button>
+                      <Button variant="ghost" size="icon" onClick={() => excluir(atv)}>
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </div>
+
                   </div>
                 </CardContent>
               </Card>
-            );
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

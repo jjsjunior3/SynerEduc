@@ -1,397 +1,522 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+
+// UI Components
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
-import { Calendar, UserCheck, Save, Users, AlertTriangle, Loader2, History } from 'lucide-react';
+import { Checkbox } from './ui/checkbox';
+import { Textarea } from './ui/textarea';
+import { 
+  ArrowLeft, 
+  UserCheck, 
+  CheckCircle, 
+  XCircle, 
+  Calendar, 
+  Loader2, 
+  Save,
+  AlertCircle
+} from 'lucide-react';
 import { toast } from 'sonner';
 
+// Interfaces
 interface FrequenciaProfessorProps {
-  disciplina: { id: string; nome: string };
-  serie: { id: string; nome: string };
+  disciplina: {
+    id: string;
+    nome: string;
+    cor?: string;
+    turma?: string;
+    serie?: string;
+  };
+  serie: any; // Aceita string ou objeto
+  onVoltar: () => void;
 }
 
-interface Aluno {
-  id: string;
-  nome: string;
+interface AlunoFrequencia {
+  aluno_id: string;
+  aluno_nome: string;
+  matricula?: string;
   presente: boolean;
-  observacao?: string;
+  observacao: string;
+  frequencia_id: string | null;
 }
 
-interface RegistroFrequenciaHistorico {
-  data_aula: string;
-  totalAlunos: number;
+interface HistoricoAula {
+  id: string;
+  data: string;
+  aula?: string;
   presentes: number;
-  faltas: number;
+  ausentes: number;
+  total: number;
 }
 
-export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorProps) {
+export function FrequenciaProfessor({ disciplina, serie, onVoltar }: FrequenciaProfessorProps) {
   const { usuario } = useAuth();
-  const [dataSelecionada, setDataSelecionada] = useState(new Date().toISOString().split('T')[0]);
-  const [alunos, setAlunos] = useState<Aluno[]>([]);
-  const [loadingAlunos, setLoadingAlunos] = useState(true);
-  const [loadingFrequencia, setLoadingFrequencia] = useState(false);
-  const [historicoFrequencia, setHistoricoFrequencia] = useState<RegistroFrequenciaHistorico[]>([]);
-  const [turmaId, setTurmaId] = useState<string | null>(null);
 
-  // ✅ CORREÇÃO: Regex em uma única linha para evitar erro de sintaxe
-  const serieIdPuro = typeof serie.id === 'string' ? serie.id.replace(/serie_/, '') : serie.id;
-  const serieNome = serie.nome;
+  // Estados
+  const [loading, setLoading] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [dataFrequencia, setDataFrequencia] = useState(new Date().toISOString().split('T')[0]);
+
+  const [listaAlunos, setListaAlunos] = useState<AlunoFrequencia[]>([]);
+  const [historico, setHistorico] = useState<HistoricoAula[]>([]);
+
+  // Estado para armazenar o ID da turma capturado
+  const [turmaIdCapturado, setTurmaIdCapturado] = useState<string | null>(null);
+
+  // Helpers de Série/Turma
+  const turmaIdProp = typeof turma === 'object' ? turma?.id : null;
+  const serieNome = typeof serie === 'string' ? serie : serie?.nome;
 
   // ========================================
-  // CARREGAR ALUNOS DA SÉRIE E TURMA
+  // 1. CARREGAR DADOS
   // ========================================
-  const carregarAlunos = useCallback(async () => {
-    if (!serieIdPuro || !serieNome) {
-      setLoadingAlunos(false);
-      return;
-    }
+  const carregarDados = useCallback(async () => {
+    if (!usuario?.id || !disciplina?.id) return;
 
-    setLoadingAlunos(true);
+    setLoading(true);
     try {
-      const { data: turmaData, error: turmaError } = await supabase
-        .from('turmas')
-        .select('id')
-        .eq('serie_id', serieIdPuro)
-        .limit(1)
-        .single();
-
-      if (turmaError && turmaError.code !== 'PGRST116') {
-        console.error('Erro ao buscar turma:', turmaError);
-        toast.error('Erro ao buscar turma para a série.');
-        setLoadingAlunos(false);
-        return;
-      }
-
-      if (!turmaData) {
-        toast.info('Nenhuma turma encontrada para esta série. Cadastre uma turma primeiro.');
-        setAlunos([]);
-        setLoadingAlunos(false);
-        return;
-      }
-      setTurmaId(turmaData.id);
-
-      const { data: alunosData, error: alunosError } = await supabase
+      // A. Buscar Alunos (Corrigido: Não pede turma_id)
+      let queryAlunos = supabase
         .from('users')
-        .select('id, nome')
+        .select('id, nome, email') 
         .eq('tipo', 'aluno')
-        .eq('serie', serieNome)
         .order('nome', { ascending: true });
+
+      // Filtra pela série (texto) que existe na tabela users
+      if (serieNome) {
+        queryAlunos = queryAlunos.eq('serie', serieNome);
+      }
+
+      const { data: alunosData, error: alunosError } = await queryAlunos;
 
       if (alunosError) throw alunosError;
 
-      const alunosFormatados: Aluno[] = (alunosData || [])
-        .filter(aluno => aluno !== null)
-        .map(aluno => ({
-          id: aluno.id,
-          nome: aluno.nome,
-          presente: false,
-          observacao: ''
-        }));
+      if (!alunosData || alunosData.length === 0) {
+        setListaAlunos([]);
+        setLoading(false);
+        return;
+      }
 
-      setAlunos(alunosFormatados);
+      // ✅ LÓGICA ROBUSTA PARA DESCOBRIR ID DA TURMA
+      if (!turmaIdProp && !turmaIdCapturado && alunosData.length > 0) {
+        const primeiroAlunoId = alunosData[0].id;
 
-    } catch (error) {
-      console.error('Erro ao carregar alunos:', error);
-      toast.error('Erro ao carregar lista de alunos.');
-    } finally {
-      setLoadingAlunos(false);
-    }
-  }, [serieIdPuro, serieNome]);
+        // Tentativa 1: Buscar na tabela de vínculo alunos_turmas
+        const { data: vinculoData } = await supabase
+          .from('alunos_turmas')
+          .select('turma_id')
+          .eq('aluno_id', primeiroAlunoId)
+          .maybeSingle();
 
-  // ========================================
-  // CARREGAR FREQUÊNCIA PARA A DATA SELECIONADA
-  // ========================================
-  const carregarFrequenciaDaData = useCallback(async () => {
-    if (!disciplina?.id || !turmaId || !dataSelecionada) return;
+        if (vinculoData) {
+          console.log("ID da turma encontrado via vínculo:", vinculoData.turma_id);
+          setTurmaIdCapturado(vinculoData.turma_id);
+        } else {
+          // Tentativa 2: Buscar na tabela turmas pelo nome da série
+          console.log("Tentando buscar turma pelo nome:", serieNome);
+          const { data: turmaData } = await supabase
+            .from('turmas')
+            .select('id')
+            .ilike('nome', `%${serieNome}%`) // Busca aproximada (ex: "6º ano" acha "6º Ano A")
+            .limit(1)
+            .maybeSingle();
 
-    setLoadingFrequencia(true);
+          if (turmaData) {
+            console.log("ID da turma encontrado pelo nome:", turmaData.id);
+            setTurmaIdCapturado(turmaData.id);
+          }
+        }
+      }
 
-    try {
-      const { data: frequenciaData, error: frequenciaError } = await supabase
+      const alunosIds = alunosData.map(a => a.id);
+
+      // B. Buscar Frequência do Dia
+      const { data: freqData, error: freqError } = await supabase
         .from('frequencia_diaria')
-        .select('aluno_id, presente, observacao')
-        .eq('data_aula', dataSelecionada)
+        .select('*')
         .eq('disciplina_id', disciplina.id)
-        .eq('turma_id', turmaId);
+        .eq('data_aula', dataFrequencia)
+        .in('aluno_id', alunosIds);
 
-      if (frequenciaError) throw frequenciaError;
+      if (freqError) throw freqError;
 
-      const frequenciaMap = new Map(frequenciaData?.map(f => [f.aluno_id, { presente: f.presente, observacao: f.observacao }]));
+      const freqMap = new Map();
+      freqData?.forEach(f => freqMap.set(f.aluno_id, f));
 
-      setAlunos(prevAlunos => prevAlunos.map(aluno => ({
-        ...aluno,
-        presente: frequenciaMap.get(aluno.id)?.presente ?? false,
-        observacao: frequenciaMap.get(aluno.id)?.observacao ?? ''
-      })));
-    } catch (error) {
-      console.error('Erro ao carregar frequência da data:', error);
-      toast.error('Erro ao carregar frequência para a data selecionada.');
-    } finally {
-      setLoadingFrequencia(false);
-    }
-  }, [disciplina.id, turmaId, dataSelecionada]);
-
-  // ========================================
-  // CARREGAR HISTÓRICO DE FREQUÊNCIA
-  // ========================================
-  const carregarHistorico = useCallback(async () => {
-    if (!disciplina?.id || !turmaId) return;
-
-    try {
-      const { data, error } = await supabase.rpc('get_frequencia_resumo_por_data', {
-        p_disciplina_id: disciplina.id,
-        p_turma_id: turmaId
-      });
-
-      if (error) throw error;
-
-      setHistoricoFrequencia(data || []);
-    } catch (error) {
-      console.error('Erro ao carregar histórico de frequência:', error);
-      toast.error('Erro ao carregar histórico de frequência.');
-    }
-  }, [disciplina.id, turmaId]);
-
-  useEffect(() => {
-    carregarAlunos();
-  }, [carregarAlunos]);
-
-  useEffect(() => {
-    if (turmaId) {
-      carregarFrequenciaDaData();
-      carregarHistorico();
-    }
-  }, [dataSelecionada, turmaId, carregarFrequenciaDaData, carregarHistorico]);
-
-  // ========================================
-  // HANDLERS
-  // ========================================
-  const handlePresencaChange = (alunoId: string, presente: boolean) => {
-    setAlunos(prev => prev.map(aluno =>
-      aluno.id === alunoId ? { ...aluno, presente } : aluno
-    ));
-  };
-
-  const handleObservacaoChange = (alunoId: string, observacao: string) => {
-    setAlunos(prev => prev.map(aluno =>
-      aluno.id === alunoId ? { ...aluno, observacao } : aluno
-    ));
-  };
-
-  const handleMarcarTodos = (presente: boolean) => {
-    setAlunos(prev => prev.map(aluno => ({ ...aluno, presente })));
-  };
-
-  const handleSalvarFrequencia = async () => {
-    if (!usuario?.id || !disciplina?.id || !turmaId) {
-      toast.error('Dados incompletos para salvar frequência.');
-      return;
-    }
-
-    setLoadingFrequencia(true);
-    try {
-      const frequenciaParaSalvar = alunos.map(aluno => ({
+      // C. Montar Lista
+      const listaFinal = alunosData.map(aluno => ({
         aluno_id: aluno.id,
-        disciplina_id: disciplina.id,
-        turma_id: turmaId,
-        data_aula: dataSelecionada,
-        presente: aluno.presente,
-        observacao: aluno.observacao || null,
+        aluno_nome: aluno.nome,
+        matricula: aluno.email?.split('@')[0] || 'N/A',
+        presente: freqMap.has(aluno.id) ? freqMap.get(aluno.id).presente : true,
+        observacao: freqMap.has(aluno.id) ? freqMap.get(aluno.id).observacao || '' : '',
+        frequencia_id: freqMap.has(aluno.id) ? freqMap.get(aluno.id).id : null,
       }));
 
-      const { error } = await supabase
-        .from('frequencia_diaria')
-        .upsert(frequenciaParaSalvar, { onConflict: 'aluno_id, disciplina_id, turma_id, data_aula' });
+      setListaAlunos(listaFinal);
 
-      if (error) throw error;
-
-      toast.success('Frequência salva com sucesso!');
-      carregarHistorico();
-    } catch (error) {
-      console.error('Erro ao salvar frequência:', error);
-      toast.error('Erro ao salvar frequência. Tente novamente.');
+    } catch (err) {
+      console.error("Erro ao carregar:", err);
+      toast.error("Erro ao carregar lista de alunos.");
     } finally {
-      setLoadingFrequencia(false);
+      setLoading(false);
     }
+  }, [usuario?.id, disciplina?.id, turmaIdProp, serieNome, dataFrequencia, turmaIdCapturado]);
+
+  // ========================================
+  // 2. CARREGAR HISTÓRICO
+  // ========================================
+  const carregarHistorico = useCallback(async () => {
+    if (!disciplina?.id) return;
+    try {
+      const { data } = await supabase
+        .from('frequencia_diaria')
+        .select('data_aula, presente')
+        .eq('disciplina_id', disciplina.id)
+        .order('data_aula', { ascending: false })
+        .limit(200);
+
+      if (data) {
+        const agrupado = data.reduce((acc: any, curr) => {
+          const d = curr.data_aula;
+          if (!acc[d]) acc[d] = { id: d, data: d, aula: 'Aula Regular', presentes: 0, ausentes: 0, total: 0 };
+          acc[d].total++;
+          if (curr.presente) acc[d].presentes++;
+          else acc[d].ausentes++;
+          return acc;
+        }, {});
+
+        setHistorico(Object.values(agrupado).slice(0, 5) as HistoricoAula[]);
+      }
+    } catch (err) {
+      console.error("Erro histórico:", err);
+    }
+  }, [disciplina?.id]);
+
+  useEffect(() => {
+    carregarDados();
+    carregarHistorico();
+  }, [carregarDados, carregarHistorico]);
+
+  // ========================================
+  // 3. MANIPULADORES (Ações)
+  // ========================================
+  const handleTogglePresenca = (alunoId: string) => {
+    setListaAlunos(prev => prev.map(a => 
+      a.aluno_id === alunoId ? { ...a, presente: !a.presente } : a
+    ));
+  };
+
+  const handleMarcarTodosPresentes = () => {
+    setListaAlunos(prev => prev.map(a => ({ ...a, presente: true })));
+  };
+
+  const handleMarcarTodosAusentes = () => {
+    setListaAlunos(prev => prev.map(a => ({ ...a, presente: false })));
+  };
+
+  const handleAtualizarObservacao = (alunoId: string, texto: string) => {
+    setListaAlunos(prev => prev.map(a => 
+      a.aluno_id === alunoId ? { ...a, observacao: texto } : a
+    ));
+  };
+
+    const handleSalvarFrequencia = async () => {
+    // ✅ Usa o ID que veio via prop OU o que descobrimos buscando na tabela alunos_turmas
+      const idFinalTurma = turmaIdProp || turmaIdCapturado;
+
+      if (!idFinalTurma) {
+        toast.error("Erro: ID da turma não identificado. Verifique se a turma existe no banco.");
+        return;
+      }
+
+      setSalvando(true);
+      try {
+        const dadosParaSalvar = listaAlunos.map(a => {
+          // Objeto base com os dados obrigatórios
+          const registro = {
+            aluno_id: a.aluno_id,
+            disciplina_id: disciplina.id,
+            turma_id: idFinalTurma,
+            data_aula: dataFrequencia,
+            presente: a.presente,
+            observacao: a.observacao || null,
+          };
+
+          // 💡 O PULO DO GATO: Só adicionamos o ID se ele existir (edição).
+          // Se for novo (null), não enviamos o campo 'id' para o banco gerar automático.
+          if (a.frequencia_id) {
+            return { ...registro, id: a.frequencia_id };
+          }
+
+          return registro;
+        });
+          console.log("🔍 turmaIdProp:", turmaIdProp);
+          console.log("🔍 turmaIdCapturado:", turmaIdCapturado);
+          console.log("🔍 idFinalTurma:", turmaIdProp || turmaIdCapturado);
+        const { error } = await supabase
+          .from('frequencia_diaria')
+          .upsert(dadosParaSalvar, { onConflict: 'aluno_id, disciplina_id, data_aula' });
+
+        if (error) throw error;
+
+        toast.success(`Frequência de ${formatarData(dataFrequencia)} salva!`);
+        await carregarDados();
+        await carregarHistorico();
+
+      } catch (err: any) {
+        console.error(err);
+        toast.error("Erro ao salvar: " + err.message);
+      } finally {
+        setSalvando(false);
+      }
+    };
+
+
+  const formatarData = (dataStr: string) => {
+    if (!dataStr) return '-';
+    const [ano, mes, dia] = dataStr.split('-');
+    return `${dia}/${mes}/${ano}`;
   };
 
   // ========================================
-  // ESTATÍSTICAS E HELPERS
+  // RENDERIZAÇÃO
   // ========================================
-  const calcularEstatisticas = () => {
-    const presentes = alunos.filter(a => a.presente).length;
-    const faltas = alunos.length - presentes;
-    const percentualPresenca = alunos.length > 0 ? (presentes / alunos.length) * 100 : 0;
-
-    return { presentes, faltas, percentualPresenca };
-  };
-
-  const { presentes, faltas, percentualPresenca } = calcularEstatisticas();
-
-  const getPercentualColor = (percentual: number) => {
-    if (percentual >= 90) return 'text-green-600';
-    if (percentual >= 75) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
   return (
-    <div className="p-6 space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Controle de Frequência</h2>
-      <p className="text-sm text-gray-600 mt-1">
-        {disciplina.nome} • Turma: {serie.nome}
-      </p>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Calendar className="w-5 h-5" />
-            Selecionar Data
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Input
-            type="date"
-            value={dataSelecionada}
-            onChange={(e) => setDataSelecionada(e.target.value)}
-            className="max-w-[200px]"
-            disabled={loadingFrequencia}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="w-5 h-5" />
-            Lista de Alunos
-          </CardTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleMarcarTodos(true)} disabled={loadingAlunos || loadingFrequencia}>
-              Marcar Todos Presentes
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="px-6 py-4">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onVoltar}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar
             </Button>
-            <Button variant="outline" size="sm" onClick={() => handleMarcarTodos(false)} disabled={loadingAlunos || loadingFrequencia}>
-              Marcar Todos Ausentes
-            </Button>
+            <div className={`w-10 h-10 ${disciplina.cor || 'bg-blue-600'} rounded-lg flex items-center justify-center text-white`}>
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="font-semibold text-gray-900">Frequência - {disciplina.nome}</h1>
+              <p className="text-sm text-gray-600">
+                {serieNome} • {listaAlunos.length} alunos
+              </p>
+            </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {loadingAlunos || loadingFrequencia ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
-              <span className="text-gray-600">Carregando alunos e frequência...</span>
-            </div>
-          ) : alunos.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <AlertTriangle className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
-              <p className="font-medium">Nenhum aluno encontrado para esta série/turma.</p>
-              <p className="text-sm mt-1">Verifique o cadastro de alunos e turmas.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-2">
-              {alunos.map((aluno) => (
-                <div key={aluno.id} className="flex flex-col p-3 border rounded-md bg-gray-50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-800">{aluno.nome}</span>
-                    <Checkbox
-                      checked={aluno.presente}
-                      onCheckedChange={(checked: boolean) => handlePresencaChange(aluno.id, checked)}
-                      disabled={loadingFrequencia}
+        </div>
+      </div>
+
+      {/* Conteúdo Principal */}
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+
+          {/* Card Principal de Chamada */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Chamada - {serieNome}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+
+              {/* Cabeçalho com Data e Ações Rápidas */}
+              <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200 gap-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-2">
+                      Data da Aula
+                    </label>
+                    <Input
+                      type="date"
+                      value={dataFrequencia}
+                      onChange={(e) => setDataFrequencia(e.target.value)}
+                      className="w-48 bg-white"
                     />
                   </div>
-                  <Input
-                    type="text"
-                    placeholder="Observação (opcional)"
-                    value={aluno.observacao}
-                    onChange={(e) => handleObservacaoChange(aluno.id, e.target.value)}
-                    className="text-xs h-8"
-                    disabled={loadingFrequencia}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <UserCheck className="w-5 h-5" />
-            Resumo da Frequência
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex justify-between items-center text-sm">
-            <span>Total de Alunos:</span>
-            <Badge variant="secondary">{alunos.length}</Badge>
-          </div>
-          <div className="flex justify-between items-center text-sm">
-            <span>Presentes:</span>
-            <Badge className="bg-green-100 text-green-700">{presentes}</Badge>
-          </div>
-          <div className="flex justify-between items-center text-sm">
-            <span>Faltas:</span>
-            <Badge className="bg-red-100 text-red-700">{faltas}</Badge>
-          </div>
-          <div className="flex justify-between items-center text-lg font-semibold pt-2 border-t">
-            <span>% Presença:</span>
-            <span className={getPercentualColor(percentualPresenca)}>
-              {percentualPresenca.toFixed(2)}%
-            </span>
-          </div>
-          <Button
-            onClick={handleSalvarFrequencia}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-            disabled={loadingAlunos || loadingFrequencia}
-          >
-            {loadingFrequencia ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Salvando...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Salvar Frequência
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <History className="w-5 h-5" />
-            Histórico Recente
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {historicoFrequencia.length === 0 ? (
-            <div className="text-center text-gray-500 py-4">
-              Nenhum registro de frequência recente.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {historicoFrequencia.map((registro, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-md bg-gray-50">
-                  <span className="text-sm font-medium text-gray-800">
-                    {new Date(registro.data_aula).toLocaleDateString('pt-BR')}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-green-100 text-green-700">P: {registro.presentes}</Badge>
-                    <Badge className="bg-red-100 text-red-700">F: {registro.faltas}</Badge>
+                  <div className="pl-4 border-l border-blue-300 hidden md:block">
+                    <p className="text-sm text-gray-600 mb-1">Total</p>
+                    <p className="text-2xl font-bold text-blue-700">{listaAlunos.length}</p>
+                  </div>
+                  <div className="pl-4 border-l border-blue-300 hidden md:block">
+                    <p className="text-sm text-gray-600 mb-1">Presentes</p>
+                    <p className="text-2xl font-bold text-green-700">
+                      {listaAlunos.filter(a => a.presente).length}
+                    </p>
+                  </div>
+                  <div className="pl-4 border-l border-blue-300 hidden md:block">
+                    <p className="text-sm text-gray-600 mb-1">Ausentes</p>
+                    <p className="text-2xl font-bold text-red-700">
+                      {listaAlunos.filter(a => !a.presente).length}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleMarcarTodosPresentes}
+                    className="flex-1 md:flex-none flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-300 text-green-700"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Todos Presentes
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleMarcarTodosAusentes}
+                    className="flex-1 md:flex-none flex items-center gap-2 bg-red-50 hover:bg-red-100 border-red-300 text-red-700"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Todos Ausentes
+                  </Button>
+                </div>
+              </div>
+
+              {/* Lista de Alunos */}
+              {loading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                </div>
+              ) : listaAlunos.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  Nenhum aluno encontrado.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {listaAlunos.map((aluno, index) => (
+                    <div
+                      key={aluno.aluno_id}
+                      className={`border-2 rounded-lg p-4 transition-all ${
+                        aluno.presente
+                          ? 'bg-green-50/50 border-green-200'
+                          : 'bg-red-50/50 border-red-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Número e Checkbox */}
+                        <div className="flex items-center gap-3 pt-1">
+                          <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center font-semibold text-gray-700 text-sm shadow-sm">
+                            {index + 1}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`aluno-${aluno.aluno_id}`}
+                              checked={aluno.presente}
+                              onCheckedChange={() => handleTogglePresenca(aluno.aluno_id)}
+                              className="w-5 h-5 data-[state=checked]:bg-green-600 data-[state=unchecked]:border-gray-400"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Informações do Aluno */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 gap-2">
+                            <div>
+                              <h4 className="font-bold text-gray-900 text-base">{aluno.aluno_nome}</h4>
+                              <p className="text-xs text-gray-500">ID: {aluno.aluno_id.slice(0, 8)}</p>
+                            </div>
+
+                            <div 
+                              className="cursor-pointer"
+                              onClick={() => handleTogglePresenca(aluno.aluno_id)}
+                            >
+                              {aluno.presente ? (
+                                <Badge className="bg-green-600 hover:bg-green-700 text-white px-3 py-1">
+                                  <CheckCircle className="w-3 h-3 mr-1" /> Presente
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-red-600 hover:bg-red-700 text-white px-3 py-1">
+                                  <XCircle className="w-3 h-3 mr-1" /> Ausente
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Campo de Observação */}
+                          <div>
+                            <Textarea
+                              value={aluno.observacao}
+                              onChange={(e) => handleAtualizarObservacao(aluno.aluno_id, e.target.value)}
+                              placeholder="Adicione uma observação (opcional)..."
+                              className="w-full resize-none bg-white text-sm min-h-[60px]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Botão Salvar */}
+              <div className="flex items-center justify-between pt-4 border-t sticky bottom-0 bg-white p-4 shadow-lg md:static md:shadow-none md:bg-transparent md:p-0 z-20">
+                <div className="hidden md:block">
+                  <p className="text-sm text-gray-600">
+                    Editando frequência de <span className="font-bold">{formatarData(dataFrequencia)}</span>
+                  </p>
+                </div>
+                <Button
+                  onClick={handleSalvarFrequencia}
+                  disabled={salvando || loading}
+                  className="flex items-center gap-2 w-full md:w-auto bg-blue-600 hover:bg-blue-700"
+                  size="lg"
+                >
+                  {salvando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                  Salvar Frequência
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Histórico de Frequências Anteriores */}
+          {historico.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Histórico Recente</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {historico.map((registro) => (
+                    <div
+                      key={registro.data}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Calendar className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-900">
+                            {formatarData(registro.data)}
+                          </div>
+                          <div className="text-sm text-gray-600">{registro.aula || 'Aula Regular'}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="flex items-center gap-1 text-green-700">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="font-semibold">{registro.presentes}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-red-700">
+                          <XCircle className="w-4 h-4" />
+                          <span className="font-semibold">{registro.ausentes}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

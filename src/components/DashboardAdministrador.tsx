@@ -21,7 +21,7 @@ import logoEscola from "figma:asset/e339c695d5503d560f7e53d2039456d52fd95ea5.png
 import { Usuario } from "../types/auth";
 import { GerenciadorUsuarios } from "./GerenciadorUsuariosFixed";
 import { GestaoConteudoPDF } from "./GestaoConteudoPDF";
-import { ComunicadosPage } from "./ComunicadosPage";
+import ComunicadosPage from "./ComunicadosPage";
 import { Forum } from "./Forum";
 import { GestaoVinculos } from "./GestaoVinculos";
 import { supabase } from "../supabase/supabaseClient";

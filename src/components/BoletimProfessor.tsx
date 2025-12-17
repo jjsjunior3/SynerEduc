@@ -6,8 +6,8 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { BarChart3, Edit2, Save, Calculator, Download, Loader2, AlertCircle, FileText } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { Calculator, Save, Loader2, AlertCircle, FileText } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { Textarea } from './ui/textarea';
@@ -57,21 +57,28 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
 
   const [observacaoEditando, setObservacaoEditando] = useState('');
   const [modalObservacao, setModalObservacao] = useState(false);
-  const [alunoObservacao, setAlunoObservacao] = useState<string | null>(null);
 
-  const serieIdPuro = typeof serie.id === 'string' ? serie.id.replace(/serie_/, '') : serie.id;
   const serieNome = serie.nome;
 
-  // ... (Funções de cálculo e carregamento mantidas iguais) ...
+  // ✅ CÁLCULO DE RECUPERAÇÃO (Substitui a menor nota)
   const calcularMediaBimestre = (av1: number, av2: number, rec: number): number => {
-    let media = 0;
-    if (av1 > 0 || av2 > 0) {
-      media = (av1 + av2) / 2;
+    let nota1 = av1;
+    let nota2 = av2;
+
+    if (rec > 0) {
+      if (nota1 <= nota2 && rec > nota1) {
+        nota1 = rec;
+      } else if (nota2 < nota1 && rec > nota2) {
+        nota2 = rec;
+      } else if (nota1 === nota2 && rec > nota1) {
+        nota1 = rec;
+      }
     }
-    if (rec > 0 && rec > media) {
-      return rec;
+
+    if (nota1 > 0 || nota2 > 0) {
+      return (nota1 + nota2) / 2;
     }
-    return media;
+    return 0;
   };
 
   const calcularSituacao = (mediaFinal: number): 'aprovado' | 'recuperacao' | 'reprovado' | 'cursando' => {
@@ -127,8 +134,8 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
         const b4 = getNotasBimestre(4);
 
         const mediasValidas = [b1.media, b2.media, b3.media, b4.media].filter(m => m > 0);
-        const mediaFinal = mediasValidas.length > 0 
-          ? mediasValidas.reduce((acc, curr) => acc + curr, 0) / mediasValidas.length 
+        const mediaFinal = mediasValidas.length > 0
+          ? mediasValidas.reduce((acc, curr) => acc + curr, 0) / mediasValidas.length
           : 0;
 
         return {
@@ -271,7 +278,6 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
     setNotaEditando('');
   };
 
-  // ... (Helpers visuais mantidos) ...
   const getNotaColor = (nota: number) => {
     if (nota >= 7) return 'text-green-600 font-semibold';
     if (nota >= 5) return 'text-yellow-600 font-semibold';
@@ -289,73 +295,108 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
   };
 
   // ========================================
-  // EXPORTAR PDF COM TIMBRE
+  // ✅ EXPORTAR PDF PADRONIZADO (IGUAL COORDENAÇÃO)
   // ========================================
-  const exportarPDF = () => {
-    const doc = new jsPDF();
+  const exportarPDF = async () => {
+    try {
+      toast.loading('Gerando PDF...');
+      const doc = new jsPDF();
 
-    // --- CABEÇALHO (TIMBRE) ---
-    // Se você tiver uma URL de logo, pode usar:
-    // doc.addImage('URL_DA_LOGO', 'PNG', 14, 10, 20, 20);
+      // 1. Carregar Logo
+      const logo = new Image();
+      logo.src = '/logo-colegio-conexao.png'; // Caminho exato da pasta public
 
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('COLÉGIO CONEXÃO', 105, 20, { align: 'center' });
+      await new Promise((resolve, reject) => {
+        logo.onload = resolve;
+        logo.onerror = reject;
+      });
 
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Relatório de Notas Bimestrais', 105, 28, { align: 'center' });
+      // 2. Cabeçalho Padrão
+      doc.addImage(logo, 'PNG', 14, 10, 30, 30);
 
-    // Linha divisória
-    doc.setLineWidth(0.5);
-    doc.line(14, 35, 196, 35);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('COLÉGIO CONEXÃO', 50, 20);
 
-    // Informações da Turma
-    doc.setFontSize(10);
-    doc.text(`Disciplina: ${disciplina.nome}`, 14, 42);
-    doc.text(`Turma: ${serie.nome}`, 14, 48);
-    doc.text(`Bimestre: ${bimestreSelecionado}º`, 14, 54);
-    doc.text(`Professor: ${usuario?.nome || 'Não identificado'}`, 14, 60);
-    doc.text(`Data de Emissão: ${new Date().toLocaleDateString('pt-BR')}`, 150, 42);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Boletim de Notas e Resultados', 50, 28);
 
-    // --- TABELA DE NOTAS ---
-    const tableColumn = ["Aluno", "AV1", "AV2", "REC", "Média", "Situação"];
-    const tableRows: any[] = [];
+      // Metadados alinhados
+      doc.setFontSize(10);
+      doc.text(`Disciplina: ${disciplina.nome}`, 50, 35);
+      doc.text(`Turma: ${serie.nome}`, 50, 40);
 
-    alunos.forEach(aluno => {
-      const bimestreData = aluno[`bimestre${bimestreSelecionado}` as keyof NotaAlunoAvancada] as any;
-      const rowData = [
-        aluno.nome,
-        bimestreData.av1 > 0 ? bimestreData.av1.toFixed(1) : '-',
-        bimestreData.av2 > 0 ? bimestreData.av2.toFixed(1) : '-',
-        bimestreData.rec > 0 ? bimestreData.rec.toFixed(1) : '-',
-        bimestreData.media > 0 ? bimestreData.media.toFixed(2) : '-',
-        aluno.situacao.toUpperCase()
-      ];
-      tableRows.push(rowData);
-    });
+      doc.text(`Bimestre: ${bimestreSelecionado}º`, 120, 35);
+      doc.text(`Professor: ${usuario?.nome || 'Docente'}`, 120, 40);
 
-    autoTable(doc, {
-      startY: 65,
-      head: [tableColumn],
-      body: tableRows,
-      theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 }, // Azul
-      styles: { fontSize: 10, cellPadding: 3 },
-      alternateRowStyles: { fillColor: [245, 245, 245] }
-    });
+      // Data no canto direito (padrão coordenação)
+      doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 150, 20);
 
-    // Rodapé
-    const pageCount = doc.getNumberOfPages();
-    for(let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.text('Sistema de Gestão Escolar - Conexão', 105, 290, { align: 'center' });
-      doc.text(`Página ${i} de ${pageCount}`, 196, 290, { align: 'right' });
+      // Linha Azul Separadora
+      doc.setDrawColor(0, 0, 255);
+      doc.setLineWidth(0.5);
+      doc.line(14, 45, 196, 45);
+
+      // 3. Tabela de Notas
+      const tableColumn = ["Aluno", "AV1", "AV2", "REC", "Média", "Situação"];
+      const tableRows: any[] = [];
+
+      alunos.forEach(aluno => {
+        const bimestreData = aluno[`bimestre${bimestreSelecionado}` as keyof NotaAlunoAvancada] as any;
+        const rowData = [
+          aluno.nome,
+          bimestreData.av1 > 0 ? bimestreData.av1.toFixed(1) : '-',
+          bimestreData.av2 > 0 ? bimestreData.av2.toFixed(1) : '-',
+          bimestreData.rec > 0 ? bimestreData.rec.toFixed(1) : '-',
+          bimestreData.media > 0 ? bimestreData.media.toFixed(2) : '-',
+          aluno.situacao.toUpperCase()
+        ];
+        tableRows.push(rowData);
+      });
+
+      autoTable(doc, {
+        startY: 55, // Ajustado para não bater na linha azul
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { 
+          fillColor: [41, 128, 185], 
+          textColor: 255,
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        columnStyles: {
+          0: { halign: 'left' },
+          1: { halign: 'center' },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { halign: 'center', fontStyle: 'bold' },
+          5: { halign: 'center' }
+        },
+        styles: { fontSize: 10, cellPadding: 3 },
+        alternateRowStyles: { fillColor: [245, 245, 245] }
+      });
+
+      // Rodapé
+      const pageCount = doc.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text('Sistema de Gestão Escolar - Conexão', 105, 290, { align: 'center' });
+        doc.text(`Página ${i} de ${pageCount}`, 196, 290, { align: 'right' });
+      }
+
+      doc.save(`Boletim_${disciplina.nome}_${serie.nome}_${bimestreSelecionado}Bim.pdf`);
+      toast.dismiss();
+      toast.success('PDF gerado com sucesso!');
+
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.dismiss();
+      toast.error('Erro ao gerar PDF. Verifique se a logo está na pasta public.');
     }
-
-    doc.save(`Notas_${disciplina.nome}_${serie.nome}_${bimestreSelecionado}Bim.pdf`);
-    toast.success('PDF gerado com sucesso!');
   };
 
   const { aprovados, recuperacao, reprovados, mediaGeralTurma } = (() => {
@@ -380,7 +421,6 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {/* Botão de Exportar PDF */}
           <Button onClick={exportarPDF} variant="outline" className="gap-2 bg-red-50 text-red-600 border-red-200 hover:bg-red-100">
             <FileText className="w-4 h-4" />
             Exportar PDF
@@ -570,11 +610,14 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
         </CardContent>
       </Card>
 
-      {/* Modal de Observações (Mantido igual) */}
+      {/* Modal de Observações */}
       <Dialog open={modalObservacao} onOpenChange={setModalObservacao}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Adicionar Observação</DialogTitle>
+            <DialogDescription>
+              Insira uma observação pedagógica sobre este aluno para compor o relatório.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>

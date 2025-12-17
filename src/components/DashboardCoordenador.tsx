@@ -1,6 +1,6 @@
 // src/components/DashboardCoordenador.tsx
 import { lazy, Suspense, useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -22,26 +22,25 @@ import {
   Eye,
 } from 'lucide-react';
 
-import {Notificacoes} from './Notificacoes';
+import { Notificacoes } from './Notificacoes';
 import { PerfilUsuario } from './PerfilUsuario';
+import { SchoolHeader } from './SchoolHeader'; // ✅ Importar SchoolHeader
 import { Usuario } from '../types/auth';
 
 // ---------- Lazy imports dos subpainéis ----------
 const BoletinsGerais = lazy(() => import('./BoletinsGerais'));
 const RelatorioTurma = lazy(() => import('./RelatorioTurma'));
-const FrequenciaAlunos = lazy(() => import('./FrequenciaAlunos'));
+const FrequenciaAlunos = lazy(() => import('./FrequenciaAluno'));
 const EnviarComunicado = lazy(() => import('./EnviarComunicado'));
 const ForumCoordenador = lazy(() => import('./ForumCoordenador'));
 const AgendaProfessores = lazy(() => import('./AgendaProfessores'));
-const GestaoHorarios = lazy(() => import('./GestaoHorarios')); 
-
+const GestaoHorarios = lazy(() => import('./GestaoHorarios'));
 
 // ---------- Props ----------
 interface DashboardCoordenadorProps {
   onBackToSite?: () => void;
   usuario?: Usuario;
   logout?: () => void;
-  atualizarUsuario?: (usuario: Usuario) => void;
 }
 
 // ---------- Componente principal ----------
@@ -49,7 +48,6 @@ export default function DashboardCoordenador({
   onBackToSite,
   usuario,
   logout,
-  atualizarUsuario,
 }: DashboardCoordenadorProps) {
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
   const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
@@ -106,13 +104,13 @@ export default function DashboardCoordenador({
       color: 'bg-pink-200',
       iconColor: 'text-pink-600',
     },
-     {
-    id: 'horarios',
-    title: 'Gestão de Horários',
-    description: 'Cadastrar e editar grade horária das turmas',
-    icon: <Clock className="w-8 h-8" />,
-    color: 'bg-cyan-200',
-    iconColor: 'text-cyan-600',
+    {
+      id: 'horarios',
+      title: 'Gestão de Horários',
+      description: 'Cadastrar e editar grade horária das turmas',
+      icon: <Clock className="w-8 h-8" />,
+      color: 'bg-cyan-200',
+      iconColor: 'text-cyan-600',
     },
     {
       id: 'forum',
@@ -149,10 +147,17 @@ export default function DashboardCoordenador({
     }
   };
 
-  // ----------------- Caso não seja “dashboard”, renderiza o módulo escolhido -----------------
+  // ----------------- Caso não seja "dashboard", renderiza o módulo escolhido -----------------
   if (viewAtual !== 'dashboard') {
     return (
-      <Suspense fallback={<div className="p-10 text-center text-gray-600">Carregando módulo...</div>}>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center min-h-screen">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mr-3" />
+            <span className="text-gray-600">Carregando módulo...</span>
+          </div>
+        }
+      >
         {renderConteudo()}
       </Suspense>
     );
@@ -164,14 +169,8 @@ export default function DashboardCoordenador({
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-semibold text-gray-900">
-              Colégio Conexão EAD
-            </h1>
-            <p className="text-sm text-gray-600">
-              Painel de Coordenação Pedagógica
-            </p>
-          </div>
+          {/* ✅ Usar SchoolHeader para padronizar */}
+          <SchoolHeader subtitle="Painel de Coordenação Pedagógica" />
 
           <div className="flex items-center gap-4">
             {onBackToSite && (
@@ -181,7 +180,7 @@ export default function DashboardCoordenador({
                 onClick={onBackToSite}
                 className="text-gray-600 hover:text-gray-900"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao site
+                <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao site
               </Button>
             )}
 
@@ -213,10 +212,7 @@ export default function DashboardCoordenador({
         {/* Notificações */}
         {mostrarNotificacoes && (
           <div className="absolute right-4 top-16 w-80 z-50">
-            <Notificacoes
-              usuario={usuario}
-              onClose={() => setMostrarNotificacoes(false)}
-            />
+            <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
           </div>
         )}
       </header>
@@ -229,17 +225,17 @@ export default function DashboardCoordenador({
             <Card
               key={item.id}
               onClick={() => handleMenuClick(item.id)}
-              className={`${item.color} cursor-pointer border-0 hover:shadow-lg transition-all duration-200`}
+              className={`${item.color} cursor-pointer border-0 hover:shadow-lg transition-all duration-200 hover:scale-105`}
             >
               <CardContent className="p-6 text-center space-y-3">
-                <div className={`w-16 h-16 mx-auto bg-white rounded-full flex items-center justify-center ${item.iconColor}`}>
+                <div className={`w-16 h-16 mx-auto bg-white rounded-full flex items-center justify-center ${item.iconColor} shadow-md`}>
                   {item.icon}
                 </div>
                 <div>
-                  <CardTitle className="font-semibold text-gray-800">
+                  <CardTitle className="font-semibold text-gray-800 text-base mb-1">
                     {item.title}
                   </CardTitle>
-                  <p className="text-sm text-gray-600">{item.description}</p>
+                  <p className="text-xs text-gray-600">{item.description}</p>
                 </div>
               </CardContent>
             </Card>
@@ -272,13 +268,12 @@ export default function DashboardCoordenador({
         </aside>
       </main>
 
-      {/* Perfil */}
+      {/* ✅ Perfil - Renderizar como Dialog com props corretas */}
       <PerfilUsuario
         open={mostrarPerfil}
         onOpenChange={setMostrarPerfil}
         usuario={usuario}
         logout={logout}
-        atualizarUsuario={atualizarUsuario}
       />
     </div>
   );

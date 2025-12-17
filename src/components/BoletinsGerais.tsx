@@ -1,80 +1,243 @@
-import { useState } from 'react';
+// src/components/BoletinsGerais.tsx
+/**
+ * Boletins Gerais - Coordenação
+ * Visualizar notas de todos os alunos por série, turma, disciplina e bimestre.
+ */
+
+import { useState, useEffect } from 'react';
+import { supabase } from '../supabase/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { ArrowLeft, Search, Download, Eye, Filter } from 'lucide-react';
+import { ArrowLeft, Search, Download, Eye, Filter, Loader2, AlertCircle, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface BoletinsGeraisProps {
   onVoltar: () => void;
 }
 
-interface BoletimAluno {
+interface Aluno {
   id: string;
-  nomeAluno: string;
+  nome: string;
+  email: string;
   serie: string;
-  turma: string;
-  mediaGeral: number;
-  situacao: 'aprovado' | 'recuperacao' | 'reprovado';
-  disciplinas: {
-    nome: string;
-    nota1: number;
-    nota2: number;
-    nota3: number;
-    nota4: number;
-    media: number;
-    faltas: number;
-  }[];
 }
 
-export function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
+interface Nota {
+  id: string;
+  user_id: string;
+  disciplina_id: string;
+  bimestre: number;
+  av1: number | null;
+  av2: number | null;
+  recuperacao: number | null;
+  media: number | null;
+  media_final: number | null;
+  frequencia: number | null;
+  faltas: number | null;
+  status_final: string | null;
+  disciplina: { nome: string } | null;
+}
+
+interface BoletimAluno {
+  aluno: Aluno;
+  notas: Nota[];
+  mediaGeral: number;
+  totalFaltas: number;
+  situacao: 'aprovado' | 'recuperacao' | 'reprovado';
+}
+
+export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  // Filtros
+  const [series, setSeries] = useState<string[]>([]);
+  const [disciplinas, setDisciplinas] = useState<{ id: string; nome: string }[]>([]);
   const [filtroSerie, setFiltroSerie] = useState('todas');
-  const [filtroTurma, setFiltroTurma] = useState('todas');
+  const [filtroDisciplina, setFiltroDisciplina] = useState('todas');
+  const [filtroBimestre, setFiltroBimestre] = useState('todos');
   const [busca, setBusca] = useState('');
 
-  const boletins: BoletimAluno[] = [
-    {
-      id: '1',
-      nomeAluno: 'Maria Silva Santos',
-      serie: '3ª série',
-      turma: 'A',
-      mediaGeral: 8.2,
-      situacao: 'aprovado',
-      disciplinas: [
-        { nome: 'Matemática', nota1: 8.5, nota2: 7.8, nota3: 8.2, nota4: 8.0, media: 8.1, faltas: 2 },
-        { nome: 'Português', nota1: 9.0, nota2: 8.5, nota3: 8.8, nota4: 8.7, media: 8.8, faltas: 1 },
-        { nome: 'Física', nota1: 7.5, nota2: 8.0, nota3: 7.8, nota4: 8.2, media: 7.9, faltas: 3 }
-      ]
-    },
-    {
-      id: '2',
-      nomeAluno: 'João Pedro Oliveira',
-      serie: '3ª série',
-      turma: 'A',
-      mediaGeral: 6.8,
-      situacao: 'recuperacao',
-      disciplinas: [
-        { nome: 'Matemática', nota1: 6.0, nota2: 6.5, nota3: 7.0, nota4: 6.8, media: 6.6, faltas: 5 },
-        { nome: 'Português', nota1: 7.5, nota2: 7.0, nota3: 7.2, nota4: 7.3, media: 7.3, faltas: 2 },
-        { nome: 'Física', nota1: 5.5, nota2: 6.0, nota3: 6.5, nota4: 6.2, media: 6.1, faltas: 4 }
-      ]
-    },
-    {
-      id: '3',
-      nomeAluno: 'Ana Carolina Lima',
-      serie: '2ª série',
-      turma: 'B',
-      mediaGeral: 9.1,
-      situacao: 'aprovado',
-      disciplinas: [
-        { nome: 'Matemática', nota1: 9.5, nota2: 9.0, nota3: 9.2, nota4: 9.0, media: 9.2, faltas: 0 },
-        { nome: 'Português', nota1: 8.8, nota2: 9.2, nota3: 9.0, nota4: 9.1, media: 9.0, faltas: 1 },
-        { nome: 'História', nota1: 9.0, nota2: 9.5, nota3: 8.8, nota4: 9.2, media: 9.1, faltas: 0 }
-      ]
-    }
-  ];
+  // Dados
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [notas, setNotas] = useState<Nota[]>([]);
+  const [boletins, setBoletins] = useState<BoletimAluno[]>([]);
 
+  // Estatísticas
+  const [mediaGeral, setMediaGeral] = useState(0);
+  const [aprovados, setAprovados] = useState(0);
+  const [recuperacao, setRecuperacao] = useState(0);
+  const [reprovados, setReprovados] = useState(0);
+
+  // ========================================
+  // 1️⃣ CARREGAR SÉRIES E DISCIPLINAS
+  // ========================================
+  useEffect(() => {
+    carregarFiltros();
+  }, []);
+
+  async function carregarFiltros() {
+    try {
+      // Buscar séries únicas
+      const { data: seriesData, error: seriesError } = await supabase
+        .from('users')
+        .select('serie')
+        .eq('tipo', 'aluno')
+        .not('serie', 'is', null);
+
+      if (seriesError) throw seriesError;
+
+      const seriesUnicas = Array.from(new Set(seriesData?.map(item => item.serie) || []));
+      setSeries(['todas', ...seriesUnicas.sort()]);
+
+      // Buscar disciplinas
+      const { data: disciplinasData, error: disciplinasError } = await supabase
+        .from('disciplinas')
+        .select('id, nome')
+        .order('nome', { ascending: true });
+
+      if (disciplinasError) throw disciplinasError;
+
+      setDisciplinas(disciplinasData || []);
+    } catch (error) {
+      console.error('Erro ao carregar filtros:', error);
+    }
+  }
+
+  // ========================================
+  // 2️⃣ CARREGAR ALUNOS E NOTAS
+  // ========================================
+  useEffect(() => {
+    carregarDados();
+  }, [filtroSerie, filtroDisciplina, filtroBimestre]);
+
+  async function carregarDados() {
+    setCarregando(true);
+    setErro(null);
+
+    try {
+      // BUSCAR ALUNOS
+      let queryAlunos = supabase
+        .from('users')
+        .select('id, nome, email, serie')
+        .eq('tipo', 'aluno')
+        .order('nome', { ascending: true });
+
+      if (filtroSerie !== 'todas') {
+        queryAlunos = queryAlunos.eq('serie', filtroSerie);
+      }
+
+      const { data: alunosData, error: alunosError } = await queryAlunos;
+      if (alunosError) throw alunosError;
+
+      setAlunos(alunosData || []);
+
+      // BUSCAR NOTAS
+      const alunosIds = alunosData?.map(a => a.id) || [];
+
+      if (alunosIds.length === 0) {
+        setNotas([]);
+        setBoletins([]);
+        setCarregando(false);
+        return;
+      }
+
+      let queryNotas = supabase
+        .from('notas')
+        .select(`
+          *,
+          disciplina:disciplinas!disciplina_id(nome)
+        `)
+        .in('user_id', alunosIds);
+
+      if (filtroDisciplina !== 'todas') {
+        queryNotas = queryNotas.eq('disciplina_id', filtroDisciplina);
+      }
+
+      if (filtroBimestre !== 'todos') {
+        queryNotas = queryNotas.eq('bimestre', parseInt(filtroBimestre));
+      }
+
+      const { data: notasData, error: notasError } = await queryNotas;
+      if (notasError) throw notasError;
+
+      setNotas(notasData || []);
+
+      // GERAR BOLETINS
+      gerarBoletins(alunosData || [], notasData || []);
+
+    } catch (error: any) {
+      console.error('Erro ao carregar dados:', error);
+      setErro(error.message || 'Erro ao carregar boletins');
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  // ========================================
+  // 3️⃣ GERAR BOLETINS E ESTATÍSTICAS
+  // ========================================
+  function gerarBoletins(alunosData: Aluno[], notasData: Nota[]) {
+    const boletinsGerados: BoletimAluno[] = alunosData.map(aluno => {
+      const notasAluno = notasData.filter(n => n.user_id === aluno.id);
+
+      // Calcular média geral (usando media_final se disponível, senão media)
+      const somaMedias = notasAluno.reduce((acc, n) => {
+        const notaFinal = n.media_final ?? n.media ?? 0;
+        return acc + notaFinal;
+      }, 0);
+
+      const mediaGeral = notasAluno.length > 0 ? somaMedias / notasAluno.length : 0;
+
+      // Calcular total de faltas
+      const totalFaltas = notasAluno.reduce((acc, n) => acc + (n.faltas ?? 0), 0);
+
+      // Determinar situação
+      let situacao: 'aprovado' | 'recuperacao' | 'reprovado';
+      if (mediaGeral >= 7) {
+        situacao = 'aprovado';
+      } else if (mediaGeral >= 5) {
+        situacao = 'recuperacao';
+      } else {
+        situacao = 'reprovado';
+      }
+
+      return {
+        aluno,
+        notas: notasAluno,
+        mediaGeral,
+        totalFaltas,
+        situacao
+      };
+    });
+
+    setBoletins(boletinsGerados);
+
+    // CALCULAR ESTATÍSTICAS
+    const boletinsComNotas = boletinsGerados.filter(b => b.notas.length > 0);
+    const somaMedias = boletinsComNotas.reduce((acc, b) => acc + b.mediaGeral, 0);
+    const mediaGeralCalc = boletinsComNotas.length > 0 ? somaMedias / boletinsComNotas.length : 0;
+
+    setMediaGeral(mediaGeralCalc);
+    setAprovados(boletinsComNotas.filter(b => b.situacao === 'aprovado').length);
+    setRecuperacao(boletinsComNotas.filter(b => b.situacao === 'recuperacao').length);
+    setReprovados(boletinsComNotas.filter(b => b.situacao === 'reprovado').length);
+  }
+
+  // ========================================
+  // 4️⃣ FILTRAR BOLETINS POR BUSCA
+  // ========================================
+  const boletinsFiltrados = boletins.filter(b =>
+    b.aluno.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    b.aluno.email?.toLowerCase().includes(busca.toLowerCase())
+  );
+
+  // ========================================
+  // 5️⃣ FUNÇÕES AUXILIARES
+  // ========================================
   const getSituacaoColor = (situacao: string) => {
     switch (situacao) {
       case 'aprovado': return 'bg-green-100 text-green-700';
@@ -90,37 +253,95 @@ export function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     return 'text-red-600';
   };
 
-  const boletinsFiltrados = boletins.filter(boletim => {
-    const matchBusca = boletim.nomeAluno.toLowerCase().includes(busca.toLowerCase());
-    const matchSerie = filtroSerie === 'todas' || boletim.serie === filtroSerie;
-    const matchTurma = filtroTurma === 'todas' || boletim.turma === filtroTurma;
-    return matchBusca && matchSerie && matchTurma;
-  });
+  function exportarPDF() {
+    toast.info('Função de exportar PDF será implementada em breve');
+  }
 
+  function visualizarBoletim(alunoId: string) {
+    toast.info('Visualização detalhada será implementada em breve');
+  }
+
+  // ========================================
+  // 6️⃣ RENDERIZAÇÃO
+  // ========================================
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={onVoltar}
-            className="flex items-center gap-2"
-          >
+          <Button variant="ghost" size="sm" onClick={onVoltar} className="flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
             Voltar
           </Button>
           <div>
             <h1 className="font-semibold text-gray-900">Boletins Gerais</h1>
-            <p className="text-sm text-gray-600">Visualizar boletins de todos os alunos</p>
+            <p className="text-sm text-gray-600">Visualizar notas de todos os alunos por série, turma, disciplina e bimestre</p>
           </div>
         </div>
       </div>
 
       <div className="p-6">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* Filtros */}
+          {/* ESTATÍSTICAS */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Users className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total de Alunos</p>
+                    <p className="text-2xl font-bold text-gray-900">{alunos.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Média Geral</p>
+                    <p className="text-2xl font-bold text-gray-900">{mediaGeral.toFixed(1)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Aprovados</p>
+                    <p className="text-2xl font-bold text-green-600">{aprovados}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Recuperação</p>
+                    <p className="text-2xl font-bold text-yellow-600">{recuperacao}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* FILTROS */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -129,7 +350,7 @@ export function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Buscar Aluno</label>
                   <div className="relative">
@@ -137,11 +358,12 @@ export function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                     <Input
                       value={busca}
                       onChange={(e) => setBusca(e.target.value)}
-                      placeholder="Nome do aluno..."
+                      placeholder="Nome ou email..."
                       className="pl-10"
                     />
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Série</label>
                   <Select value={filtroSerie} onValueChange={setFiltroSerie}>
@@ -149,113 +371,185 @@ export function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todas">Todas as séries</SelectItem>
-                      <SelectItem value="1ª série">1ª série</SelectItem>
-                      <SelectItem value="2ª série">2ª série</SelectItem>
-                      <SelectItem value="3ª série">3ª série</SelectItem>
+                      {series.map(serie => (
+                        <SelectItem key={serie} value={serie}>
+                          {serie === 'todas' ? 'Todas as Séries' : serie}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Turma</label>
-                  <Select value={filtroTurma} onValueChange={setFiltroTurma}>
+                  <label className="text-sm font-medium">Disciplina</label>
+                  <Select value={filtroDisciplina} onValueChange={setFiltroDisciplina}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todas">Todas as turmas</SelectItem>
-                      <SelectItem value="A">Turma A</SelectItem>
-                      <SelectItem value="B">Turma B</SelectItem>
-                      <SelectItem value="C">Turma C</SelectItem>
+                      <SelectItem value="todas">Todas as Disciplinas</SelectItem>
+                      {disciplinas.map(disc => (
+                        <SelectItem key={disc.id} value={disc.id}>
+                          {disc.nome}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Bimestre</label>
+                  <Select value={filtroBimestre} onValueChange={setFiltroBimestre}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os Bimestres</SelectItem>
+                      <SelectItem value="1">1º Bimestre</SelectItem>
+                      <SelectItem value="2">2º Bimestre</SelectItem>
+                      <SelectItem value="3">3º Bimestre</SelectItem>
+                      <SelectItem value="4">4º Bimestre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="flex items-end">
-                  <Button className="w-full">
+                  <Button onClick={exportarPDF} className="w-full bg-blue-600 hover:bg-blue-700">
                     <Download className="w-4 h-4 mr-2" />
-                    Exportar Tudo
+                    Exportar PDF
                   </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Lista de Boletins */}
-          <div className="space-y-4">
-            {boletinsFiltrados.map((boletim) => (
-              <Card key={boletim.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-medium text-gray-900 mb-1">{boletim.nomeAluno}</h3>
-                      <p className="text-sm text-gray-600">
-                        {boletim.serie} - Turma {boletim.turma}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600">Média Geral</p>
-                        <p className={`font-bold ${getMediaColor(boletim.mediaGeral)}`}>
-                          {boletim.mediaGeral.toFixed(1)}
-                        </p>
-                      </div>
-                      <Badge className={getSituacaoColor(boletim.situacao)}>
-                        {boletim.situacao}
-                      </Badge>
-                    </div>
-                  </div>
+          {/* LOADING */}
+          {carregando && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mr-3" />
+              <span className="text-gray-600">Carregando boletins...</span>
+            </div>
+          )}
 
-                  {/* Disciplinas */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                    {boletim.disciplinas.map((disciplina, index) => (
-                      <div key={index} className="border rounded-lg p-3">
-                        <h4 className="font-medium text-sm mb-2">{disciplina.nome}</h4>
-                        <div className="flex justify-between items-center text-xs text-gray-600 mb-1">
-                          <span>1º Bim: {disciplina.nota1}</span>
-                          <span>2º Bim: {disciplina.nota2}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs text-gray-600 mb-2">
-                          <span>3º Bim: {disciplina.nota3}</span>
-                          <span>4º Bim: {disciplina.nota4}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">Média:</span>
-                          <span className={`text-sm font-bold ${getMediaColor(disciplina.media)}`}>
-                            {disciplina.media.toFixed(1)}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Faltas: {disciplina.faltas}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" size="sm">
-                      <Eye className="w-4 h-4 mr-1" />
-                      Visualizar
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Download className="w-4 h-4 mr-1" />
-                      Baixar PDF
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {boletinsFiltrados.length === 0 && (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <Search className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="font-medium text-gray-900 mb-2">Nenhum boletim encontrado</h3>
-                <p className="text-gray-600">
-                  Tente ajustar os filtros ou a busca para encontrar os boletins desejados.
-                </p>
+          {/* ERRO */}
+          {erro && !carregando && (
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="p-6 flex items-start gap-3">
+                <AlertCircle className="w-6 h-6 text-red-600 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-red-900">Erro ao carregar boletins</h3>
+                  <p className="text-sm text-red-700 mt-1">{erro}</p>
+                  <Button variant="outline" size="sm" onClick={carregarDados} className="mt-3">
+                    Tentar novamente
+                  </Button>
+                </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* LISTA DE BOLETINS */}
+          {!carregando && !erro && (
+            <div className="space-y-4">
+              {boletinsFiltrados.length === 0 ? (
+                <Card>
+                  <CardContent className="p-12 text-center">
+                    <Search className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="font-medium text-gray-900 mb-2">Nenhum boletim encontrado</h3>
+                    <p className="text-gray-600">
+                      Ajuste os filtros ou aguarde o lançamento de notas pelos professores.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                boletinsFiltrados.map((boletim) => (
+                  <Card key={boletim.aluno.id}>
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="font-medium text-gray-900 mb-1">{boletim.aluno.nome}</h3>
+                          <p className="text-sm text-gray-600">
+                            {boletim.aluno.serie} • {boletim.aluno.email}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-sm text-gray-600">Média Geral</p>
+                            <p className={`text-2xl font-bold ${getMediaColor(boletim.mediaGeral)}`}>
+                              {boletim.mediaGeral.toFixed(1)}
+                            </p>
+                          </div>
+                          <Badge className={getSituacaoColor(boletim.situacao)}>
+                            {boletim.situacao}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Disciplinas */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                        {boletim.notas.map((nota) => (
+                          <div key={nota.id} className="border rounded-lg p-3">
+                            <h4 className="font-medium text-sm mb-2">
+                              {nota.disciplina?.nome || 'Disciplina'}
+                            </h4>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-xs text-gray-600">
+                                <span>Bimestre:</span>
+                                <span className="font-medium">{nota.bimestre}º</span>
+                              </div>
+                              {nota.av1 !== null && (
+                                <div className="flex justify-between text-xs text-gray-600">
+                                  <span>AV1:</span>
+                                  <span className="font-medium">{nota.av1.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {nota.av2 !== null && (
+                                <div className="flex justify-between text-xs text-gray-600">
+                                  <span>AV2:</span>
+                                  <span className="font-medium">{nota.av2.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {nota.recuperacao !== null && (
+                                <div className="flex justify-between text-xs text-orange-600">
+                                  <span>Recuperação:</span>
+                                  <span className="font-medium">{nota.recuperacao.toFixed(2)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between items-center pt-2 border-t">
+                                <span className="text-sm font-medium">Média:</span>
+                                <span className={`text-sm font-bold ${getMediaColor(nota.media_final ?? nota.media ?? 0)}`}>
+                                  {(nota.media_final ?? nota.media ?? 0).toFixed(1)}
+                                </span>
+                              </div>
+                              {nota.faltas !== null && (
+                                <div className="text-xs text-gray-500">
+                                  Faltas: {nota.faltas}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <div className="text-sm text-gray-600">
+                          Total de Faltas: <span className="font-medium">{boletim.totalFaltas}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => visualizarBoletim(boletim.aluno.id)}>
+                            <Eye className="w-4 h-4 mr-1" />
+                            Visualizar
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={exportarPDF}>
+                            <Download className="w-4 h-4 mr-1" />
+                            Baixar PDF
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
           )}
         </div>
       </div>
