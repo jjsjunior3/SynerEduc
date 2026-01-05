@@ -24,19 +24,17 @@ import {
   Trophy,
   Cpu
 } from 'lucide-react';
-// Imagens padrão do Figma
-// import logoEscola from './assets/logo-escola.png'; // <-- REMOVA ESTA LINHA
 
 interface SiteInstitucionalProps {
   onAccessPortal: () => void;
 }
 
-export function SiteInstitucional({ onAccessPortal }: SiteInstitucionalProps) {
+export default function SiteInstitucional({ onAccessPortal }: SiteInstitucionalProps) {
   const [showMatriculaDialog, setShowMatriculaDialog] = useState(false);
   const [formularioData, setFormularioData] = useState({
     nomeAluno: '',
     serie: '',
-    turno: '',
+    turno: 'matutino', // Valor inicial para 'matutino'
     nomeResponsavel: '',
     email: '',
     telefone: ''
@@ -100,24 +98,25 @@ export function SiteInstitucional({ onAccessPortal }: SiteInstitucionalProps) {
 
   const handleFormularioSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const emailData = {
-      subject: 'Nova Matrícula - Colégio Conexão EAD Maranhense',
-      body: `
-Nome do Aluno: ${formularioData.nomeAluno}%0A
-Série: ${formularioData.serie}%0A
-Turno: ${formularioData.turno}%0A
-Nome do Responsável: ${formularioData.nomeResponsavel}%0A
-E-mail: ${formularioData.email}%0A
-Telefone/WhatsApp: ${formularioData.telefone}%0A%0A
-Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
-      `
-    };
-    window.location.href = `mailto:contato@conexaoead.edu.br?subject=${emailData.subject}&body=${emailData.body}`;
+
+    const numeroWhatsApp = '5598983532145'; // ⚠️ SUBSTITUA PELO NÚMERO DE TELEFONE DA ESCOLA (com código do país e DDD, sem caracteres especiais)
+
+    const mensagemWhatsApp = `Olá, gostaria de solicitar uma matrícula para o Colégio Conexão EAD Maranhense com os seguintes dados:%0A%0A` +
+                             `*Nome do Aluno:* ${formularioData.nomeAluno}%0A` +
+                             `*Série Pretendida:* ${formularioData.serie}%0A` +
+                             `*Turno:* ${formularioData.turno}%0A` +
+                             `*Nome do Responsável:* ${formularioData.nomeResponsavel}%0A` +
+                             `*E-mail:* ${formularioData.email}%0A` +
+                             `*Telefone/WhatsApp:* ${formularioData.telefone}%0A%0A` +
+                             `Solicitação enviada em: ${new Date().toLocaleString('pt-BR')}`;
+
+    window.open(`https://wa.me/${numeroWhatsApp}?text=${mensagemWhatsApp}`, '_blank');
+
     setShowMatriculaDialog(false);
     setFormularioData({
       nomeAluno: '',
       serie: '',
-      turno: '',
+      turno: 'matutino', // Resetar para matutino
       nomeResponsavel: '',
       email: '',
       telefone: ''
@@ -135,13 +134,12 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-3">
-              {/* ✅ CORRIGIDO: Referenciando o logo diretamente da pasta public */}
               <img src="/logo-colegio-conexao.png" alt="Colégio Conexão" className="w-12 h-12" />
               <div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text text-transparent">
                   Colégio Conexão
                 </h1>
-                <p className="text-xs text-gray-600">EAD Maranhense</p>
+                <p className="text-xs text-gray-600">Colégio Conexão Maranhense</p>
               </div>
             </div>
             <nav className="hidden md:flex items-center gap-6">
@@ -188,10 +186,10 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
           </div>
         </div>
       </header>
-      {/* Hero Section com Vídeo de Fundo */}
-      <section className="relative h-[600px] overflow-hidden">
+      {/* Hero Section com Vídeo de Fundo - ✅ ALTURA E ESTILOS AJUSTADOS */}
+      <section className="relative h-screen overflow-hidden"> {/* ✅ h-screen para ocupar 100% da altura da tela */}
         {/* Vídeo de Fundo */}
-        <div className="absolute inset-0 w-full h-full">
+        <div className="absolute inset-0 w-full h-full z-0">
           <video
             autoPlay
             loop
@@ -199,20 +197,23 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
             playsInline
             className="w-full h-full object-cover"
           >
-            <source src="https://assets.mixkit.co/videos/preview/mixkit-elementary-school-students-working-in-class-42684-large.mp4" type="video/mp4" />
+            <source src="/video1.mp4" type="video/mp4" />
+            Seu navegador não suporta a tag de vídeo.
           </video>
-          {/* Overlay com gradiente das cores da escola */}
-          <div className="absolute inset-0 bg-gradient-to-r from-orange-900/70 via-green-900/60 to-orange-900/70"></div>
         </div>
-        {/* Conteúdo do Hero */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
+        {/* Overlay com gradiente das cores da escola */}
+        <div className="absolute inset-0 bg-gradient-to-r from-orange-600/70 via-green-600/60 to-orange-600/70 z-10"></div>
+        {/* Conteúdo do Hero - ✅ FONTES E POSICIONAMENTO AJUSTADOS */}
+        <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center py-20">
           <div className="text-white max-w-3xl">
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+            <h2 className="text-6xl md:text-8xl lg:text-9xl font-extrabold mb-6 leading-tight drop-shadow-lg" style={{
+                textShadow: '1.5px 1.5px 0px #FF8C00, -1.5px -1.5px 0px #FF8C00, 1.5px -1.5px 0px #FF8C00, -1.5px 1.5px 0px #FF8C00, 0px 1.5px 0px #FF8C00, 0px -1.5px 0px #FF8C00, 1.5px 0px 0px #FF8C00, -1.5px 0px 0px #FF8C00'
+              }}> {/* ✅ Fontes MUITO maiores */}
               Educação de
               <span className="block text-orange-400">Qualidade</span>
               para o Futuro
             </h2>
-            <p className="text-xl md:text-2xl mb-8 text-gray-100">
+            <p className="text-2xl md:text-3xl lg:text-4xl mb-8 text-gray-100 font-medium drop-shadow-md"> {/* ✅ Fonte MUITO maior */}
               Ensino do 1º ao 9º ano com infraestrutura completa e metodologia moderna
             </p>
             <div className="flex flex-wrap gap-4">
@@ -236,7 +237,7 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
           </div>
         </div>
         {/* Indicadores de scroll */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce z-20">
           <div className="w-8 h-12 border-2 border-white rounded-full flex items-start justify-center p-2">
             <div className="w-2 h-3 bg-white rounded-full"></div>
           </div>
@@ -370,7 +371,7 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
               onClick={() => scrollToSection('contato')}
               size="lg"
               variant="outline"
-              className="border-2 border-white text-white hover:bg-white/10 font-bold text-lg px-8 py-6"
+              className="border-2 border-green-600 text-green-600 hover:bg-white/10 font-bold text-lg px-8 py-6 shadow-2xl"
             >
               Fale Conosco
             </Button>
@@ -396,8 +397,8 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">Endereço</h3>
                 <p className="text-gray-600">
-                  Rua da Educação, 123<br />
-                  Centro, São Luís - MA
+                  Av. João Pessoa, n 262<br />
+                  Outeiro da Cruz, São Luís - MA
                 </p>
               </CardContent>
             </Card>
@@ -408,8 +409,8 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">Telefone</h3>
                 <p className="text-gray-600">
-                  (98) 3234-5678<br />
-                  (98) 98765-4321
+                  (98) 3243-3057<br />
+                  (98) 982532145
                 </p>
               </CardContent>
             </Card>
@@ -420,8 +421,7 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">E-mail</h3>
                 <p className="text-gray-600">
-                  contato@conexaoead.edu.br<br />
-                  secretaria@conexaoead.edu.br
+                  secretaria@conexaoma.com.br<br />
                 </p>
               </CardContent>
             </Card>
@@ -434,11 +434,10 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
           <div className="grid md:grid-cols-3 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                {/* ✅ CORRIGIDO: Referenciando o logo diretamente da pasta public */}
                 <img src="/logo-colegio-conexao.png" alt="Logo" className="w-10 h-10" />
                 <div>
                   <h3 className="font-bold text-lg">Colégio Conexão</h3>
-                  <p className="text-sm text-gray-400">EAD Maranhense</p>
+                  <p className="text-sm text-gray-400">Maranhense</p>
                 </div>
               </div>
               <p className="text-gray-400 text-sm">
@@ -526,9 +525,8 @@ Solicitação de matrícula enviada em: ${new Date().toLocaleString('pt-BR')}
                   <SelectValue placeholder="Selecione o turno" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Apenas a opção Matutino */}
                   <SelectItem value="matutino">Matutino</SelectItem>
-                  <SelectItem value="vespertino">Vespertino</SelectItem>
-                  <SelectItem value="noturno">Noturno</SelectItem>
                 </SelectContent>
               </Select>
             </div>

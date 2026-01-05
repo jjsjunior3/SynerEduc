@@ -12,7 +12,7 @@ import {DashboardAdministrador} from "./components/DashboardAdministrador";
 import DashboardFallback from "./components/DashboardFallback";
 
 // Site / Login
-import {SiteInstitucional} from "./components/SiteInstitucional";
+import SiteInstitucional from "./components/SiteInstitucional";
 import  LoginCompleto from './components/LoginCompleto';
 
 /**
