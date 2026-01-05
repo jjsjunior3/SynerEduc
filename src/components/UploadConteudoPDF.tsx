@@ -90,14 +90,14 @@ export function UploadConteudoPDF({
 
   // Séries / disciplinas / bimestres (mockadas, depois você pode ligar no banco)
   const series = [
-    { id: "5ano", nome: "5º ano - Ensino Fundamental", nivel: "fundamental" },
-    { id: "6ano", nome: "6º ano - Ensino Fundamental", nivel: "fundamental" },
-    { id: "7ano", nome: "7º ano - Ensino Fundamental", nivel: "fundamental" },
-    { id: "8ano", nome: "8º ano - Ensino Fundamental", nivel: "fundamental" },
-    { id: "9ano", nome: "9º ano - Ensino Fundamental", nivel: "fundamental" },
-    { id: "1serie", nome: "1ª série - Ensino Médio", nivel: "medio" },
-    { id: "2serie", nome: "2ª série - Ensino Médio", nivel: "medio" },
-    { id: "3serie", nome: "3ª série - Ensino Médio", nivel: "medio" },
+    { id: "5ano", nome: "5º ano", nivel: "fundamental" },
+    { id: "6ano", nome: "6º ano", nivel: "fundamental" },
+    { id: "7ano", nome: "7º ano", nivel: "fundamental" },
+    { id: "8ano", nome: "8º ano", nivel: "fundamental" },
+    { id: "9ano", nome: "9º ano", nivel: "fundamental" },
+    { id: "1serie", nome: "1ª série", nivel: "medio" },
+    { id: "2serie", nome: "2ª série", nivel: "medio" },
+    { id: "3serie", nome: "3ª série", nivel: "medio" },
   ];
 
   const disciplinas = [

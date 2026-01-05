@@ -1,3 +1,4 @@
+// src/components/DashboardProfessor.tsx
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabase/supabaseClient";
 import { useAuth } from "../contexts/AuthContext";
@@ -10,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 // Icons
 import {
   Bell,
-  Calendar,
+  Calendar, // Usado para Agenda
   ArrowLeft,
   FileEdit,
   BarChart3,
@@ -25,7 +26,7 @@ import {
   Info,
   ChevronRight,
   Inbox, // Ícone para Atividades Recebidas
-  Book   // ✅ Ícone que estava faltando
+  Book
 } from "lucide-react";
 // Sub-components
 import { Notificacoes } from "./Notificacoes";
@@ -34,8 +35,8 @@ import HorarioEscolar from "./HorarioEscolar";
 import { AgendamentoAulasVivo } from "./AgendamentoAulasVivo";
 import { BoletimProfessor } from "./BoletimProfessor";
 import { DisciplinaProfessor } from "./DisciplinaProfessor";
-import { AgendaProfessor } from "./AgendaProfessor";
-import { AtividadesRecebidas } from "./AtividadesRecebidas"; // ✅ Novo Componente
+import { AgendaProfessor } from "./AgendaProfessor"; // Importa o componente AgendaProfessor
+import { AtividadesRecebidas } from "./AtividadesRecebidas";
 import { SchoolHeader } from "./SchoolHeader";
 
 type ViewType = "dashboard" | "atividades" | "boletim" | "agenda" | "horarios" | "aulas-vivo" | "disciplina";
@@ -44,7 +45,7 @@ interface SerieTurmaResumo {
   id: string; // ID da turma ou série (chave composta)
   nomeTurma: string;
   nomeSerie: string;
-  serieId: string; // ✅ NOVO: ID real da série
+  serieId: string;
   ativa: boolean;
   cor: string;
   disciplinas: { id: string; nome: string; cor: string }[];
@@ -134,7 +135,6 @@ export default function DashboardProfessor() {
     }
   };
 
-  // ✅ CORREÇÃO DA CONSULTA SQL (Usando Joins)
   const carregarTurmasProfessor = async () => {
     try {
       setCarregando(true);
@@ -161,14 +161,14 @@ export default function DashboardProfessor() {
         const key = turma ? `turma_${turma.id}` : `serie_${serie?.id}`;
         const nomeSerie = serie?.nome || "Série não definida";
         const nomeTurma = turma?.nome || "Única";
-        const serieId = serie?.id || ""; // ✅ NOVO: Captura o ID da série
+        const serieId = serie?.id || "";
 
         if (!mapTurmas.has(key)) {
           mapTurmas.set(key, {
             id: key,
             nomeTurma,
             nomeSerie,
-            serieId, // ✅ NOVO: Adiciona o ID da série
+            serieId,
             ativa: turma?.ativa ?? true,
             cor: disc.cor || "bg-blue-500",
             disciplinas: []
@@ -195,8 +195,8 @@ export default function DashboardProfessor() {
   const abrirDisciplina = (disciplina: any, turma: SerieTurmaResumo) => {
     setDisciplinaSelecionada({
       ...disciplina,
-      turma: turma,     // ← TURMA AQUI
-      serie: turma.nomeSerie
+      turma: { id: turma.id, nome: turma.nomeTurma },
+      serie: { id: turma.serieId, nome: turma.nomeSerie }
     });
     setTurmaSelecionada(turma);
     setViewAtual("disciplina");
@@ -207,19 +207,17 @@ export default function DashboardProfessor() {
     return (
       <DisciplinaProfessor
         disciplina={disciplinaSelecionada}
-        serie={disciplinaSelecionada.serie} // ✅ Agora é um objeto {id, nome}
+        serie={disciplinaSelecionada.serie}
         turma={disciplinaSelecionada.turma}
         onVoltar={() => setViewAtual("dashboard")}
       />
     );
   }
 
-  // ✅ NOVA VIEW: Atividades Recebidas
   if (viewAtual === "atividades") {
     return <AtividadesRecebidas onVoltar={() => setViewAtual("dashboard")} />;
   }
 
-  // Views que precisam de seleção prévia (Boletim e Agenda)
   if (viewAtual === "boletim") {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -246,9 +244,9 @@ export default function DashboardProfessor() {
               </CardContent>
             </Card>
           ) : (
-            <BoletimProfessor 
+            <BoletimProfessor
               disciplina={{ id: turmaSelecionada.disciplinas[0]?.id, nome: turmaSelecionada.disciplinas[0]?.nome }}
-              serie={{ id: turmaSelecionada.serieId, nome: turmaSelecionada.nomeSerie }} // ✅ Passando o ID da série
+              serie={{ id: turmaSelecionada.serieId, nome: turmaSelecionada.nomeSerie }}
               onVoltar={() => { setViewAtual("dashboard"); setTurmaSelecionada(null); }}
             />
           )}
@@ -257,20 +255,21 @@ export default function DashboardProfessor() {
     );
   }
 
+  // ✅ NOVA VIEW: Agenda
   if (viewAtual === "agenda") {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
-          <Button variant="ghost" onClick={() => { setViewAtual("dashboard"); setTurmaSelecionada(null); }} className="mb-4">
+          <Button variant="ghost" onClick={() => { setViewAtual("dashboard"); setTurmaSelecionada(null); setDisciplinaSelecionada(null); }} className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Painel
           </Button>
           {!turmaSelecionada ? (
             <Card className="max-w-md mx-auto mt-10">
               <CardContent className="p-6 space-y-4">
                 <div className="text-center">
-                  <Calendar className="w-12 h-12 mx-auto text-purple-600 mb-2" />
-                  <h2 className="text-xl font-bold">Agenda da Turma</h2>
-                  <p className="text-gray-500 text-sm">Selecione a turma para ver a agenda.</p>
+                  <Calendar className="w-12 h-12 mx-auto text-blue-600 mb-2" /> {/* Ícone atualizado */}
+                  <h2 className="text-xl font-bold">Agenda de Atividades Diárias</h2>
+                  <p className="text-gray-500 text-sm">Selecione a turma para gerenciar a agenda.</p>
                 </div>
                 <Select onValueChange={(val) => setTurmaSelecionada(turmas.find(t => t.id === val) || null)}>
                   <SelectTrigger><SelectValue placeholder="Selecione a turma..." /></SelectTrigger>
@@ -282,11 +281,30 @@ export default function DashboardProfessor() {
                 </Select>
               </CardContent>
             </Card>
+          ) : !disciplinaSelecionada ? (
+            <Card className="max-w-md mx-auto mt-10">
+              <CardContent className="p-6 space-y-4">
+                <div className="text-center">
+                  <BookOpen className="w-12 h-12 mx-auto text-blue-600 mb-2" />
+                  <h2 className="text-xl font-bold">Selecione a Disciplina</h2>
+                  <p className="text-gray-500 text-sm">Para qual disciplina você deseja gerenciar a agenda?</p>
+                </div>
+                <Select onValueChange={(val) => setDisciplinaSelecionada(turmaSelecionada.disciplinas.find((d: any) => d.id === val) || null)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a disciplina..." /></SelectTrigger>
+                  <SelectContent>
+                    {turmaSelecionada.disciplinas.map((d: any) => (
+                      <SelectItem key={d.id} value={d.id}>{d.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
           ) : (
-            <AgendaProfessor 
-              disciplina={{ id: turmaSelecionada.disciplinas[0]?.id, nome: turmaSelecionada.disciplinas[0]?.nome }}
-              serie={{ id: turmaSelecionada.serieId, nome: turmaSelecionada.nomeSerie }} // ✅ Passando o ID da série
-              onVoltar={() => { setViewAtual("dashboard"); setTurmaSelecionada(null); }}
+            <AgendaProfessor
+              disciplina={disciplinaSelecionada}
+              serie={{ id: turmaSelecionada.serieId, nome: turmaSelecionada.nomeSerie }}
+              turma={{ id: turmaSelecionada.id, nome: turmaSelecionada.nomeTurma }}
+              onVoltar={() => { setDisciplinaSelecionada(null); }} // Volta para seleção de disciplina
             />
           )}
         </div>
@@ -360,7 +378,7 @@ export default function DashboardProfessor() {
               </CardContent>
             </Card>
           ) : (
-            <AgendamentoAulasVivo 
+            <AgendamentoAulasVivo
               turmaId={turmaSelecionada.id}
               nomeTurma={`${turmaSelecionada.nomeSerie} - ${turmaSelecionada.nomeTurma}`}
             />
@@ -416,9 +434,7 @@ export default function DashboardProfessor() {
                     {/* Botão Sair – mesmo layout, comportamento simplificado */}
                     <button
                       onClick={() => {
-                        // fecha o menu
                         setMostrarMenuUsuario(false);
-                        // executa o logout do contexto (já faz signOut e redireciona para /login)
                         logout();
                       }}
                       className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer"
@@ -453,7 +469,7 @@ export default function DashboardProfessor() {
             <div className="w-1 h-6 bg-blue-600 rounded-full"></div>
             Acesso Rápido
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4"> {/* Alterado para 4 colunas */}
             {/* Botão Lançar Notas (Boletim) */}
             <Button
               variant="outline"
@@ -491,6 +507,19 @@ export default function DashboardProfessor() {
               </div>
               <span className="text-sm font-medium text-gray-700">
                 Meu Horário
+              </span>
+            </Button>
+            {/* ✅ NOVO Botão Agenda */}
+            <Button
+              variant="outline"
+              className="h-24 flex flex-col items-center justify-center gap-2 hover:border-blue-500 hover:bg-blue-50 transition-all"
+              onClick={() => setViewAtual("agenda")}
+            >
+              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-purple-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">
+                Agenda
               </span>
             </Button>
           </div>

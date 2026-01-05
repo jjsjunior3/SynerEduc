@@ -1,261 +1,381 @@
 // src/components/DisciplinaPage.tsx
-/**
- * Componente para visualizar o conteúdo de uma disciplina específica para o ALUNO.
- * Contém abas para Conteúdo, Atividades, Frequência, Agenda, Aulas ao Vivo e Fórum.
- *
- * CORREÇÕES:
- * - Ajuste na interface DisciplinaPageProps para receber serie e turma como objetos com IDs e nomes.
- * - Passagem correta das props disciplina, serie e turma para AgendaAluno e FrequenciaAluno.
- * - Renderiza AgendaAluno e FrequenciaAluno (novos componentes).
- * - REMOVIDAS todas as referências a ThemeContext e Dark Mode.
- */
-
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase/supabaseClient";
+
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+
 import {
-  ArrowLeft,
-  FileText,
-  CheckCircle,
+  ChevronLeft,
   BookOpen,
-  MessageSquare,
-  BarChart3,
+  FileText,
   Video,
-  Loader2,
-  AlertCircle,
   Calendar as CalendarIcon,
+  MessageSquare,
+  Sun,
+  Moon,
+  FileText as FileTextIcon,
+  Loader2,
 } from "lucide-react";
 
-import { Button } from "./ui/button";
-import { Card, CardContent } from "./ui/card";
-import { Badge } from "./ui/badge";
-import { Progress } from "./ui/progress";
-// import { useTheme } from "../contexts/ThemeContext"; // REMOVIDO
-
-// Sub‑componentes das abas
-import { PDFViewerModerno } from "./PDFViewerModerno"; // Assumindo que você terá um PDFViewerAluno
 import { AtividadesAluno } from "./AtividadesAluno";
-import  {FrequenciaAluno}  from "./FrequenciaAluno"; // ✅ NOVO: Componente para Frequência do Aluno
-import { Forum } from "./Forum"; // Assumindo que você terá um ForumAluno
-import { AulasAoVivo } from "./AulasAoVivo"; // Assumindo que você terá um AulasAoVivoAluno
-import { AgendaAluno } from "./AgendaAluno"; // ✅ NOVO: Componente para Agenda do Aluno
+import { AulasAoVivo } from "./AulasAoVivo";
+import { Forum } from "./Forum";
+import { PDFViewerModerno, ConteudoPdf } from "./PDFViewerModerno";
 
-/* ============================================================= */
-/* ====================== TIPOS DE DADOS ====================== */
-interface DisciplinaProps {
+type Aba = "conteudo" | "atividades" | "aulaVivo" | "forum";
+
+interface DisciplinaData {
   id: string;
   nome: string;
-  cor?: string;
+  cor: string; // Tailwind class (ex: "bg-blue-600")
 }
 
-interface SerieProps {
-  id: string; // ID real da série (UUID)
-  nome: string; // Nome da série (string)
+interface TurmaData {
+  id: string;
+  nome: string;
+  serieId: string;
+  serieNome: string;
+  totalAlunos: number;
+  disciplinas: DisciplinaData[];
 }
 
-interface TurmaProps {
-  id: string; // ID da turma (UUID)
-  nome: string; // Nome da turma (string)
-}
-
-// ✅ AJUSTADO: Interface de props para DisciplinaPage
 interface DisciplinaPageProps {
-  disciplina: DisciplinaProps;
-  serie: SerieProps; // ✅ ID real da série e nome da série
-  turma: TurmaProps; // ✅ ID da turma e nome da turma
+  disciplina: DisciplinaData;
+  turma: TurmaData | null;
   onVoltar: () => void;
+  usuario: any;
 }
-
-/* ============================================================= */
 
 export function DisciplinaPage({
   disciplina,
-  serie,
   turma,
   onVoltar,
+  usuario,
 }: DisciplinaPageProps) {
-  // const { theme } = useTheme(); // REMOVIDO
-  const [abaAtiva, setAbaAtiva] = useState<
-    "conteudo" | "atividades" | "forum" | "frequencia" | "agenda" | "aulas-vivo"
-  >("conteudo");
+  const [abaAtiva, setAbaAtiva] = useState<Aba>("conteudo");
+  const [darkMode, setDarkMode] = useState(false);
 
+  // Conteúdo / PDFs
+  const [materiais, setMateriais] = useState<ConteudoPdf[]>([]);
+  const [materialSelecionado, setMaterialSelecionado] =
+    useState<ConteudoPdf | null>(null);
   const [loadingConteudo, setLoadingConteudo] = useState(false);
-  const [conteudo, setConteudo] = useState<any>(null);
+  const [erroConteudo, setErroConteudo] = useState<string | null>(null);
 
+  if (!disciplina || !turma) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-2" />
+        <span className="text-gray-600 text-sm">Carregando disciplina...</span>
+      </div>
+    );
+  }
+
+  const corDisciplina = disciplina.cor || "bg-blue-600";
+  const cardBg = darkMode
+    ? "bg-gray-900 text-white shadow-lg border border-gray-700"
+    : "bg-white";
+
+  const menuItens = [
+    { id: "conteudo" as Aba, label: "Conteúdo", icon: BookOpen },
+    { id: "atividades" as Aba, label: "Atividades", icon: FileText },
+    { id: "aulaVivo" as Aba, label: "Aulas ao Vivo", icon: Video },
+    { id: "forum" as Aba, label: "Fórum", icon: MessageSquare },
+  ];
+
+  // ==========================
+  // CARREGAR PDFs DO CONTEÚDO
+  // ==========================
   useEffect(() => {
-    if (abaAtiva === "conteudo" && disciplina?.id) {
+    async function carregarMateriais() {
+      if (!turma?.serieNome || !disciplina?.nome) return;
+
       setLoadingConteudo(true);
-      setTimeout(() => {
-        setConteudo({
-          titulo: `Conteúdo de ${disciplina.nome}`,
-          descricao: `Este é o material didático para a disciplina de ${disciplina.nome} da ${serie.nome} - Turma ${turma.nome}.`,
-        });
+      setErroConteudo(null);
+
+      try {
+        const { data, error } = await supabase
+          .from("pdfs_conteudista")
+          .select(
+            `
+            id,
+            url,
+            nome,
+            titulo,
+            descricao,
+            disciplina,
+            serie,
+            bimestre,
+            autor_nome,
+            created_at
+          `
+          )
+          .eq("serie", turma.serieNome)
+          .eq("disciplina", disciplina.nome)
+          .order("bimestre", { ascending: true })
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+
+        const mapeados: ConteudoPdf[] =
+          (data || []).map((row: any) => ({
+            id: row.id,
+            url: row.url,
+            nome: row.nome || row.titulo || "Material",
+            titulo: row.titulo,
+            descricao: row.descricao,
+            disciplina: row.disciplina,
+            serie: row.serie,
+            bimestre: row.bimestre,
+            autor_nome: row.autor_nome,
+            created_at: row.created_at,
+          })) || [];
+
+        setMateriais(mapeados);
+        // Se nenhum material selecionado ainda, seleciona o do 1º bimestre se existir,
+        // senão o primeiro da lista.
+        if (!materialSelecionado) {
+          const doPrimeiroBimestre =
+            mapeados.find((m) => m.bimestre === 1) || mapeados[0] || null;
+          setMaterialSelecionado(doPrimeiroBimestre);
+        }
+      } catch (e: any) {
+        console.error("Erro ao carregar materiais da disciplina:", e);
+        setErroConteudo(
+          e?.message || "Erro ao carregar materiais desta disciplina."
+        );
+        setMateriais([]);
+        setMaterialSelecionado(null);
+      } finally {
         setLoadingConteudo(false);
-      }, 500);
+      }
     }
-  }, [abaAtiva, disciplina, serie, turma]);
 
-  /* ============================================================= */
-  /* ==================== RENDERIZAÇÃO DAS ABAS ==================== */
+    if (abaAtiva === "conteudo") {
+      carregarMateriais();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaAtiva, turma?.serieNome, disciplina?.nome]);
 
-  if (abaAtiva === "conteudo") {
-    return (
-      <div className="flex-1 w-full bg-gray-50 p-6 overflow-y-auto"> {/* REMOVIDO dark: classes */}
-        {loadingConteudo ? (
-          <div className="flex items-center justify-center p-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" /> {/* REMOVIDO dark: classes */}
-            <span className="ml-2 text-gray-600">Carregando conteúdo...</span> {/* REMOVIDO dark: classes */}
-          </div>
-        ) : (
-          <Card className="max-w-4xl mx-auto bg-white text-gray-900"> {/* REMOVIDO dark: classes */}
-            <CardHeader>
-              <CardTitle>Conteúdo da Disciplina: {disciplina.nome}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-gray-700">{conteudo?.descricao}</p> {/* REMOVIDO dark: classes */}
-              {/* <PDFViewerAluno pdfUrl="https://example.com/sample.pdf" /> */}
-              <div className="p-4 border border-dashed rounded-md text-center text-gray-500"> {/* REMOVIDO dark: classes */}
-                Conteúdo da disciplina será exibido aqui.
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  }
+  // Helpers para bimestres 1..4
+  const bimestres = [1, 2, 3, 4];
 
-  if (abaAtiva === "atividades") {
-    return (
-      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
-        <AtividadesAluno
-          onVoltar={onVoltar}
-          disciplina={disciplina}
-          serie={serie}
-          turma={turma}
-        />
-      </div>
-    );
-  }
+  const getMaterialDoBimestre = (bimestre: number) =>
+    materiais.find((m) => m.bimestre === bimestre) || null;
 
-  if (abaAtiva === "frequencia") {
-    return (
-      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
-        <FrequenciaAluno
-          onVoltar={onVoltar}
-          disciplina={disciplina}
-          serie={serie}
-          turma={turma}
-        />
-      </div>
-    );
-  }
+  const handleSelecionarBimestre = (bimestre: number) => {
+    const mat = getMaterialDoBimestre(bimestre);
+    if (mat) {
+      setMaterialSelecionado(mat);
+    }
+  };
 
-  if (abaAtiva === "agenda") {
-    return (
-      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
-        <AgendaAluno
-          onVoltar={onVoltar}
-          disciplina={disciplina}
-          serie={serie}
-          turma={turma}
-        />
-      </div>
-    );
-  }
-
-  if (abaAtiva === "aulas-vivo") {
-    return (
-      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
-        <AulasAoVivo
-          onVoltar={onVoltar}
-          disciplina={disciplina}
-          serie={serie}
-          turma={turma}
-        />
-      </div>
-    );
-  }
-
-  if (abaAtiva === "forum") {
-    return (
-      <div className="flex-1 w-full bg-gray-50 overflow-y-auto"> {/* REMOVIDO dark: classes */}
-        <Forum
-          onVoltar={onVoltar}
-          disciplina={disciplina}
-          serie={serie}
-          turma={turma}
-        />
-      </div>
-    );
-  }
-
-  /* ============================================================= */
-  /* ==================== LAYOUT PRINCIPAL DO COMPONENTE ==================== */
   return (
-    <div className="h-screen flex flex-col bg-gray-50 text-gray-900 overflow-hidden"> {/* REMOVIDO dark: classes */}
+    <div
+      className={`min-h-screen flex flex-col ${
+        darkMode ? "bg-gray-950 text-gray-100" : "bg-gray-50 text-gray-900"
+      }`}
+    >
       {/* HEADER */}
-      <div className={`${disciplina.cor || "bg-blue-600"} border-b shrink-0`}>
-        <div className="px-6 py-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onVoltar}
-            className="flex items-center gap-2 text-white hover:text-white/80 hover:bg-white/10"
-          >
-            <ArrowLeft className="w-4 h-4" /> Voltar ao Painel
-          </Button>
+      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4 flex-1">
+            <button
+              onClick={onVoltar}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
 
-          <div className="flex justify-between items-end text-white mt-4">
-            <div>
-              <h1 className="text-2xl font-bold">{disciplina.nome}</h1>
-              <p className="text-white/80 text-sm">
-                {serie.nome} - Turma {turma.nome}
-              </p>
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 ${corDisciplina} rounded-lg flex items-center justify-center text-white`}
+              >
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-lg md:text-xl font-semibold">
+                  {disciplina.nome}
+                </h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {turma.serieNome} • Turma {turma.nome}
+                </p>
+              </div>
             </div>
-            <Badge className="bg-white/20 text-white border-0">
-              <BookOpen className="w-4 h-4 mr-2" /> Material Didático
-            </Badge>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 dark:text-gray-400 hidden md:inline">
+              {usuario?.nome}
+            </span>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* ABAS DE NAVEGAÇÃO */}
-      <div className="bg-white border-b border-gray-200 shrink-0 z-10"> {/* REMOVIDO dark: classes */}
-        <div className="px-6">
-          <div className="flex space-x-6 overflow-x-auto">
-            {[
-              { id: "conteudo", label: "Conteúdo", icon: FileText },
-              { id: "atividades", label: "Atividades", icon: FileText },
-              { id: "frequencia", label: "Frequência", icon: BarChart3 },
-              { id: "agenda", label: "Agenda", icon: CalendarIcon },
-              { id: "aulas-vivo", label: "Aulas ao Vivo", icon: Video },
-              { id: "forum", label: "Fórum", icon: MessageSquare },
-            ].map((aba) => {
-              const Icon = aba.icon;
+        {/* ABAS DE NAVEGAÇÃO */}
+        <div className="border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+          <nav className="max-w-7xl mx-auto px-4 md:px-6 flex items-center gap-1 overflow-x-auto">
+            {menuItens.map((item) => {
+              const Icon = item.icon;
+              const isAtivo = abaAtiva === item.id;
+
               return (
                 <button
-                  key={aba.id}
-                  onClick={() => setAbaAtiva(aba.id as any)}
-                  className={`flex items-center gap-2 py-4 border-b-2 font-medium whitespace-nowrap ${
-                    abaAtiva === aba.id
-                      ? "border-blue-600 text-blue-600" // REMOVIDO dark: classes
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" // REMOVIDO dark: classes
+                  key={item.id}
+                  onClick={() => setAbaAtiva(item.id)}
+                  className={`flex items-center gap-2 px-4 py-3 border-b-2 text-sm font-medium transition-all ${
+                    isAtivo
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
-                  {aba.label}
+                  {item.label}
                 </button>
               );
             })}
-          </div>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      {/* ÁREA PRINCIPAL (conteúdo das abas) */}
-      <div className="flex-1 flex overflow-hidden relative">
-        <div className="flex items-center justify-center w-full h-full text-gray-500"> {/* REMOVIDO dark: classes */}
-          Selecione uma aba para visualizar o conteúdo.
-        </div>
-      </div>
+      {/* CONTEÚDO DAS ABAS */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 py-6">
+        {/* ABA CONTEÚDO */}
+        {abaAtiva === "conteudo" && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Coluna dos bimestres */}
+            <div className="lg:col-span-1 space-y-4">
+              <Card className={cardBg}>
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <FileTextIcon className="w-4 h-4" />
+                    Conteúdos por Bimestre
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {loadingConteudo && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Carregando materiais...
+                    </div>
+                  )}
+
+                  {erroConteudo && (
+                    <p className="text-xs text-red-600">{erroConteudo}</p>
+                  )}
+
+                  {!loadingConteudo &&
+                    !erroConteudo &&
+                    bimestres.map((bimestre) => {
+                      const mat = getMaterialDoBimestre(bimestre);
+                      const isAtivo = !!mat;
+                      const isSelecionado =
+                        materialSelecionado &&
+                        materialSelecionado.bimestre === bimestre;
+
+                      return (
+                        <button
+                          key={bimestre}
+                          onClick={() => isAtivo && handleSelecionarBimestre(bimestre)}
+                          disabled={!isAtivo}
+                          className={`w-full text-left px-3 py-3 rounded-md border text-sm transition flex flex-col gap-1 ${
+                            isAtivo
+                              ? isSelecionado
+                                ? "border-blue-600 bg-blue-50 text-blue-700"
+                                : "border-gray-200 hover:border-blue-400 hover:bg-blue-50/60"
+                              : "border-dashed border-gray-300 bg-gray-50 text-gray-400 cursor-not-allowed"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold">
+                              {bimestre}º bimestre
+                            </span>
+                            {isAtivo && (
+                              <Badge
+                                className="bg-blue-100 text-blue-700 border-none text-[10px]"
+                                variant="secondary"
+                              >
+                                Disponível
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-xs">
+                            {isAtivo
+                              ? mat?.nome || "Material disponível"
+                              : "Conteúdo ainda não disponível"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Visualizador de PDF */}
+            <div className="lg:col-span-3">
+              <PDFViewerModerno
+                material={materialSelecionado}
+                disciplina={{
+                  id: disciplina.id,
+                  nome: disciplina.nome,
+                  professor: undefined,
+                }}
+                darkMode={darkMode}
+                onMarcarConcluido={(id) => {
+                  console.log("Marcar concluído material", id);
+                  // Futuro: salvar em tabela de progresso (ex: pdfs_alunos)
+                }}
+                onEnviarDuvida={(id) => {
+                  console.log("Dúvida sobre material", id);
+                  // Futuro: abrir modal de dúvida / fórum
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ABA ATIVIDADES */}
+        {abaAtiva === "atividades" && (
+          <div className="p-2 md:p-4">
+            <AtividadesAluno
+              disciplinaId={disciplina.id}
+              nomeDisciplina={disciplina.nome}
+              serieNome={turma.serieNome}
+            />
+          </div>
+        )}
+
+        {/* ABA AULAS AO VIVO */}
+        {abaAtiva === "aulaVivo" && (
+          <div className="p-2 md:p-4">
+            <AulasAoVivo
+              onVoltar={onVoltar}
+              disciplina={disciplina}
+              serie={{ id: turma.serieId, nome: turma.serieNome }}
+              turma={{ id: turma.id, nome: turma.nome }}
+            />
+          </div>
+        )}
+
+        {/* ABA FÓRUM */}
+        {abaAtiva === "forum" && (
+          <div className="p-2 md:p-4">
+            <Forum
+              onVoltar={onVoltar}
+              disciplina={disciplina}
+              serie={{ id: turma.serieId, nome: turma.serieNome }}
+              turma={{ id: turma.id, nome: turma.nome }}
+            />
+          </div>
+        )}
+      </main>
     </div>
   );
 }
