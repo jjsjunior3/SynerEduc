@@ -24,7 +24,7 @@ import {
 
 import { Notificacoes } from './Notificacoes';
 import { PerfilUsuario } from './PerfilUsuario';
-import { SchoolHeader } from './SchoolHeader'; // ✅ Importar SchoolHeader
+import { SchoolHeader } from './SchoolHeader';
 import { Usuario } from '../types/auth';
 
 // ---------- Lazy imports dos subpainéis ----------
@@ -150,122 +150,184 @@ export default function DashboardCoordenador({
   // ----------------- Caso não seja "dashboard", renderiza o módulo escolhido -----------------
   if (viewAtual !== 'dashboard') {
     return (
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center min-h-screen">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mr-3" />
-            <span className="text-gray-600">Carregando módulo...</span>
+      <div className="min-h-screen bg-gray-50 flex flex-col"> {/* Adicionado flex flex-col */}
+        {/* Header Fixo do Painel de Coordenador - Largura Total para o fundo, conteúdo limitado */}
+        <header className="bg-white border-b border-gray-200 py-4 sticky top-0 z-50"> {/* Removido px-6 */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"> {/* NOVO: Wrapper para limitar largura do conteúdo do header */}
+            <div className="flex items-center justify-between">
+              {/* ✅ Usar SchoolHeader para padronizar */}
+              <SchoolHeader subtitle="Painel de Coordenação Pedagógica" />
+
+              <div className="flex items-center gap-4">
+                {onBackToSite && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onBackToSite}
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao site
+                  </Button>
+                )}
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}
+                >
+                  <Bell className="w-5 h-5" />
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMostrarPerfil(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={usuario?.avatar} />
+                    <AvatarFallback>
+                      {usuario?.nome?.slice(0, 2).toUpperCase() || "CO"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Notificações */}
+            {mostrarNotificacoes && (
+              <div className="absolute right-4 top-16 w-80 z-50">
+                <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
+              </div>
+            )}
           </div>
-        }
-      >
-        {renderConteudo()}
-      </Suspense>
+        </header>
+
+        {/* Conteúdo do Módulo Específico - Com Limitação Lateral */}
+        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"> {/* Adicionado flex-1 e padding vertical */}
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center min-h-[calc(100vh-150px)]"> {/* Ajustado min-h para considerar o header */}
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mr-3" />
+                <span className="text-gray-600">Carregando módulo...</span>
+              </div>
+            }
+          >
+            {renderConteudo()}
+          </Suspense>
+        </main>
+      </div>
     );
   }
 
   // ----------------- Dashboard principal -----------------
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          {/* ✅ Usar SchoolHeader para padronizar */}
-          <SchoolHeader subtitle="Painel de Coordenação Pedagógica" />
+    <div className="min-h-screen bg-gray-50 flex flex-col"> {/* Adicionado flex flex-col */}
+      {/* Header Fixo do Painel de Coordenador - Largura Total para o fundo, conteúdo limitado */}
+      <header className="bg-white border-b border-gray-200 py-4 sticky top-0 z-50"> {/* Removido px-6 */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"> {/* NOVO: Wrapper para limitar largura do conteúdo do header */}
+          <div className="flex items-center justify-between">
+            {/* ✅ Usar SchoolHeader para padronizar */}
+            <SchoolHeader subtitle="Painel de Coordenação Pedagógica" />
 
-          <div className="flex items-center gap-4">
-            {onBackToSite && (
+            <div className="flex items-center gap-4">
+              {onBackToSite && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onBackToSite}
+                  className="text-gray-600 hover:text-gray-900"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao site
+                </Button>
+              )}
+
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={onBackToSite}
-                className="text-gray-600 hover:text-gray-900"
+                onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}
               >
-                <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao site
+                <Bell className="w-5 h-5" />
               </Button>
-            )}
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}
-            >
-              <Bell className="w-5 h-5" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setMostrarPerfil(true)}
-              className="flex items-center gap-2"
-            >
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={usuario?.avatar} />
-                <AvatarFallback>
-                  {usuario?.nome?.slice(0, 2).toUpperCase() || "CO"}
-                </AvatarFallback>
-              </Avatar>
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMostrarPerfil(true)}
+                className="flex items-center gap-2"
+              >
+                <Avatar className="w-8 h-8">
+                  <AvatarImage src={usuario?.avatar} />
+                  <AvatarFallback>
+                    {usuario?.nome?.slice(0, 2).toUpperCase() || "CO"}
+                  </AvatarFallback>
+                </Avatar>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </Button>
+            </div>
           </div>
+
+          {/* Notificações */}
+          {mostrarNotificacoes && (
+            <div className="absolute right-4 top-16 w-80 z-50">
+              <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
+            </div>
+          )}
         </div>
-
-        {/* Notificações */}
-        {mostrarNotificacoes && (
-          <div className="absolute right-4 top-16 w-80 z-50">
-            <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
-          </div>
-        )}
       </header>
 
-      {/* Conteúdo principal */}
-      <main className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Conteúdo principal do Dashboard - Com Limitação Lateral */}
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"> {/* Adicionado flex-1 e padding vertical */}
         {/* -------- Menu Principal -------- */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {menuItems.map(item => (
-            <Card
-              key={item.id}
-              onClick={() => handleMenuClick(item.id)}
-              className={`${item.color} cursor-pointer border-0 hover:shadow-lg transition-all duration-200 hover:scale-105`}
-            >
-              <CardContent className="p-6 text-center space-y-3">
-                <div className={`w-16 h-16 mx-auto bg-white rounded-full flex items-center justify-center ${item.iconColor} shadow-md`}>
-                  {item.icon}
-                </div>
-                <div>
-                  <CardTitle className="font-semibold text-gray-800 text-base mb-1">
-                    {item.title}
-                  </CardTitle>
-                  <p className="text-xs text-gray-600">{item.description}</p>
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {menuItems.map(item => (
+              <Card
+                key={item.id}
+                onClick={() => handleMenuClick(item.id)}
+                className={`${item.color} cursor-pointer border-0 hover:shadow-lg transition-all duration-200 hover:scale-105`}
+              >
+                <CardContent className="p-6 text-center space-y-3">
+                  <div className={`w-16 h-16 mx-auto bg-white rounded-full flex items-center justify-center ${item.iconColor} shadow-md`}>
+                    {item.icon}
+                  </div>
+                  <div>
+                    <CardTitle className="font-semibold text-gray-800 text-base mb-1">
+                      {item.title}
+                    </CardTitle>
+                    <p className="text-xs text-gray-600">{item.description}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* -------- Sidebar -------- */}
+          <aside className="space-y-6">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <Eye className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                <p className="text-sm text-gray-500">Nenhum alerta no momento</p>
+                <p className="text-xs text-gray-400 mt-1">Sistema funcionando normalmente</p>
               </CardContent>
             </Card>
-          ))}
+            <Card>
+              <CardContent className="p-4 text-center">
+                <BarChart3 className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                <p className="text-sm text-gray-500">Nenhuma atividade recente</p>
+                <p className="text-xs text-gray-400 mt-1">Histórico será exibido aqui</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <Users className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                <p className="text-sm text-gray-500">Professores online</p>
+                <p className="text-xs text-gray-400 mt-1">Em desenvolvimento</p>
+              </CardContent>
+            </Card>
+          </aside>
         </div>
-
-        {/* -------- Sidebar -------- */}
-        <aside className="space-y-6">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <Eye className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-              <p className="text-sm text-gray-500">Nenhum alerta no momento</p>
-              <p className="text-xs text-gray-400 mt-1">Sistema funcionando normalmente</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <BarChart3 className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-              <p className="text-sm text-gray-500">Nenhuma atividade recente</p>
-              <p className="text-xs text-gray-400 mt-1">Histórico será exibido aqui</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <Users className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-              <p className="text-sm text-gray-500">Professores online</p>
-              <p className="text-xs text-gray-400 mt-1">Em desenvolvimento</p>
-            </CardContent>
-          </Card>
-        </aside>
       </main>
 
       {/* ✅ Perfil - Renderizar como Dialog com props corretas */}

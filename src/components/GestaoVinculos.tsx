@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Check,
   ArrowLeft,
+  XCircle, // Ícone para desvincular
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../supabase/supabaseClient";
@@ -395,6 +396,26 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
     }
   };
 
+  // Nova função para remover TODOS os vínculos de um professor
+  const removerTodosVinculosDoProfessor = async (professorId: string, professorNome: string) => {
+    if (!confirm(`Deseja realmente desvincular o professor ${professorNome} de TODAS as suas disciplinas e séries?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from("professores_disciplinas_series")
+        .delete()
+        .eq("professor_id", professorId);
+
+      if (error) throw error;
+
+      setVinculos((prev) => prev.filter((v) => v.professorId !== professorId));
+      toast.success(`Todos os vínculos de ${professorNome} foram removidos com sucesso!`);
+    } catch (e: any) {
+      console.error("[GestaoVinculos] Erro ao remover todos os vínculos do professor:", e.message);
+      toast.error("Erro ao remover todos os vínculos do professor");
+    }
+  };
+
   // --------- RENDER ---------
 
   return (
@@ -651,28 +672,50 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {professores.map((prof) => {
               const vps = vinculosPorProfessor(prof.id);
-              if (vps.length === 0) return null;
+              // AQUI ESTÁ A ALTERAÇÃO: Só renderiza o card se houver vínculos
+              if (vps.length === 0) return null; 
 
               return (
                 <Card key={prof.id} className="border border-gray-200">
                   <CardContent className="p-4">
-                    <h4 className="font-semibold text-gray-900 mb-3">
-                      {prof.nome}
-                    </h4>
-                    <div className="space-y-2">
-                      {vps.map((v) => (
-                        <div
-                          key={v.id}
-                          className="text-sm text-gray-600 flex items-center gap-2"
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-gray-900">
+                        {prof.nome}
+                      </h4>
+                      {vps.length > 0 && ( // O botão "Desvincular Tudo" só aparece se houver vínculos
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removerTodosVinculosDoProfessor(prof.id, prof.nome)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
+                          title={`Desvincular ${prof.nome} de todas as disciplinas/séries`}
                         >
-                          <div className="w-2 h-2 bg-blue-600 rounded-full" />
-                          {v.disciplinaNome} - {v.serieNome}
-                        </div>
-                      ))}
+                          <XCircle className="w-4 h-4 mr-1" /> Desvincular Tudo
+                        </Button>
+                      )}
                     </div>
-                    <Badge variant="secondary" className="mt-3">
-                      {vps.length} vínculo(s)
-                    </Badge>
+                    <div className="space-y-2">
+                      {vps.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">
+                          Nenhum vínculo ativo.
+                        </p>
+                      ) : (
+                        vps.map((v) => (
+                          <div
+                            key={v.id}
+                            className="text-sm text-gray-600 flex items-center gap-2"
+                          >
+                            <div className="w-2 h-2 bg-blue-600 rounded-full" />
+                            {v.disciplinaNome} - {v.serieNome}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {vps.length > 0 && (
+                      <Badge variant="secondary" className="mt-3">
+                        {vps.length} vínculo(s)
+                      </Badge>
+                    )}
                   </CardContent>
                 </Card>
               );

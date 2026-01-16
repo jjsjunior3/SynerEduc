@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+// src/components/PDFViewerProfessor.tsx
+import { useState, useRef, useEffect } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,16 +16,17 @@ import {
   Loader2
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { toast } from "sonner"; // Adicionado toast
+import { Progress } from "./ui/progress"; // Adicionado Progress
 
+// ✅ ATUALIZADO: Interface BimestreData mais simples, focada no que é passado
 interface BimestreData {
-  id: string;
   numero: number;
   nome: string;
   descricao: string;
   pdfUrl?: string;
-  totalAlunos: number;
-  alunosVisualizaram: number;
-  progresso: number;
+  id?: string; // Adicionado id para consistência, se necessário para ações
+  autor_nome?: string; // Adicionado para exibir o nome do professor
 }
 
 interface PDFViewerProfessorProps {
@@ -36,9 +38,10 @@ interface PDFViewerProfessorProps {
   hasAnterior: boolean;
   sidebarAberta?: boolean;
   onToggleSidebar?: () => void;
-  onUploadPDF?: (file: File) => void;
-  onEditarDescricao?: (texto: string) => void;
-  onRemoverPDF?: () => void;
+  onUploadPDF?: (file: File) => void; // Mantido, se for usar
+  onRemoverPDF?: () => void; // Mantido, se for usar
+  // Removido onEditarDescricao, onMarcarConcluido, onEnviarDuvida, darkMode, disciplina
+  // pois não são usados ou não são relevantes para o contexto do professor visualizando o próprio material
 }
 
 export function PDFViewerProfessor({
@@ -53,17 +56,41 @@ export function PDFViewerProfessor({
   onUploadPDF,
   onRemoverPDF
 }: PDFViewerProfessorProps) {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingPdf, setIsLoadingPdf] = useState(true); // ✅ Renomeado para evitar conflito
   const [zoom, setZoom] = useState(75); // ✅ Zoom inicial 75%
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  if (!bimestre) return null;
+  // Resetar estado ao mudar de bimestre
+  useEffect(() => {
+    setIsLoadingPdf(true); // ✅ Usando isLoadingPdf
+    setZoom(75); // Resetar zoom para 75% ao carregar novo PDF
+  }, [bimestre?.pdfUrl]);
 
+  // Função para lidar com o download
+  const handleDownload = () => {
+    if (!bimestre?.pdfUrl) {
+      toast.error("Erro", { description: "URL do PDF não disponível para download." });
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = bimestre.pdfUrl;
+    link.download = bimestre.nome || "material.pdf";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success("Download iniciado!", {
+      description: "O arquivo PDF está sendo baixado.",
+    });
+  };
+
+  // Função para alternar tela cheia
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       containerRef.current?.requestFullscreen().catch(err => {
         console.error(`Erro ao tentar tela cheia: ${err.message}`);
+        toast.error("Erro ao entrar em tela cheia", { description: err.message });
       });
       setIsFullscreen(true);
     } else {
@@ -75,6 +102,21 @@ export function PDFViewerProfessor({
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 300));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 50));
   const resetZoom = () => setZoom(75);
+
+  // ESTADO VAZIO: nenhum material selecionado
+  if (!bimestre) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center bg-gray-100">
+        <div className="bg-gray-200 p-6 rounded-full mb-4">
+          <FileText className="w-12 h-12 text-gray-400" />
+        </div>
+        <h3 className="text-lg font-medium text-gray-600">Nenhum bimestre selecionado</h3>
+        <p className="text-sm max-w-xs mt-2">
+          Selecione um bimestre na barra lateral para visualizar o conteúdo.
+        </p>
+      </div>
+    );
+  }
 
   return (
     // ✅ Container principal com position relative
@@ -116,11 +158,11 @@ export function PDFViewerProfessor({
 
           {bimestre.pdfUrl && (
             <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="hidden sm:flex h-8" 
-                onClick={() => window.open(bimestre.pdfUrl, '_blank')}
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:flex h-8"
+                onClick={handleDownload} // Usar handleDownload
               >
                 <Download className="w-4 h-4 mr-2" /> Baixar
               </Button>
@@ -164,17 +206,15 @@ export function PDFViewerProfessor({
       <div className="flex-1 min-h-0 w-full bg-gray-200 overflow-hidden relative">
         {bimestre.pdfUrl ? (
           <>
-            {/* ✅ IFRAME - Ocupa 100% da área disponível */}
             <iframe
               src={`${bimestre.pdfUrl}#zoom=${zoom}&view=FitH`}
               className="w-full h-full border-none block"
               style={{ display: 'block' }}
               title={`PDF - ${bimestre.nome}`}
-              onLoad={() => setIsLoading(false)}
+              onLoad={() => setIsLoadingPdf(false)} // ✅ Usando setIsLoadingPdf
             />
 
-            {/* Loading Spinner */}
-            {isLoading && (
+            {isLoadingPdf && ( // ✅ Usando isLoadingPdf
               <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-20">
                 <div className="text-center">
                   <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-600" />
@@ -184,7 +224,7 @@ export function PDFViewerProfessor({
             )}
           </>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-gray-400 -8 text-center bg-gray-100">
+          <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center bg-gray-100">
             <div className="bg-gray-200 p-6 rounded-full mb-4">
               <FileText className="w-12 h-12 text-gray-400" />
             </div>

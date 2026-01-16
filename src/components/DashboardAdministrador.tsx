@@ -237,70 +237,73 @@ export function DashboardAdministrador({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <img
-              src={logoEscola}
-              alt="Colégio Conexão EAD Maranhense"
-              className="w-12 h-12 object-contain"
-            />
-            <div>
-              <h1 className="font-semibold text-gray-900">
-                Colégio Conexão EAD Maranhense
-              </h1>
-              <p className="text-sm text-gray-600">Painel Administrativo</p>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Header Fixo do Painel Administrativo - Largura Total para o fundo, conteúdo limitado */}
+      <div className="bg-white border-b border-gray-200 py-4 sticky top-0 z-50"> {/* Removido px-6 */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"> {/* NOVO: Wrapper para limitar largura do conteúdo do header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <img
+                src={logoEscola}
+                alt="Colégio Conexão EAD Maranhense"
+                className="w-12 h-12 object-contain"
+              />
+              <div>
+                <h1 className="font-semibold text-gray-900">
+                  Colégio Conexão EAD Maranhense
+                </h1>
+                <p className="text-sm text-gray-600">Painel Administrativo</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              {onBackToSite && (
+                <Button variant="outline" size="sm" onClick={onBackToSite}>
+                  Voltar ao Site
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2"
+                onClick={() => setMostrarPerfil(true)}
+              >
+                <Avatar className="w-8 h-8">
+                  <AvatarImage src={usuario?.avatar} alt={usuario?.nome} />
+                  <AvatarFallback className="text-sm">
+                    {usuario?.nome
+                      ? usuario.nome
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()
+                      : "A"}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-gray-700">
+                  {usuario?.nome || "Administrador"}
+                </span>
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            {onBackToSite && (
-              <Button variant="outline" size="sm" onClick={onBackToSite}>
-                Voltar ao Site
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2"
-              onClick={() => setMostrarPerfil(true)}
-            >
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={usuario?.avatar} alt={usuario?.nome} />
-                <AvatarFallback className="text-sm">
-                  {usuario?.nome
-                    ? usuario.nome
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase()
-                    : "A"}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm text-gray-700">
-                {usuario?.nome || "Administrador"}
-              </span>
-            </Button>
-          </div>
-        </div>
 
-        {/* Perfil Dropdown */}
-        {mostrarPerfil && (
-          <div className="absolute right-6 top-20 w-80 z-50">
-            <PerfilUsuario
-              usuario={usuario}
-              onClose={() => setMostrarPerfil(false)}
-              onAtualizar={atualizarUsuario}
-            />
-          </div>
-        )}
+          {/* Perfil Dropdown */}
+          {mostrarPerfil && (
+            <div className="absolute right-6 top-20 w-80 z-50"> {/* Ajustar right-6 se necessário */}
+              <PerfilUsuario
+                usuario={usuario}
+                onClose={() => setMostrarPerfil(false)}
+                onAtualizar={atualizarUsuario}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-col md:flex-row h-full w-full">
-        {viewAtual === "dashboard" ? (
-          <>
-            {/* Sidebar */}
-            <aside className="md:w-1/4 p-4 space-y-4 bg-gray-50">
+      {/* Container Principal do Conteúdo - Com Limitação Lateral */}
+      <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col md:flex-row h-full">
+          {/* Sidebar - Visível apenas no Dashboard */}
+          {viewAtual === "dashboard" && (
+            <aside className="md:w-1/4 p-4 space-y-4 bg-gray-50 rounded-lg shadow-sm md:mr-6 mb-6 md:mb-0">
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -332,125 +335,130 @@ export function DashboardAdministrador({
                 </CardContent>
               </Card>
             </aside>
+          )}
 
-            {/* Conteúdo principal */}
-            <main className="flex-1 p-8">
-              {/* Menu Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {menuItems.map((item) => (
-                  <Card
-                    key={item.id}
-                    className={`cursor-pointer hover:shadow-lg transition-shadow ${item.color}`}
-                    onClick={() => handleMenuClick(item.id)}
-                  >
-                    <CardContent className="flex items-center gap-4 p-6">
-                      <span
-                        className={`rounded-full p-2 ${item.iconColor} bg-white`}
-                      >
-                        {item.icon}
+          {/* Área de Conteúdo Principal (Dashboard ou Componente Específico) */}
+          <main className="flex-1">
+            {viewAtual === "dashboard" ? (
+              <>
+                {/* Menu Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  {menuItems.map((item) => (
+                    <Card
+                      key={item.id}
+                      className={`cursor-pointer hover:shadow-lg transition-shadow ${item.color}`}
+                      onClick={() => handleMenuClick(item.id)}
+                    >
+                      <CardContent className="flex items-center gap-4 p-6">
+                        <span
+                          className={`rounded-full p-2 ${item.iconColor} bg-white`}
+                        >
+                          {item.icon}
+                        </span>
+                        <div>
+                          <h3 className="font-semibold text-gray-800 mb-2">
+                            {item.title}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            {item.description}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Estatísticas rápidas */}
+                <div className="mt-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      Visão Geral
+                    </h2>
+                    {carregandoStats && (
+                      <span className="text-xs text-gray-500">
+                        Atualizando estatísticas...
                       </span>
-                      <div>
-                        <h3 className="font-semibold text-gray-800 mb-2">
-                          {item.title}
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          {item.description}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {/* Estatísticas rápidas */}
-              <div className="mt-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Visão Geral
-                  </h2>
-                  {carregandoStats && (
-                    <span className="text-xs text-gray-500">
-                      Atualizando estatísticas...
-                    </span>
-                  )}
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <Card className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {estatisticas.totalAlunos}
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          Total de Alunos
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-2xl font-bold text-green-600">
+                          {estatisticas.totalProfessores}
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          Professores
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-2xl font-bold text-purple-600">
+                          {estatisticas.totalDisciplinas}
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          Disciplinas
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {estatisticas.totalTurmas}
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          Turmas
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {estatisticas.totalAlunos}
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        Total de Alunos
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-green-600">
-                        {estatisticas.totalProfessores}
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        Professores
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-purple-600">
-                        {estatisticas.totalDisciplinas}
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        Disciplinas
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-orange-600">
-                        {estatisticas.totalTurmas}
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        Turmas
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </main>
-          </>
-        ) : (
-          <div className="w-full">
-            {viewAtual === "cadastrar-usuario" && (
-              <CadastrarUsuarioNovo
-                onVoltar={() => setViewAtual("dashboard")}
-              />
+              </>
+            ) : (
+              <>
+                {/* Renderiza os sub-componentes diretamente aqui */}
+                {viewAtual === "cadastrar-usuario" && (
+                  <CadastrarUsuarioNovo
+                    onVoltar={() => setViewAtual("dashboard")}
+                  />
+                )}
+                {viewAtual === "gestao" && (
+                  <GestaoEscola onVoltar={() => setViewAtual("dashboard")} />
+                )}
+                {viewAtual === "relatorios" && (
+                  <RelatoriosAdmin onVoltar={() => setViewAtual("dashboard")} />
+                )}
+                {viewAtual === "admin-usuarios" && (
+                  <GerenciadorUsuarios
+                    onVoltar={() => setViewAtual("dashboard")}
+                  />
+                )}
+                {viewAtual === "gestao-conteudo" && (
+                  <GestaoConteudoPDF onVoltar={() => setViewAtual("dashboard")} />
+                )}
+                {viewAtual === "comunicados" && (
+                  <ComunicadosPage onVoltar={() => setViewAtual("dashboard")} />
+                )}
+                {viewAtual === "forum" && (
+                  <Forum onVoltar={() => setViewAtual("dashboard")} />
+                )}
+                {viewAtual === "gestao-vinculos" && (
+                  <GestaoVinculos onVoltar={() => setViewAtual("dashboard")} />
+                )}
+              </>
             )}
-            {viewAtual === "gestao" && (
-              <GestaoEscola onVoltar={() => setViewAtual("dashboard")} />
-            )}
-            {viewAtual === "relatorios" && (
-              <RelatoriosAdmin onVoltar={() => setViewAtual("dashboard")} />
-            )}
-            {viewAtual === "admin-usuarios" && (
-              <GerenciadorUsuarios
-                onVoltar={() => setViewAtual("dashboard")}
-              />
-            )}
-            {viewAtual === "gestao-conteudo" && (
-              <GestaoConteudoPDF onVoltar={() => setViewAtual("dashboard")} />
-            )}
-            {viewAtual === "comunicados" && (
-              <ComunicadosPage onVoltar={() => setViewAtual("dashboard")} />
-            )}
-            {viewAtual === "forum" && (
-              <Forum onVoltar={() => setViewAtual("dashboard")} />
-            )}
-            {viewAtual === "gestao-vinculos" && (
-              <GestaoVinculos onVoltar={() => setViewAtual("dashboard")} />
-            )}
-          </div>
-        )}
+          </main>
+        </div>
       </div>
     </div>
   );

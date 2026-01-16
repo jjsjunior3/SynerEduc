@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+// src/components/UploadConteudoPDF.tsx
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -65,6 +66,14 @@ interface FormularioConteudo {
   visibilidade: "publico" | "privado" | "rascunho";
 }
 
+// Interface para as disciplinas carregadas do banco
+interface DisciplinaDB {
+  id: string;
+  nome: string;
+  cor: string;
+  ativa: boolean;
+}
+
 export function UploadConteudoPDF({
   onVoltar,
   usuario,
@@ -78,6 +87,10 @@ export function UploadConteudoPDF({
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [viewAtual, setViewAtual] = useState<"upload" | "gerenciar">("upload");
 
+  // ✅ NOVO: Estado para disciplinas carregadas do banco
+  const [disciplinasDB, setDisciplinasDB] = useState<DisciplinaDB[]>([]);
+  const [loadingDisciplinas, setLoadingDisciplinas] = useState(true);
+
   const [formulario, setFormulario] = useState<FormularioConteudo>({
     serie: serieSelecionada?.id || "",
     disciplina: disciplinaSelecionada?.id || "",
@@ -88,7 +101,7 @@ export function UploadConteudoPDF({
     visibilidade: "rascunho",
   });
 
-  // Séries / disciplinas / bimestres (mockadas, depois você pode ligar no banco)
+  // Séries (você pode também buscar do banco, mas vou manter hardcoded por enquanto)
   const series = [
     { id: "5ano", nome: "5º ano", nivel: "fundamental" },
     { id: "6ano", nome: "6º ano", nivel: "fundamental" },
@@ -100,19 +113,67 @@ export function UploadConteudoPDF({
     { id: "3serie", nome: "3ª série", nivel: "medio" },
   ];
 
-  const disciplinas = [
-    { id: "portugues", nome: "Português", icone: "📚" },
-    { id: "matematica", nome: "Matemática", icone: "🔢" },
-    { id: "ciencias", nome: "Ciências", icone: "🔬" },
-    { id: "historia", nome: "História", icone: "📜" },
-    { id: "geografia", nome: "Geografia", icone: "🌍" },
-    { id: "fisica", nome: "Física", icone: "⚛️" },
-    { id: "quimica", nome: "Química", icone: "🧪" },
-    { id: "biologia", nome: "Biologia", icone: "🧬" },
-    { id: "ingles", nome: "Inglês", icone: "🗣️" },
-    { id: "arte", nome: "Arte", icone: "🎨" },
-    { id: "educacao_fisica", nome: "Educação Física", icone: "⚽" },
-  ];
+  // ✅ MAPEAMENTO DE ÍCONES POR NOME DA DISCIPLINA
+  // Este é um objeto que associa o nome da disciplina (em minúsculas, sem acentos) a um ícone emoji
+  const iconesPorDisciplina: Record<string, string> = {
+    'portugues': '📚',
+    'matematica': '🔢',
+    'ciencias': '🔬',
+    'historia': '📜',
+    'geografia': '🌍',
+    'fisica': '⚛️',
+    'quimica': '🧪',
+    'biologia': '🧬',
+    'ingles': '🗣️',
+    'arte': '🎨',
+    'educacao fisica': '⚽',
+    'literatura': '📖',
+    'filosofia': '🤔',
+    'sociologia': '👥',
+    'redacao': '✍️',
+    'espanhol': '🇪🇸',
+    'frances': '🇫🇷',
+    'informatica': '💻',
+    'musica': '🎵',
+    'teatro': '🎭',
+  };
+
+  // Função auxiliar para normalizar o nome da disciplina e buscar o ícone
+  const getIconeDisciplina = (nomeDisciplina: string): string => {
+    const nomeNormalizado = nomeDisciplina
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .trim();
+
+    return iconesPorDisciplina[nomeNormalizado] || '📖'; // Ícone padrão se não encontrar
+  };
+
+  // ✅ NOVO: Carregar disciplinas do banco ao montar o componente
+  useEffect(() => {
+    async function carregarDisciplinas() {
+      try {
+        setLoadingDisciplinas(true);
+        const { data, error } = await supabase
+          .from('disciplinas')
+          .select('id, nome, cor, ativa')
+          .eq('ativa', true) // Apenas disciplinas ativas
+          .order('nome', { ascending: true });
+
+        if (error) throw error;
+
+        setDisciplinasDB(data || []);
+      } catch (error) {
+        console.error('Erro ao carregar disciplinas:', error);
+        toast.error('Erro ao carregar lista de disciplinas');
+        setDisciplinasDB([]);
+      } finally {
+        setLoadingDisciplinas(false);
+      }
+    }
+
+    carregarDisciplinas();
+  }, []);
 
   const bimestres = [
     { id: "1", nome: "1º Bimestre" },
@@ -239,6 +300,14 @@ export function UploadConteudoPDF({
     setUploading(true);
 
     try {
+      // Buscar o nome da disciplina selecionada para salvar na tabela
+      const disciplinaSelecionadaObj = disciplinasDB.find(d => d.id === formulario.disciplina);
+      const nomeDisciplina = disciplinaSelecionadaObj?.nome || formulario.disciplina;
+
+      // Buscar o nome da série selecionada para salvar na tabela
+      const serieSelecionadaObj = series.find(s => s.id === formulario.serie);
+      const nomeSerie = serieSelecionadaObj?.nome || formulario.serie;
+
       for (const arquivo of arquivos) {
         if (arquivo.status === "sucesso") continue;
 
@@ -295,23 +364,17 @@ export function UploadConteudoPDF({
           .from("pdfs_conteudista")
           .insert({
             url: storageData.path,
+            nome: formulario.topico || arquivo.nome, // Nome do tópico como 'nome'
             titulo: formulario.topico || arquivo.nome,
             descricao: formulario.descricao || null,
+            disciplina: nomeDisciplina, // ✅ SALVA O NOME DA DISCIPLINA
+            serie: nomeSerie, // ✅ SALVA O NOME DA SÉRIE
+            bimestre: Number(formulario.bimestre), // ✅ SALVA O NÚMERO DO BIMESTRE
+            autor_nome: usuario.nome || 'Professor Conteudista',
             data_envio: new Date().toISOString(),
             id_prof_conteudista: usuario.id,
-
-            // ⚠️ por enquanto NÃO mexemos nos UUIDs
-            id_disciplina: null,
-            id_bimestre: null,
-            id_turma: null,
-
-            // novos campos simples pra você filtrar depois
-            disciplina_slug: formulario.disciplina || null,          // "ciencias", "matematica"
-            bimestre_numero: formulario.bimestre
-              ? Number(formulario.bimestre)
-              : null,                                                // 1, 2, 3, 4
+            created_at: new Date().toISOString(),
           });
-
 
         if (insertError) {
           console.error("Erro ao salvar metadados:", insertError);
@@ -646,19 +709,31 @@ export function UploadConteudoPDF({
                           disciplina: value,
                         }))
                       }
+                      disabled={loadingDisciplinas}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione a disciplina" />
+                        <SelectValue placeholder={loadingDisciplinas ? "Carregando..." : "Selecione a disciplina"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {disciplinas.map((disciplina) => (
-                          <SelectItem key={disciplina.id} value={disciplina.id}>
-                            <span className="flex items-center gap-2">
-                              <span>{disciplina.icone}</span>
-                              {disciplina.nome}
-                            </span>
-                          </SelectItem>
-                        ))}
+                        {loadingDisciplinas ? (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-purple-600 mr-2" />
+                            <span className="text-sm text-gray-600">Carregando disciplinas...</span>
+                          </div>
+                        ) : disciplinasDB.length === 0 ? (
+                          <div className="text-center p-4 text-sm text-gray-500">
+                            Nenhuma disciplina ativa encontrada
+                          </div>
+                        ) : (
+                          disciplinasDB.map((disciplina) => (
+                            <SelectItem key={disciplina.id} value={disciplina.id}>
+                              <span className="flex items-center gap-2">
+                                <span>{getIconeDisciplina(disciplina.nome)}</span>
+                                {disciplina.nome}
+                              </span>
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

@@ -1,3 +1,4 @@
+// src/components/GestaoConteudoPDF.tsx
 import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -18,10 +19,10 @@ import {
   Plus,
   Download
 } from 'lucide-react';
-import { Usuario } from '../types/auth'; // Importando o tipo Usuario
+import { Usuario } from '../types/auth';
 import { supabase } from '../supabase/supabaseClient';
+import { toast } from 'sonner';
 
-// ADICIONADO: Interface para receber o usuário via props
 interface GestaoConteudoPDFProps {
   usuario?: Usuario;
 }
@@ -46,7 +47,25 @@ interface UploadProgress {
   fileName: string;
 }
 
-// ALTERADO: Recebendo usuario via props
+// ✅ Interface para disciplinas carregadas do banco
+interface DisciplinaDB {
+  id: string;
+  nome: string;
+  slug: string;
+  cor: string;
+  ativa: boolean;
+  segmento: string; // "Fundamental 1", "Fundamental 2" ou "Ensino Médio"
+  serie: string;
+}
+
+// ✅ NOVA INTERFACE PARA SÉRIES CARREGADAS DO BANCO
+interface SerieDB {
+  id: string;
+  nome: string;
+  segmento: string; // "fundamental", "Ensino Médio" (como está no seu banco)
+  ativa: boolean;
+}
+
 export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
   const [conteudos, setConteudos] = useState<ConteudoPDF[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +76,13 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
     fileName: ''
   });
 
-  // REMOVIDO: const { usuario } = useAuth(); -> Agora usamos o que vem via props
+  // ✅ Estado para disciplinas carregadas do banco
+  const [disciplinasDB, setDisciplinasDB] = useState<DisciplinaDB[]>([]);
+  const [loadingDisciplinas, setLoadingDisciplinas] = useState(true);
+
+  // ✅ NOVO: Estado para séries carregadas do banco
+  const [seriesDB, setSeriesDB] = useState<SerieDB[]>([]);
+  const [loadingSeries, setLoadingSeries] = useState(true);
 
   // Filtros
   const [filtroSerie, setFiltroSerie] = useState('');
@@ -73,22 +98,41 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
     arquivo: null as File | null
   });
 
-  const series = [
-    '5º ano - Ensino Fundamental',
-    '6º ano - Ensino Fundamental', 
-    '7º ano - Ensino Fundamental',
-    '8º ano - Ensino Fundamental',
-    '9º ano - Ensino Fundamental',
-    '1ª série - Ensino Médio',
-    '2ª série - Ensino Médio',
-    '3ª série - Ensino Médio'
-  ];
+  // ✅ MAPEAMENTO DE ÍCONES POR NOME DA DISCIPLINA
+  const iconesPorDisciplina: Record<string, string> = {
+    'portugues': '📚',
+    'matematica': '🔢',
+    'ciencias': '🔬',
+    'historia': '📜',
+    'geografia': '🌍',
+    'fisica': '⚛️',
+    'quimica': '🧪',
+    'biologia': '🧬',
+    'ingles': '🗣️',
+    'arte': '🎨',
+    'artes': '🎨',
+    'educacao fisica': '⚽',
+    'literatura': '📖',
+    'filosofia': '🤔',
+    'sociologia': '👥',
+    'redacao': '✍️',
+    'espanhol': '🇪🇸',
+    'frances': '🇫🇷',
+    'informatica': '💻',
+    'musica': '🎵',
+    'teatro': '🎭',
+    'gramatica': '📝',
+  };
 
-  const disciplinas = [
-    'Matemática', 'Português', 'História', 'Geografia', 'Ciências',
-    'Física', 'Química', 'Biologia', 'Inglês', 'Educação Física',
-    'Artes', 'Filosofia', 'Sociologia'
-  ];
+  // Função auxiliar para normalizar o nome da disciplina e buscar o ícone
+  const getIconeDisciplina = (nomeDisciplina: string): string => {
+    const nomeNormalizado = nomeDisciplina
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .trim();
+    return iconesPorDisciplina[nomeNormalizado] || '📖'; // Ícone padrão se não encontrar
+  };
 
   const bimestres = [1, 2, 3, 4];
 
@@ -100,15 +144,113 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // ✅ Carregar disciplinas do banco ao montar o componente
+  useEffect(() => {
+    async function carregarDisciplinas() {
+      try {
+        setLoadingDisciplinas(true);
+        const { data, error } = await supabase
+          .from('disciplinas')
+          .select('id, nome, slug, cor, ativa, segmento, serie')
+          .eq('ativa', true) // Apenas disciplinas ativas
+          .order('nome', { ascending: true });
+
+        if (error) throw error;
+        setDisciplinasDB(data || []);
+      } catch (error) {
+        console.error('Erro ao carregar disciplinas:', error);
+        toast.error('Erro ao carregar lista de disciplinas');
+        setDisciplinasDB([]);
+      } finally {
+        setLoadingDisciplinas(false);
+      }
+    }
+    carregarDisciplinas();
+  }, []);
+
+  // ✅ NOVA FUNÇÃO: Carregar séries do banco
+  useEffect(() => {
+    async function carregarSeries() {
+      try {
+        setLoadingSeries(true);
+        const { data, error } = await supabase
+          .from('series')
+          .select('id, nome, segmento, ativa')
+          .eq('ativa', true) // Apenas séries ativas
+          .order('nome', { ascending: true });
+
+        if (error) throw error;
+        setSeriesDB(data || []);
+      } catch (error) {
+        console.error('Erro ao carregar séries:', error);
+        toast.error('Erro ao carregar lista de séries');
+        setSeriesDB([]);
+      } finally {
+        setLoadingSeries(false);
+      }
+    }
+    carregarSeries();
+  }, []);
+
+  // ✅ FUNÇÃO AUXILIAR: Mapeia o nome da série para o segmento esperado pelas disciplinas
+  const getSegmentoFromSerieNome = (serieNome: string): string | null => {
+    const nome = serieNome.toLowerCase();
+
+    // Fundamental 1: 1º a 5º ano
+    if (nome.includes('1º ano') || nome.includes('2º ano') || 
+        nome.includes('3º ano') || nome.includes('4º ano') || 
+        nome.includes('5º ano')) {
+      return 'Fundamental 1';
+    }
+
+    // Fundamental 2: 6º a 9º ano
+    if (nome.includes('6º ano') || nome.includes('7º ano') || 
+        nome.includes('8º ano') || nome.includes('9º ano')) {
+      return 'Fundamental 2';
+    }
+
+    // Ensino Médio: 1ª a 3ª série
+    if (nome.includes('1ª série') || nome.includes('2ª série') || 
+        nome.includes('3ª série')) {
+      return 'Ensino Médio';
+    }
+
+    // Fallback: retorna null se não conseguir determinar um segmento
+    return null; 
+  };
+
+  // ✅ NOVO: Função para filtrar disciplinas pelo segmento da série selecionada
+  const disciplinasFiltradas = () => {
+    if (!uploadData.serie) return disciplinasDB;
+
+    // Buscar o nome da série selecionada
+    const serieNomeSelecionada = uploadData.serie;
+
+    // Obter o segmento correto baseado no NOME da série
+    const segmentoCorreto = getSegmentoFromSerieNome(serieNomeSelecionada);
+
+    if (!segmentoCorreto) return []; // Se não conseguir determinar o segmento, retorna vazio
+
+    // Filtrar disciplinas pelo segmento
+    return disciplinasDB.filter(d => d.segmento === segmentoCorreto);
+  };
+
+  // ✅ NOVO: Limpar disciplina selecionada quando mudar a série
+  useEffect(() => {
+    // Quando a série muda, limpa a disciplina selecionada
+    // porque ela pode não estar mais disponível no novo segmento
+    setUploadData(prev => ({ ...prev, disciplina: '' }));
+  }, [uploadData.serie]);
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       if (file.type !== 'application/pdf') {
-        alert('Por favor, selecione apenas arquivos PDF.');
+        toast.error('Por favor, selecione apenas arquivos PDF.');
         return;
       }
       if (file.size > 50 * 1024 * 1024) { // 50MB limit
-        alert('O arquivo deve ter no máximo 50MB.');
+        toast.error('O arquivo deve ter no máximo 50MB.');
         return;
       }
       setUploadData(prev => ({ ...prev, arquivo: file }));
@@ -117,13 +259,13 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
 
   const handleUpload = async () => {
     if (!uploadData.arquivo || !uploadData.serie || !uploadData.disciplina || !uploadData.bimestre) {
-      alert('Por favor, preencha todos os campos e selecione um arquivo.');
+      toast.error('Por favor, preencha todos os campos e selecione um arquivo.');
       return;
     }
 
     // Verificação de segurança
     if (!usuario?.id) {
-      alert('Erro de sessão: Usuário não identificado. Tente fazer login novamente.');
+      toast.error('Erro de sessão: Usuário não identificado. Tente fazer login novamente.');
       return;
     }
 
@@ -147,7 +289,6 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
         });
 
       if (storageError) throw storageError;
-
       setUploadProgress(prev => ({ ...prev, progress: 60 }));
 
       // 2. Obter URL Pública
@@ -155,37 +296,41 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
         .from('pdfs-conteudista')
         .getPublicUrl(filePath);
 
+      // ✅ Buscar o nome da disciplina selecionada para salvar na tabela
+      const disciplinaSelecionadaObj = disciplinasDB.find(d => d.id === uploadData.disciplina);
+      const nomeDisciplina = disciplinaSelecionadaObj?.nome || uploadData.disciplina;
+
       // 3. Salvar metadados no Banco de Dados
       const { error: dbError } = await supabase
         .from('pdfs_conteudista')
         .insert({
           nome: uploadData.arquivo.name,
-          disciplina: uploadData.disciplina,
+          disciplina: nomeDisciplina, // ✅ SALVA O NOME DA DISCIPLINA
           serie: uploadData.serie,
           bimestre: parseInt(uploadData.bimestre),
           url: publicUrl,
           arquivo: filePath,
           tamanho: uploadData.arquivo.size,
           autor_id: usuario.id,
-          autor_nome: usuario.nome || 'Professor Conteudista'
+          autor_nome: usuario.nome || 'Professor Conteudista',
+          created_at: new Date().toISOString(),
         });
 
       if (dbError) throw dbError;
-
       setUploadProgress(prev => ({ ...prev, progress: 100 }));
 
       setTimeout(() => {
         setUploadProgress({ isUploading: false, progress: 0, fileName: '' });
         setIsUploadDialogOpen(false);
         setUploadData({ serie: '', disciplina: '', bimestre: '', arquivo: null });
-        alert(`✅ PDF enviado com sucesso!`);
+        toast.success(`✅ PDF enviado com sucesso!`);
         carregarConteudos();
       }, 1000);
 
     } catch (error: any) {
       console.error('[GESTAO_PDF] Erro:', error);
       setError(error.message || 'Erro ao fazer upload.');
-      alert('Erro ao enviar arquivo: ' + error.message);
+      toast.error('Erro ao enviar arquivo: ' + error.message);
       setUploadProgress({ isUploading: false, progress: 0, fileName: '' });
     }
   };
@@ -193,12 +338,10 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
   const handleExcluir = async (conteudo: ConteudoPDF) => {
     try {
       setLoading(true);
-
       if (conteudo.arquivo) {
         const { error: storageError } = await supabase.storage
           .from('pdfs-conteudista')
           .remove([conteudo.arquivo]);
-
         if (storageError) console.warn('Erro ao deletar do storage:', storageError);
       }
 
@@ -208,12 +351,11 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
         .eq('id', conteudo.id);
 
       if (dbError) throw dbError;
-
+      toast.success('PDF excluído com sucesso!');
       carregarConteudos();
-
     } catch (error: any) {
       console.error('Erro ao excluir:', error);
-      alert('Erro ao excluir: ' + error.message);
+      toast.error('Erro ao excluir: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -224,11 +366,9 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
       setLoading(false);
       return;
     }
-
     try {
       setLoading(true);
       setError('');
-
       const { data, error } = await supabase
         .from('pdfs_conteudista')
         .select('*')
@@ -250,7 +390,6 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
         autorId: item.autor_id,
         autorNome: item.autor_nome
       }));
-
       setConteudos(conteudosFormatados);
     } catch (error: any) {
       console.error('Erro ao carregar:', error);
@@ -268,7 +407,6 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
     const matchSerie = !filtroSerie || filtroSerie === 'todas' || conteudo.serie === filtroSerie;
     const matchDisciplina = !filtroDisciplina || filtroDisciplina === 'todas' || conteudo.disciplina === filtroDisciplina;
     const matchBimestre = !filtroBimestre || filtroBimestre === 'todos' || conteudo.bimestre.toString() === filtroBimestre;
-
     return matchSerie && matchDisciplina && matchBimestre;
   });
 
@@ -278,7 +416,7 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
       acc[chave] = {
         serie: conteudo.serie,
         disciplina: conteudo.disciplina,
-        conteudos: []
+        conteudos: [],
       };
     }
     acc[chave].conteudos.push(conteudo);
@@ -287,7 +425,7 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho */}
+      {/* ✅ CABEÇALHO REVERTIDO PARA O LAYOUT ORIGINAL DE JOSÉ */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Gestão de Conteúdo por Bimestres</h3>
@@ -296,8 +434,8 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={carregarConteudos}
             disabled={loading}
             className="gap-2"
@@ -305,7 +443,6 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
             Recarregar
           </Button>
-
           <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -315,50 +452,93 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>Adicionar Conteúdo PDF</DialogTitle>
+                <DialogTitle>Adicionar Novo Conteúdo PDF</DialogTitle>
                 <DialogDescription>
-                  Selecione a série, disciplina, bimestre e faça upload do arquivo PDF
+                  Preencha os detalhes e faça o upload do arquivo PDF.
                 </DialogDescription>
               </DialogHeader>
-
               <div className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="serie">Série</Label>
-                  <Select value={uploadData.serie} onValueChange={(value) => setUploadData(prev => ({ ...prev, serie: value }))}>
+                  <Select
+                    value={uploadData.serie}
+                    onValueChange={(value) => {
+                      setUploadData(prev => ({ ...prev, serie: value, disciplina: '' }));
+                    }}
+                    disabled={loadingSeries}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a série" />
+                      <SelectValue placeholder={
+                        loadingSeries ? "Carregando séries..." : "Selecione a série"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
-                      {series.map(serie => (
-                        <SelectItem key={serie} value={serie}>{serie}</SelectItem>
-                      ))}
+                      {loadingSeries ? (
+                        <div className="flex items-center justify-center p-4">
+                          <Loader2 className="w-4 h-4 animate-spin text-purple-600 mr-2" />
+                          <span className="text-sm text-gray-600">Carregando...</span>
+                        </div>
+                      ) : seriesDB.length === 0 ? (
+                        <div className="text-center p-4 text-sm text-gray-500">
+                          Nenhuma série ativa encontrada
+                        </div>
+                      ) : (
+                        seriesDB.map(serie => (
+                          <SelectItem key={serie.id} value={serie.nome}>
+                            {serie.nome}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="disciplina">Disciplina</Label>
-                  <Select value={uploadData.disciplina} onValueChange={(value) => setUploadData(prev => ({ ...prev, disciplina: value }))}>
+                  <Select
+                    value={uploadData.disciplina}
+                    onValueChange={(value) => setUploadData(prev => ({ ...prev, disciplina: value }))}
+                    disabled={!uploadData.serie || loadingDisciplinas}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a disciplina" />
+                      <SelectValue placeholder={
+                        !uploadData.serie ? "Selecione uma série primeiro" :
+                        loadingDisciplinas ? "Carregando disciplinas..." : "Selecione a disciplina"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
-                      {disciplinas.map(disciplina => (
-                        <SelectItem key={disciplina} value={disciplina}>{disciplina}</SelectItem>
-                      ))}
+                      {loadingDisciplinas ? (
+                        <div className="flex items-center justify-center p-4">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-600 mr-2" />
+                          <span className="text-sm text-gray-600">Carregando...</span>
+                        </div>
+                      ) : disciplinasFiltradas().length === 0 ? (
+                        <div className="text-center p-4 text-sm text-gray-500">
+                          Nenhuma disciplina ativa encontrada para este segmento
+                        </div>
+                      ) : (
+                        disciplinasFiltradas().map(disc => (
+                          <SelectItem key={disc.id} value={disc.id}>
+                            {disc.nome}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="bimestre">Bimestre</Label>
-                  <Select value={uploadData.bimestre} onValueChange={(value) => setUploadData(prev => ({ ...prev, bimestre: value }))}>
+                  <Select
+                    value={uploadData.bimestre}
+                    onValueChange={(value) => setUploadData(prev => ({ ...prev, bimestre: value }))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o bimestre" />
                     </SelectTrigger>
                     <SelectContent>
-                      {bimestres.map(bimestre => (
-                        <SelectItem key={bimestre} value={bimestre.toString()}>{bimestre}º Bimestre</SelectItem>
+                      {bimestres.map(bi => (
+                        <SelectItem key={bi} value={bi.toString()}>{bi}º Bimestre</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -371,46 +551,51 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
                     type="file"
                     accept=".pdf"
                     onChange={handleFileSelect}
-                    className="cursor-pointer"
+                    disabled={uploadProgress.isUploading}
                   />
                   {uploadData.arquivo && (
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-500">
                       Arquivo selecionado: {uploadData.arquivo.name} ({formatFileSize(uploadData.arquivo.size)})
                     </p>
                   )}
                 </div>
 
                 {uploadProgress.isUploading && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm">Enviando {uploadProgress.fileName}...</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress.progress}%` }}
-                      />
-                    </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                    <div
+                      className="bg-blue-600 h-2.5 rounded-full"
+                      style={{ width: `${uploadProgress.progress}%` }}
+                    ></div>
+                    <p className="text-xs text-gray-500 mt-1 text-center">
+                      {uploadProgress.fileName} ({uploadProgress.progress}%)
+                    </p>
                   </div>
                 )}
-
-                <div className="flex gap-2 pt-4">
-                  <Button 
-                    onClick={handleUpload} 
-                    disabled={uploadProgress.isUploading}
-                    className="flex-1"
-                  >
-                    {uploadProgress.isUploading ? 'Enviando...' : 'Enviar PDF'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setIsUploadDialogOpen(false)}
-                    disabled={uploadProgress.isUploading}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-6">
+                <Button
+                  onClick={handleUpload}
+                  disabled={uploadProgress.isUploading || !uploadData.arquivo || !uploadData.serie || !uploadData.disciplina || !uploadData.bimestre}
+                >
+                  {uploadProgress.isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Enviar PDF
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsUploadDialogOpen(false)}
+                  disabled={uploadProgress.isUploading}
+                >
+                  Cancelar
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -427,27 +612,35 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as séries</SelectItem>
-                {series.map(serie => <SelectItem key={serie} value={serie}>{serie}</SelectItem>)}
+                {seriesDB.map(serie => (
+                  <SelectItem key={serie.id} value={serie.nome}>
+                    {serie.nome}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-
             <Select value={filtroDisciplina} onValueChange={setFiltroDisciplina}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filtrar por disciplina" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as disciplinas</SelectItem>
-                {disciplinas.map(disc => <SelectItem key={disc} value={disc}>{disc}</SelectItem>)}
+                {disciplinasDB.map(disc => (
+                  <SelectItem key={disc.id} value={disc.nome}>
+                    {disc.nome}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-
             <Select value={filtroBimestre} onValueChange={setFiltroBimestre}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue placeholder="Filtrar por bimestre" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os bimestres</SelectItem>
-                {bimestres.map(bi => <SelectItem key={bi} value={bi.toString()}>{bi}º Bimestre</SelectItem>)}
+                {bimestres.map(bi => (
+                  <SelectItem key={bi} value={bi.toString()}>{bi}º Bimestre</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -505,7 +698,6 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
                             <h4 className="font-medium">{bimestre}º Bimestre</h4>
                             {conteudo ? <CheckCircle className="w-5 h-5 text-green-600" /> : <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />}
                           </div>
-
                           {conteudo ? (
                             <div className="space-y-3">
                               <div>
@@ -542,12 +734,12 @@ export function GestaoConteudoPDF({ usuario }: GestaoConteudoPDFProps) {
                           ) : (
                             <div className="space-y-3">
                               <p className="text-sm text-gray-500">Vazio</p>
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 onClick={() => {
                                   setUploadData({ serie: grupo.serie, disciplina: grupo.disciplina, bimestre: bimestre.toString(), arquivo: null });
                                   setIsUploadDialogOpen(true);
-                                }} 
+                                }}
                                 className="w-full gap-1"
                               >
                                 <Plus className="w-3 h-3" /> Adicionar

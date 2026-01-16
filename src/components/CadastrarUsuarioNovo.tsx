@@ -109,6 +109,20 @@ const seriesDisponiveis = [
   "3ª série",
 ];
 
+// ✅ FUNÇÃO PARA LIMPAR SUFIXOS DA SÉRIE
+const serieLimpa = (serie?: string): string | null => {
+  if (!serie) return null;
+
+  // Remove qualquer sufixo como:
+  // " (Fundamental)", " (Ensino Médio)", " - Fundamental", " - Ensino Médio"
+  return serie
+    .replace(/\s*|$Fundamental$|/gi, "")
+    .replace(/\s*|$Ensino\s+Médio$|/gi, "")
+    .replace(/\s*-\s*Fundamental/gi, "")
+    .replace(/\s*-\s*Ensino\s+Médio/gi, "")
+    .trim();
+};
+
 export function CadastrarUsuarioNovo({
   onVoltar,
   onUsuarioCriado,
@@ -356,8 +370,6 @@ export function CadastrarUsuarioNovo({
   };
 
   // Cadastro via Edge Function
-    // Cadastro via Edge Function
-    // Cadastro via Edge Function
   const criarUsuario = async () => {
     if (!formularioValido) {
       toast.error("Por favor, corrija os erros no formulário");
@@ -384,7 +396,7 @@ export function CadastrarUsuarioNovo({
         email: emailFinal,
         senha: dados.senha,
         tipo: dados.tipo,
-        serie: dados.tipo === "aluno" ? dados.serie : null,
+        serie: dados.tipo === "aluno" ? serieLimpa(dados.serie) : null, // ✅ SÉRIE LIMPA (sem sufixos)
         vinculacoesProfessor:
           dados.tipo === "professor" || dados.tipo === "professor_conteudista"
             ? dados.vinculacoesProfessor
@@ -397,7 +409,7 @@ export function CadastrarUsuarioNovo({
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-manage-users`,
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             // 2. ADICIONAR O CABEÇALHO DE AUTORIZAÇÃO AQUI
             "Authorization": `Bearer ${session.access_token}`
@@ -431,8 +443,6 @@ export function CadastrarUsuarioNovo({
       setSalvando(false);
     }
   };
-
-
 
   const finalizarCadastro = () => {
     setModalConfirmacao(false);
@@ -617,7 +627,6 @@ export function CadastrarUsuarioNovo({
             {/* Tipo / Série / Vinculações */}
             <div className="border-t pt-6">
               <h3 className="text-lg font-medium mb-4">Perfil do Usuário</h3>
-
               <div className="space-y-2 mb-4">
                 <Label>Tipo de Usuário *</Label>
                 <Select
@@ -683,7 +692,6 @@ export function CadastrarUsuarioNovo({
                       Adicione disciplinas e selecione as séries específicas
                       que este professor leciona.
                     </p>
-
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-blue-600">
                         <strong>{dados.vinculacoesProfessor.length}</strong>{" "}
@@ -767,7 +775,6 @@ export function CadastrarUsuarioNovo({
               <Button variant="outline" onClick={onVoltar}>
                 Cancelar
               </Button>
-
               <Button
                 onClick={criarUsuario}
                 disabled={!formularioValido || salvando}
@@ -780,7 +787,7 @@ export function CadastrarUsuarioNovo({
                   </>
                 ) : (
                   <>
-                    <Save className="-4 h-4 mr-2" />
+                    <Save className="w-4 h-4 mr-2" />
                     Criar Usuário
                   </>
                 )}
@@ -919,7 +926,6 @@ export function CadastrarUsuarioNovo({
                   <span className="font-medium">Nome:</span>
                   <span>{usuarioCriado.nome}</span>
                 </div>
-
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-gray-500" />
                   <span className="font-medium">Login:</span>
@@ -927,7 +933,6 @@ export function CadastrarUsuarioNovo({
                     {usuarioCriado.nomeUsuario}
                   </span>
                 </div>
-
                 <div className="flex items-center gap-2">
                   <Lock className="w-4 h-4 text-gray-500" />
                   <span className="font-medium">Senha:</span>
@@ -936,7 +941,6 @@ export function CadastrarUsuarioNovo({
                   </span>
                 </div>
               </div>
-
               <p className="text-sm text-gray-600">
                 Anote essas credenciais e repasse ao usuário. Ele poderá alterar
                 a senha após o primeiro login.
