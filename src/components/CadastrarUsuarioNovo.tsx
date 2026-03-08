@@ -73,48 +73,64 @@ interface DisciplinaDisponivel {
   segmento: SegmentoDisciplina | null;
 }
 
+/* -------------------------------------------------
+   Séries por segmento – usadas apenas para o modal
+   de vinculação de disciplinas (professor). Elas
+   continuam estáticas porque representam o “esqueleto”
+   de séries que cada segmento possui.
+--------------------------------------------------- */
 const seriesPorSegmento: Record<SegmentoDisciplina, string[]> = {
-  "Fundamental 1": [
-    "1º ano",
-    "2º ano",
-    "3º ano",
-    "4º ano",
-    "5º ano",
-  ],
-  "Fundamental 2": [
-    "6º ano",
-    "7º ano",
-    "8º ano",
-    "9º ano",
-  ],
-  "Ensino Médio": [
-    "1ª série",
-    "2ª série",
-    "3ª série",
-  ],
+  "Fundamental 1": ["1º ano", "2º ano", "3º ano", "4º ano", "5º ano"],
+  "Fundamental 2": ["6º ano", "7º ano", "8º ano", "9º ano"],
+  "Ensino Médio": ["1ª série", "2ª série", "3ª série"],
 };
 
-const seriesDisponiveis = [
-  "1º ano",
-  "2º ano",
-  "3º ano",
-  "4º ano",
-  "5º ano",
-  "6º ano",
-  "7º ano",
-  "8º ano",
-  "9º ano",
-  "1ª série",
-  "2ª série",
-  "3ª série",
-];
+/* -------------------------------------------------
+   Hook para carregar as séries do Supabase
+   (usado no SELECT de ALUNO)
+--------------------------------------------------- */
+const useSeriesFromSupabase = () => {
+  const [series, setSeries] = useState<string[]>([]);
+  const [carregando, setCarregando] = useState<boolean>(true);
 
-// ✅ FUNÇÃO PARA LIMPAR SUFIXOS DA SÉRIE
+  useEffect(() => {
+    const carregarSeries = async () => {
+      try {
+        setCarregando(true);
+        const { data, error } = await supabase
+          .from("series")
+          .select("nome, ativa")
+          .order("nome", { ascending: true });
+
+        if (error) throw error;
+
+        const nomes: string[] = (data ?? [])
+          .filter((s: any) => s.ativa !== false)
+          .map((s: any) => s.nome)
+          .filter(Boolean);
+
+        setSeries(nomes);
+      } catch (err: any) {
+        console.error("[CADASTRO_NOVO] Erro ao carregar séries:", err.message);
+        toast.error("Erro ao carregar séries do banco.");
+        setSeries([]);
+      } finally {
+        setCarregando(false);
+      }
+    };
+
+    carregarSeries();
+  }, []);
+
+  return { series, carregando };
+};
+
+/* -------------------------------------------------
+   Função utilitária para limpar sufixos da série
+   (mantida para compatibilidade com a Edge Function)
+--------------------------------------------------- */
 const serieLimpa = (serie?: string): string | null => {
   if (!serie) return null;
-
-  // Remove qualquer sufixo como:
-  // " (Fundamental)", " (Ensino Médio)", " - Fundamental", " - Ensino Médio"
   return serie
     .replace(/\s*|$Fundamental$|/gi, "")
     .replace(/\s*|$Ensino\s+Médio$|/gi, "")
@@ -168,7 +184,9 @@ export function CadastrarUsuarioNovo({
     { value: "professor_conteudista", label: "Professor Conteudista" },
   ];
 
-  // Carrega disciplinas (com segmento vindo do banco)
+  /* -------------------------------------------------
+     Carrega disciplinas (com segmento vindo do banco)
+  --------------------------------------------------- */
   const carregarDisciplinas = async () => {
     try {
       setCarregandoDisciplinas(true);
@@ -209,7 +227,15 @@ export function CadastrarUsuarioNovo({
     carregarDisciplinas();
   }, []);
 
-  // Validação
+  /* -------------------------------------------------
+     Carrega séries para o SELECT de ALUNO (Supabase)
+  --------------------------------------------------- */
+  const { series: seriesDisponiveis, carregando: carregandoSeries } =
+    useSeriesFromSupabase();
+
+  /* -------------------------------------------------
+     Validação do formulário
+  --------------------------------------------------- */
   const validarFormulario = () => {
     const erros: string[] = [];
 
@@ -249,14 +275,12 @@ export function CadastrarUsuarioNovo({
       erros.push("Série é obrigatória para alunos");
     }
 
-    // CORREÇÃO: Validação de disciplinas apenas para PROFESSOR (removemos conteudista)
+    // Validação de disciplinas apenas para professor comum
     if (
       dados.tipo === "professor" &&
       dados.vinculacoesProfessor.length === 0
     ) {
-      erros.push(
-        "Pelo menos uma disciplina deve ser vinculada ao professor"
-      );
+      erros.push("Pelo menos uma disciplina deve ser vinculada ao professor");
     }
 
     return erros;
@@ -265,6 +289,9 @@ export function CadastrarUsuarioNovo({
   const errosValidacao = validarFormulario();
   const formularioValido = errosValidacao.length === 0;
 
+  /* -------------------------------------------------
+     Helpers de UI
+  --------------------------------------------------- */
   const gerarNomeUsuario = () => {
     if (dados.nome.trim()) {
       const nomeUsuarioSugerido = dados.nome
@@ -369,7 +396,9 @@ export function CadastrarUsuarioNovo({
     }));
   };
 
-  // Cadastro via Edge Function
+  /* -------------------------------------------------
+     Criação do usuário via Edge Function
+  --------------------------------------------------- */
   const criarUsuario = async () => {
     if (!formularioValido) {
       toast.error("Por favor, corrija os erros no formulário");
@@ -378,8 +407,9 @@ export function CadastrarUsuarioNovo({
 
     setSalvando(true);
     try {
-      // 1. PEGAR A SESSÃO ATUAL (O "CRACHÁ" DO ADMIN)
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
         throw new Error("Sessão inválida. Faça login novamente.");
@@ -391,19 +421,20 @@ export function CadastrarUsuarioNovo({
         dados.email.trim() || `${nomeUsuario || "usuario"}@escola.local`;
 
       const payload = {
-        action: 'create', // Importante para a nova função admin-manage-users
+        action: "create",
         nome,
         email: emailFinal,
         senha: dados.senha,
         tipo: dados.tipo,
-        serie: dados.tipo === "aluno" ? serieLimpa(dados.serie) : null, // ✅ SÉRIE LIMPA (sem sufixos)
+        serie: dados.tipo === "aluno" ? serieLimpa(dados.serie) : null,
         vinculacoesProfessor:
-          dados.tipo === "professor" || dados.tipo === "professor_conteudista"
+          dados.tipo === "professor" ||
+          dados.tipo === "professor_conteudista"
             ? dados.vinculacoesProfessor
             : [],
       };
 
-      console.log("[CADASTRO_NOVO] Enviando para admin-manage-users:", payload);
+      console.log("[CADASTRO_NOVO] Enviando payload:", payload);
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-manage-users`,
@@ -411,8 +442,7 @@ export function CadastrarUsuarioNovo({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            // 2. ADICIONAR O CABEÇALHO DE AUTORIZAÇÃO AQUI
-            "Authorization": `Bearer ${session.access_token}`
+            Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify(payload),
         }
@@ -425,7 +455,7 @@ export function CadastrarUsuarioNovo({
         throw new Error(result.error || "Erro ao criar usuário");
       }
 
-      console.log("[CADASTRO_NOVO] Usuário criado via Edge Function:", result);
+      console.log("[CADASTRO_NOVO] Usuário criado:", result);
 
       setUsuarioCriado({
         nome,
@@ -449,7 +479,9 @@ export function CadastrarUsuarioNovo({
     onVoltar();
   };
 
-  // Render
+  /* -------------------------------------------------
+     Render
+  --------------------------------------------------- */
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -554,7 +586,10 @@ export function CadastrarUsuarioNovo({
                       type={mostrarSenha ? "text" : "password"}
                       value={dados.senha}
                       onChange={(e) =>
-                        setDados((prev) => ({ ...prev, senha: e.target.value }))
+                        setDados((prev) => ({
+                          ...prev,
+                          senha: e.target.value,
+                        }))
                       }
                       placeholder="Mínimo 6 caracteres"
                     />
@@ -605,13 +640,12 @@ export function CadastrarUsuarioNovo({
                       )}
                     </Button>
                   </div>
-                  {dados.confirmarSenha &&
-                    dados.senha !== dados.confirmarSenha && (
-                      <p className="text-xs text-red-500 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        As senhas não coincidem
-                      </p>
-                    )}
+                  {dados.confirmarSenha && dados.senha !== dados.confirmarSenha && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      As senhas não coincidem
+                    </p>
+                  )}
                   {dados.confirmarSenha &&
                     dados.senha === dados.confirmarSenha &&
                     dados.senha.length >= 6 && (
@@ -654,6 +688,7 @@ export function CadastrarUsuarioNovo({
                 </Select>
               </div>
 
+              {/* Série para ALUNO – agora vem do Supabase */}
               {dados.tipo === "aluno" && (
                 <div className="space-y-2">
                   <Label>Série *</Label>
@@ -663,6 +698,7 @@ export function CadastrarUsuarioNovo({
                     onValueChange={(value) =>
                       setDados((prev) => ({ ...prev, serie: value }))
                     }
+                    disabled={carregandoSeries}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione a série" />
@@ -678,7 +714,7 @@ export function CadastrarUsuarioNovo({
                 </div>
               )}
 
-              {/* CORREÇÃO: Exibe vinculação APENAS para professor comum */}
+              {/* Vinculação de disciplinas – exibida apenas para professor comum */}
               {dados.tipo === "professor" && (
                 <div className="space-y-4">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -751,7 +787,7 @@ export function CadastrarUsuarioNovo({
               )}
             </div>
 
-            {/* Erros */}
+            {/* Erros de validação */}
             {errosValidacao.length > 0 && (
               <div className="border-t pt-4">
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -770,7 +806,7 @@ export function CadastrarUsuarioNovo({
               </div>
             )}
 
-            {/* Ações */}
+            {/* Botões de ação */}
             <div className="border-t pt-6 flex justify-between">
               <Button variant="outline" onClick={onVoltar}>
                 Cancelar
@@ -782,7 +818,7 @@ export function CadastrarUsuarioNovo({
               >
                 {salvando ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Criando...
                   </>
                 ) : (
@@ -797,7 +833,7 @@ export function CadastrarUsuarioNovo({
         </Card>
       </div>
 
-      {/* Modal Disciplina */}
+      {/* Modal de adição de disciplina (professor) */}
       <Dialog open={modalDisciplina} onOpenChange={setModalDisciplina}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -874,9 +910,7 @@ export function CadastrarUsuarioNovo({
                         checked={novaVinculacao.seriesSelecionadas.includes(
                           serie
                         )}
-                        onChange={(e) =>
-                          handleSerieChange(serie, e.target.checked)
-                        }
+                        onChange={(e) => handleSerieChange(serie, e.target.checked)}
                         className="rounded"
                       />
                       <Label className="text-sm">{serie}</Label>
@@ -905,7 +939,7 @@ export function CadastrarUsuarioNovo({
         </DialogContent>
       </Dialog>
 
-      {/* Modal de confirmação */}
+      {/* Modal de confirmação de criação */}
       <Dialog open={modalConfirmacao} onOpenChange={setModalConfirmacao}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -942,8 +976,8 @@ export function CadastrarUsuarioNovo({
                 </div>
               </div>
               <p className="text-sm text-gray-600">
-                Anote essas credenciais e repasse ao usuário. Ele poderá alterar
-                a senha após o primeiro login.
+                Anote essas credenciais e repasse ao usuário. Ele poderá
+                alterar a senha após o primeiro login.
               </p>
             </div>
           )}

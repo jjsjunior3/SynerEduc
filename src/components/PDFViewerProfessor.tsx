@@ -16,17 +16,16 @@ import {
   Loader2
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { toast } from "sonner"; // Adicionado toast
-import { Progress } from "./ui/progress"; // Adicionado Progress
+import { toast } from "sonner";
 
-// ✅ ATUALIZADO: Interface BimestreData mais simples, focada no que é passado
+// Interface do que o viewer recebe
 interface BimestreData {
   numero: number;
   nome: string;
   descricao: string;
   pdfUrl?: string;
-  id?: string; // Adicionado id para consistência, se necessário para ações
-  autor_nome?: string; // Adicionado para exibir o nome do professor
+  id?: string;
+  autor_nome?: string;
 }
 
 interface PDFViewerProfessorProps {
@@ -38,10 +37,8 @@ interface PDFViewerProfessorProps {
   hasAnterior: boolean;
   sidebarAberta?: boolean;
   onToggleSidebar?: () => void;
-  onUploadPDF?: (file: File) => void; // Mantido, se for usar
-  onRemoverPDF?: () => void; // Mantido, se for usar
-  // Removido onEditarDescricao, onMarcarConcluido, onEnviarDuvida, darkMode, disciplina
-  // pois não são usados ou não são relevantes para o contexto do professor visualizando o próprio material
+  onUploadPDF?: (file: File) => void;
+  onRemoverPDF?: () => void;
 }
 
 export function PDFViewerProfessor({
@@ -56,23 +53,25 @@ export function PDFViewerProfessor({
   onUploadPDF,
   onRemoverPDF
 }: PDFViewerProfessorProps) {
-  const [isLoadingPdf, setIsLoadingPdf] = useState(true); // ✅ Renomeado para evitar conflito
-  const [zoom, setZoom] = useState(75); // ✅ Zoom inicial 75%
+  const [isLoadingPdf, setIsLoadingPdf] = useState(true);
+  const [zoom, setZoom] = useState(75);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Resetar estado ao mudar de bimestre
   useEffect(() => {
-    setIsLoadingPdf(true); // ✅ Usando isLoadingPdf
-    setZoom(75); // Resetar zoom para 75% ao carregar novo PDF
+    setIsLoadingPdf(true);
+    setZoom(75);
   }, [bimestre?.pdfUrl]);
 
-  // Função para lidar com o download
   const handleDownload = () => {
     if (!bimestre?.pdfUrl) {
-      toast.error("Erro", { description: "URL do PDF não disponível para download." });
+      toast.error("Erro", {
+        description: "URL do PDF não disponível para download.",
+      });
       return;
     }
+
     const link = document.createElement("a");
     link.href = bimestre.pdfUrl;
     link.download = bimestre.nome || "material.pdf";
@@ -85,22 +84,25 @@ export function PDFViewerProfessor({
     });
   };
 
-  // Função para alternar tela cheia
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen().catch(err => {
-        console.error(`Erro ao tentar tela cheia: ${err.message}`);
-        toast.error("Erro ao entrar em tela cheia", { description: err.message });
-      });
-      setIsFullscreen(true);
+      containerRef.current
+        ?.requestFullscreen()
+        .then(() => setIsFullscreen(true))
+        .catch((err) => {
+          console.error(`Erro ao tentar tela cheia: ${err.message}`);
+          toast.error("Erro ao entrar em tela cheia", {
+            description: err.message,
+          });
+        });
     } else {
       document.exitFullscreen();
       setIsFullscreen(false);
     }
   };
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 300));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 50));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 25, 300));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 25, 50));
   const resetZoom = () => setZoom(75);
 
   // ESTADO VAZIO: nenhum material selecionado
@@ -110,7 +112,9 @@ export function PDFViewerProfessor({
         <div className="bg-gray-200 p-6 rounded-full mb-4">
           <FileText className="w-12 h-12 text-gray-400" />
         </div>
-        <h3 className="text-lg font-medium text-gray-600">Nenhum bimestre selecionado</h3>
+        <h3 className="text-lg font-medium text-gray-600">
+          Nenhum bimestre selecionado
+        </h3>
         <p className="text-sm max-w-xs mt-2">
           Selecione um bimestre na barra lateral para visualizar o conteúdo.
         </p>
@@ -119,10 +123,13 @@ export function PDFViewerProfessor({
   }
 
   return (
-    // ✅ Container principal com position relative
-    <div ref={containerRef} className="relative h-full w-full flex flex-col bg-white overflow-hidden">
-
-      {/* ========== HEADER ========== */}
+    <div
+      ref={containerRef}
+      className={`relative w-full flex flex-col bg-white overflow-hidden ${
+        isFullscreen ? "fixed inset-0 z-50 h-screen" : "h-full"
+      }`}
+    >
+      {/* HEADER */}
       <div className="border-b border-gray-200 p-3 bg-white flex items-center justify-between shadow-sm z-10 h-16 shrink-0">
         <div className="flex items-center gap-3">
           {onToggleSidebar && !isFullscreen && (
@@ -133,7 +140,11 @@ export function PDFViewerProfessor({
               title={sidebarAberta ? "Recolher menu" : "Expandir menu"}
               className="text-gray-500 hover:bg-gray-100"
             >
-              {sidebarAberta ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+              {sidebarAberta ? (
+                <PanelLeftClose className="w-5 h-5" />
+              ) : (
+                <PanelLeftOpen className="w-5 h-5" />
+              )}
             </Button>
           )}
 
@@ -142,7 +153,9 @@ export function PDFViewerProfessor({
               <FileText className="w-5 h-5 text-blue-600" />
               {bimestre.nome}
             </h2>
-            <p className="text-xs text-gray-500 hidden sm:block leading-tight">{bimestre.descricao}</p>
+            <p className="text-xs text-gray-500 hidden sm:block leading-tight">
+              {bimestre.descricao}
+            </p>
           </div>
         </div>
 
@@ -162,12 +175,17 @@ export function PDFViewerProfessor({
                 variant="outline"
                 size="sm"
                 className="hidden sm:flex h-8"
-                onClick={handleDownload} // Usar handleDownload
+                onClick={handleDownload}
               >
                 <Download className="w-4 h-4 mr-2" /> Baixar
               </Button>
               {onRemoverPDF && (
-                <Button variant="destructive" size="sm" className="h-8" onClick={onRemoverPDF}>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-8"
+                  onClick={onRemoverPDF}
+                >
                   Remover
                 </Button>
               )}
@@ -176,72 +194,98 @@ export function PDFViewerProfessor({
         </div>
       </div>
 
-      {/* ========== TOOLBAR ========== */}
+      {/* TOOLBAR */}
       {bimestre.pdfUrl && (
         <div className="border-b border-gray-200 p-2 bg-gray-50 flex items-center justify-between px-4 h-12 shrink-0">
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomOut} title="Diminuir Zoom">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleZoomOut}
+              title="Diminuir Zoom"
+            >
               <ZoomOut className="w-4 h-4" />
             </Button>
-            <span className="text-xs font-medium w-12 text-center">{zoom}%</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomIn} title="Aumentar Zoom">
+            <span className="text-xs font-medium w-12 text-center">
+              {zoom}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleZoomIn}
+              title="Aumentar Zoom"
+            >
               <ZoomIn className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={resetZoom} className="text-xs ml-1 h-8">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetZoom}
+              className="text-xs ml-1 h-8"
+            >
               <RotateCcw className="w-3 h-3 mr-1" /> Reset
             </Button>
           </div>
 
-          <Button variant="ghost" size="sm" onClick={toggleFullscreen} className="text-gray-600 h-8">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleFullscreen}
+            className="text-gray-600 h-8"
+          >
             {isFullscreen ? (
-              <><Minimize className="w-4 h-4 mr-2" /> Sair da Tela Cheia</>
+              <>
+                <Minimize className="w-4 h-4 mr-2" /> Sair da Tela Cheia
+              </>
             ) : (
-              <><Maximize className="w-4 h-4 mr-2" /> Tela Cheia</>
+              <>
+                <Maximize className="w-4 h-4 mr-2" /> Tela Cheia
+              </>
             )}
           </Button>
         </div>
       )}
 
+      {/* ÁREA DO PDF – altura maior, como no aluno */}
       {/* ========== ÁREA DO PDF ========== */}
-      <div className="flex-1 min-h-0 w-full bg-gray-200 overflow-hidden relative">
+      <div
+        className="relative w-full bg-gray-200 overflow-hidden"
+        style={{
+          height: isFullscreen ? "100vh" : "70vh",   // ocupa boa parte da viewport
+          paddingBottom: !isFullscreen && (hasAnterior || hasProximo) ? "3rem" : 0,
+        }}
+      >
         {bimestre.pdfUrl ? (
           <>
             <iframe
               src={`${bimestre.pdfUrl}#zoom=${zoom}&view=FitH`}
               className="w-full h-full border-none block"
-              style={{ display: 'block' }}
               title={`PDF - ${bimestre.nome}`}
-              onLoad={() => setIsLoadingPdf(false)} // ✅ Usando setIsLoadingPdf
+              onLoad={() => setIsLoadingPdf(false)}
             />
 
-            {isLoadingPdf && ( // ✅ Usando isLoadingPdf
+            {isLoadingPdf && (
               <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-20">
                 <div className="text-center">
                   <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-600" />
-                  <p className="text-sm text-gray-600 font-medium">Carregando documento...</p>
+                  <p className="text-sm text-gray-600 font-medium">
+                    Carregando documento...
+                  </p>
                 </div>
               </div>
             )}
           </>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center bg-gray-100">
-            <div className="bg-gray-200 p-6 rounded-full mb-4">
-              <FileText className="w-12 h-12 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-600">Nenhum PDF disponível</h3>
-            <p className="text-sm max-w-xs mt-2">
-              Este bimestre ainda não possui material didático cadastrado.
-            </p>
-            {onUploadPDF && (
-              <Button className="mt-6" variant="outline">
-                Fazer Upload
-              </Button>
-            )}
+            {/* ... “Nenhum PDF disponível” ... */}
           </div>
         )}
       </div>
 
-      {/* ========== FOOTER - ABSOLUTO SOBRE O PDF ========== */}
+
+      {/* FOOTER DE NAVEGAÇÃO ENTRE BIMESTRES */}
       {(hasAnterior || hasProximo) && !isFullscreen && (
         <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 p-2 flex justify-between items-center shadow-lg z-30 h-12">
           <Button

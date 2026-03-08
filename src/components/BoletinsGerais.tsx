@@ -1,17 +1,48 @@
 // src/components/BoletinsGerais.tsx
 /**
  * Boletins Gerais - Coordenação
- * Visualizar notas de todos os alunos por série, turma, disciplina e bimestre.
+ * Visualizar e editar boletins dos alunos por série e bimestre,
+ * mostrando também alunos sem notas lançadas.
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase/supabaseClient';
+
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { ArrowLeft, Search, Download, Eye, Filter, Loader2, AlertCircle, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from './ui/dialog';
+import { Label } from './ui/label';
+
+import {
+  ArrowLeft,
+  Search,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  User,
+  Edit,
+  Save,
+  X,
+  Loader2,
+  AlertCircle,
+} from 'lucide-react';
+
 import { toast } from 'sonner';
 
 interface BoletinsGeraisProps {
@@ -23,6 +54,11 @@ interface Aluno {
   nome: string;
   email: string;
   serie: string;
+}
+
+interface Disciplina {
+  id: string;
+  nome: string;
 }
 
 interface Nota {
@@ -38,88 +74,99 @@ interface Nota {
   frequencia: number | null;
   faltas: number | null;
   status_final: string | null;
-  disciplina: { nome: string } | null;
+  disciplina: Disciplina | null;
 }
 
-interface BoletimAluno {
-  aluno: Aluno;
-  notas: Nota[];
-  mediaGeral: number;
-  totalFaltas: number;
-  situacao: 'aprovado' | 'recuperacao' | 'reprovado';
+interface NotaDisciplinaView {
+  disciplinaId: string;
+  disciplinaNome: string;
+  av1: number | null;
+  av2: number | null;
+  rec: number | null;
+}
+
+interface BoletimAlunoView {
+  id: string;             // alunoId-bimestre
+  alunoId: string;
+  nomeAluno: string;
+  email: string;
+  serie: string;
+  bimestreNumero: number;
+  bimestreLabel: string;
+  notas: NotaDisciplinaView[]; // pode ser []
+}
+
+interface NotaEmEdicao {
+  alunoId: string;
+  disciplinaId: string;
+  disciplinaNome: string;
+  bimestre: number;
+  nomeAluno: string;
+  av1: number | null;
+  av2: number | null;
+  rec: number | null;
+  notaRegistroId: string | null;
 }
 
 export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Filtros
+  // filtros
   const [series, setSeries] = useState<string[]>([]);
-  const [disciplinas, setDisciplinas] = useState<{ id: string; nome: string }[]>([]);
-  const [filtroSerie, setFiltroSerie] = useState('todas');
-  const [filtroDisciplina, setFiltroDisciplina] = useState('todas');
-  const [filtroBimestre, setFiltroBimestre] = useState('todos');
-  const [busca, setBusca] = useState('');
+  const [filtroSerie, setFiltroSerie] = useState<string>('todas');
+  const [filtroBimestre, setFiltroBimestre] = useState<string>('todos');
+  const [busca, setBusca] = useState<string>('');
+  const [filtrosAplicados, setFiltrosAplicados] = useState(false);
 
-  // Dados
+  // dados crus
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [notas, setNotas] = useState<Nota[]>([]);
-  const [boletins, setBoletins] = useState<BoletimAluno[]>([]);
 
-  // Estatísticas
-  const [mediaGeral, setMediaGeral] = useState(0);
-  const [aprovados, setAprovados] = useState(0);
-  const [recuperacao, setRecuperacao] = useState(0);
-  const [reprovados, setReprovados] = useState(0);
+  // UI
+  const [alunosExpandidos, setAlunosExpandidos] = useState<Set<string>>(
+    new Set(),
+  );
 
-  // ========================================
-  // 1️⃣ CARREGAR SÉRIES E DISCIPLINAS
-  // ========================================
+  // edição
+  const [notaEmEdicao, setNotaEmEdicao] = useState<NotaEmEdicao | null>(null);
+  const [salvandoNota, setSalvandoNota] = useState(false);
+
+  // ===================== CARREGAR SÉRIES =====================
   useEffect(() => {
-    carregarFiltros();
+    async function carregarSeries() {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('serie')
+          .eq('tipo', 'aluno')
+          .not('serie', 'is', null);
+
+        if (error) throw error;
+
+        const unicas = Array.from(
+          new Set((data || []).map(d => d.serie as string)),
+        ).sort();
+
+        setSeries(unicas);
+      } catch (err) {
+        console.error('Erro ao carregar séries:', err);
+        toast.error('Erro ao carregar séries');
+      }
+    }
+
+    carregarSeries();
   }, []);
 
-  async function carregarFiltros() {
-    try {
-      // Buscar séries únicas
-      const { data: seriesData, error: seriesError } = await supabase
-        .from('users')
-        .select('serie')
-        .eq('tipo', 'aluno')
-        .not('serie', 'is', null);
-
-      if (seriesError) throw seriesError;
-
-      const seriesUnicas = Array.from(new Set(seriesData?.map(item => item.serie) || []));
-      setSeries(['todas', ...seriesUnicas.sort()]);
-
-      // Buscar disciplinas
-      const { data: disciplinasData, error: disciplinasError } = await supabase
-        .from('disciplinas')
-        .select('id, nome')
-        .order('nome', { ascending: true });
-
-      if (disciplinasError) throw disciplinasError;
-
-      setDisciplinas(disciplinasData || []);
-    } catch (error) {
-      console.error('Erro ao carregar filtros:', error);
-    }
-  }
-
-  // ========================================
-  // 2️⃣ CARREGAR ALUNOS E NOTAS
-  // ========================================
-  useEffect(() => {
-    carregarDados();
-  }, [filtroSerie, filtroDisciplina, filtroBimestre]);
-
-  async function carregarDados() {
+  // ===================== APLICAR FILTROS =====================
+  async function aplicarFiltros() {
     setCarregando(true);
     setErro(null);
+    setFiltrosAplicados(true);
+    setAlunosExpandidos(new Set());
 
     try {
-      // BUSCAR ALUNOS
+      // 1) alunos
       let queryAlunos = supabase
         .from('users')
         .select('id, nome, email, serie')
@@ -133,29 +180,47 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       const { data: alunosData, error: alunosError } = await queryAlunos;
       if (alunosError) throw alunosError;
 
-      setAlunos(alunosData || []);
+      const alunosFiltrados =
+        (alunosData || []).filter(a => {
+          if (!busca.trim()) return true;
+          const texto = busca.toLowerCase();
+          return (
+            a.nome.toLowerCase().includes(texto) ||
+            (a.email ?? '').toLowerCase().includes(texto)
+          );
+        }) || [];
 
-      // BUSCAR NOTAS
-      const alunosIds = alunosData?.map(a => a.id) || [];
+      setAlunos(alunosFiltrados);
 
-      if (alunosIds.length === 0) {
+      // mesmo que não tenha aluno, não dá erro – só mostra mensagem
+      if (alunosFiltrados.length === 0) {
         setNotas([]);
-        setBoletins([]);
-        setCarregando(false);
         return;
       }
 
+      // 2) notas
+      const ids = alunosFiltrados.map(a => a.id);
+
       let queryNotas = supabase
         .from('notas')
-        .select(`
-          *,
-          disciplina:disciplinas!disciplina_id(nome)
-        `)
-        .in('user_id', alunosIds);
-
-      if (filtroDisciplina !== 'todas') {
-        queryNotas = queryNotas.eq('disciplina_id', filtroDisciplina);
-      }
+        .select(
+          `
+          id,
+          user_id,
+          disciplina_id,
+          bimestre,
+          av1,
+          av2,
+          recuperacao,
+          media,
+          media_final,
+          frequencia,
+          faltas,
+          status_final,
+          disciplinas:disciplinas!disciplina_id(id, nome)
+        `,
+        )
+        .in('user_id', ids);
 
       if (filtroBimestre !== 'todos') {
         queryNotas = queryNotas.eq('bimestre', parseInt(filtroBimestre));
@@ -164,88 +229,119 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       const { data: notasData, error: notasError } = await queryNotas;
       if (notasError) throw notasError;
 
-      setNotas(notasData || []);
+      const normalizadas: Nota[] =
+        (notasData || []).map((n: any) => ({
+          ...n,
+          disciplina: n.disciplinas
+            ? { id: n.disciplinas.id, nome: n.disciplinas.nome }
+            : null,
+        })) || [];
 
-      // GERAR BOLETINS
-      gerarBoletins(alunosData || [], notasData || []);
-
-    } catch (error: any) {
-      console.error('Erro ao carregar dados:', error);
-      setErro(error.message || 'Erro ao carregar boletins');
+      setNotas(normalizadas);
+    } catch (err: any) {
+      console.error('Erro ao carregar boletins:', err);
+      setErro(err.message || 'Erro ao carregar boletins');
+      toast.error('Erro ao carregar boletins');
     } finally {
       setCarregando(false);
     }
   }
 
-  // ========================================
-  // 3️⃣ GERAR BOLETINS E ESTATÍSTICAS
-  // ========================================
-  function gerarBoletins(alunosData: Aluno[], notasData: Nota[]) {
-    const boletinsGerados: BoletimAluno[] = alunosData.map(aluno => {
-      const notasAluno = notasData.filter(n => n.user_id === aluno.id);
+  // ===================== MONTAR VIEW DOS BOLETINS =====================
+  const boletins: BoletimAlunoView[] = useMemo(() => {
+    if (!alunos.length) return [];
 
-      // Calcular média geral (usando media_final se disponível, senão media)
-      const somaMedias = notasAluno.reduce((acc, n) => {
-        const notaFinal = n.media_final ?? n.media ?? 0;
-        return acc + notaFinal;
-      }, 0);
+    const map = new Map<string, BoletimAlunoView>();
 
-      const mediaGeral = notasAluno.length > 0 ? somaMedias / notasAluno.length : 0;
-
-      // Calcular total de faltas
-      const totalFaltas = notasAluno.reduce((acc, n) => acc + (n.faltas ?? 0), 0);
-
-      // Determinar situação
-      let situacao: 'aprovado' | 'recuperacao' | 'reprovado';
-      if (mediaGeral >= 7) {
-        situacao = 'aprovado';
-      } else if (mediaGeral >= 5) {
-        situacao = 'recuperacao';
-      } else {
-        situacao = 'reprovado';
+    for (const aluno of alunos) {
+      // se filtro de bimestre estiver em "todos", vamos criar UMA linha por aluno,
+      // mas aí não faz muito sentido para boletim; neste layout, assumimos 1 bimestre
+      // então, se "todos", vamos mostrar apenas alunos (sem bimestre definido)
+      if (filtroBimestre === 'todos') {
+        const key = `${aluno.id}-0`;
+        if (!map.has(key)) {
+          map.set(key, {
+            id: key,
+            alunoId: aluno.id,
+            nomeAluno: aluno.nome,
+            email: aluno.email,
+            serie: aluno.serie,
+            bimestreNumero: 0,
+            bimestreLabel: 'Todos os bimestres',
+            notas: [],
+          });
+        }
+        continue;
       }
 
-      return {
-        aluno,
-        notas: notasAluno,
-        mediaGeral,
-        totalFaltas,
-        situacao
-      };
-    });
+      const bimestreNumero = parseInt(filtroBimestre);
 
-    setBoletins(boletinsGerados);
+      const notasAluno =
+        notas.filter(
+          n => n.user_id === aluno.id && n.bimestre === bimestreNumero,
+        ) || [];
 
-    // CALCULAR ESTATÍSTICAS
-    const boletinsComNotas = boletinsGerados.filter(b => b.notas.length > 0);
-    const somaMedias = boletinsComNotas.reduce((acc, b) => acc + b.mediaGeral, 0);
-    const mediaGeralCalc = boletinsComNotas.length > 0 ? somaMedias / boletinsComNotas.length : 0;
+      const key = `${aluno.id}-${bimestreNumero}`;
 
-    setMediaGeral(mediaGeralCalc);
-    setAprovados(boletinsComNotas.filter(b => b.situacao === 'aprovado').length);
-    setRecuperacao(boletinsComNotas.filter(b => b.situacao === 'recuperacao').length);
-    setReprovados(boletinsComNotas.filter(b => b.situacao === 'reprovado').length);
-  }
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,
+          alunoId: aluno.id,
+          nomeAluno: aluno.nome,
+          email: aluno.email,
+          serie: aluno.serie,
+          bimestreNumero,
+          bimestreLabel: `${bimestreNumero}º Bimestre`,
+          notas: [],
+        });
+      }
 
-  // ========================================
-  // 4️⃣ FILTRAR BOLETINS POR BUSCA
-  // ========================================
-  const boletinsFiltrados = boletins.filter(b =>
-    b.aluno.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    b.aluno.email?.toLowerCase().includes(busca.toLowerCase())
-  );
+      const boletim = map.get(key)!;
 
-  // ========================================
-  // 5️⃣ FUNÇÕES AUXILIARES
-  // ========================================
-  const getSituacaoColor = (situacao: string) => {
-    switch (situacao) {
-      case 'aprovado': return 'bg-green-100 text-green-700';
-      case 'recuperacao': return 'bg-yellow-100 text-yellow-700';
-      case 'reprovado': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
+      for (const n of notasAluno) {
+        boletim.notas.push({
+          disciplinaId: n.disciplina_id,
+          disciplinaNome: n.disciplina?.nome || 'Disciplina',
+          av1: n.av1,
+          av2: n.av2,
+          rec: n.recuperacao,
+        });
+      }
     }
+
+    const lista = Array.from(map.values());
+    lista.sort((a, b) =>
+      a.nomeAluno.localeCompare(b.nomeAluno, 'pt-BR', { sensitivity: 'base' }),
+    );
+    return lista;
+  }, [alunos, notas, filtroBimestre]);
+
+  // ===================== CÁLCULOS DE NOTA =====================
+  const calcularMedia = (nota: NotaDisciplinaView) => {
+    const av1 = nota.av1 ?? 0;
+    const av2 = nota.av2 ?? 0;
+
+    if (nota.rec !== null && nota.rec !== undefined) {
+      const menor = Math.min(av1, av2);
+      const maior = Math.max(av1, av2);
+      return (maior + nota.rec) / 2;
+    }
+
+    if (nota.av1 === null && nota.av2 === null) return 0;
+    return (av1 + av2) / 2;
   };
+
+  const calcularSituacao = (
+    nota: NotaDisciplinaView,
+  ): 'Aprovado' | 'Recuperação' => {
+    const media = calcularMedia(nota);
+    return media >= 7 ? 'Aprovado' : 'Recuperação';
+  };
+
+  const getSituacaoColor = (situacao: 'Aprovado' | 'Recuperação') =>
+    situacao === 'Aprovado'
+      ? 'bg-green-100 text-green-700 border-green-300'
+      : 'bg-yellow-100 text-yellow-700 border-yellow-300';
 
   const getMediaColor = (media: number) => {
     if (media >= 7) return 'text-green-600';
@@ -253,94 +349,166 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     return 'text-red-600';
   };
 
-  function exportarPDF() {
-    toast.info('Função de exportar PDF será implementada em breve');
+  // ===================== EXPAND / COLLAPSE =====================
+  const toggleAluno = (id: string) => {
+    setAlunosExpandidos(prev => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  };
+
+  // ===================== EDIÇÃO DE NOTAS =====================
+  function abrirEdicaoNota(boletim: BoletimAlunoView, nota: NotaDisciplinaView) {
+    const registro = notas.find(
+      n =>
+        n.user_id === boletim.alunoId &&
+        n.disciplina_id === nota.disciplinaId &&
+        n.bimestre === boletim.bimestreNumero,
+    );
+
+    setNotaEmEdicao({
+      alunoId: boletim.alunoId,
+      disciplinaId: nota.disciplinaId,
+      disciplinaNome: nota.disciplinaNome,
+      bimestre: boletim.bimestreNumero,
+      nomeAluno: boletim.nomeAluno,
+      av1: nota.av1,
+      av2: nota.av2,
+      rec: nota.rec,
+      notaRegistroId: registro?.id ?? null,
+    });
   }
 
-  function visualizarBoletim(alunoId: string) {
-    toast.info('Visualização detalhada será implementada em breve');
+  function handleChangeNota(
+    campo: 'av1' | 'av2' | 'rec',
+    valor: string,
+  ) {
+    if (!notaEmEdicao) return;
+    const num = valor === '' ? null : Number(valor);
+    if (num !== null && (Number.isNaN(num) || num < 0 || num > 10)) return;
+
+    setNotaEmEdicao(prev =>
+      prev
+        ? {
+            ...prev,
+            [campo]: num,
+          }
+        : prev,
+    );
   }
 
-  // ========================================
-  // 6️⃣ RENDERIZAÇÃO
-  // ========================================
+  function cancelarEdicao() {
+    setNotaEmEdicao(null);
+  }
+
+  async function salvarNota() {
+    if (!notaEmEdicao) return;
+    setSalvandoNota(true);
+
+    try {
+      const {
+        alunoId,
+        disciplinaId,
+        bimestre,
+        av1,
+        av2,
+        rec,
+        notaRegistroId,
+      } = notaEmEdicao;
+
+      const payload: any = {
+        user_id: alunoId,
+        disciplina_id: disciplinaId,
+        bimestre,
+        av1,
+        av2,
+        recuperacao: rec,
+      };
+
+      let resp;
+      if (notaRegistroId) {
+        resp = await supabase
+          .from('notas')
+          .update(payload)
+          .eq('id', notaRegistroId)
+          .select();
+      } else {
+        resp = await supabase.from('notas').insert(payload).select();
+      }
+
+      if (resp.error) throw resp.error;
+
+      const nova = resp.data?.[0] as any;
+
+      // atualizar notas no estado
+      setNotas(prev => {
+        const semAntiga = prev.filter(
+          n =>
+            !(
+              n.user_id === alunoId &&
+              n.disciplina_id === disciplinaId &&
+              n.bimestre === bimestre
+            ),
+        );
+
+        const novaNormalizada: Nota = {
+          id: nova.id,
+          user_id: nova.user_id,
+          disciplina_id: nova.disciplina_id,
+          bimestre: nova.bimestre,
+          av1: nova.av1,
+          av2: nova.av2,
+          recuperacao: nova.recuperacao,
+          media: nova.media,
+          media_final: nova.media_final,
+          frequencia: nova.frequencia,
+          faltas: nova.faltas,
+          status_final: nova.status_final,
+          disciplina: null, // não vem no retorno; será reconstruído em próximas cargas
+        };
+
+        return [...semAntiga, novaNormalizada];
+      });
+
+      toast.success('Nota salva com sucesso');
+      setNotaEmEdicao(null);
+    } catch (err: any) {
+      console.error('Erro ao salvar nota:', err);
+      toast.error('Erro ao salvar nota');
+    } finally {
+      setSalvandoNota(false);
+    }
+  }
+
+  // ===================== RENDER =====================
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* HEADER */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onVoltar} className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onVoltar}
+            className="flex items-center gap-2"
+          >
             <ArrowLeft className="w-4 h-4" />
             Voltar
           </Button>
           <div>
             <h1 className="font-semibold text-gray-900">Boletins Gerais</h1>
-            <p className="text-sm text-gray-600">Visualizar notas de todos os alunos por série, turma, disciplina e bimestre</p>
+            <p className="text-sm text-gray-600">
+              Visualizar e editar boletins dos alunos por série e bimestre
+            </p>
           </div>
         </div>
       </div>
 
+      {/* CONTEÚDO */}
       <div className="p-6">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* ESTATÍSTICAS */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total de Alunos</p>
-                    <p className="text-2xl font-bold text-gray-900">{alunos.length}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Média Geral</p>
-                    <p className="text-2xl font-bold text-gray-900">{mediaGeral.toFixed(1)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Aprovados</p>
-                    <p className="text-2xl font-bold text-green-600">{aprovados}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <AlertCircle className="w-5 h-5 text-yellow-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Recuperação</p>
-                    <p className="text-2xl font-bold text-yellow-600">{recuperacao}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* FILTROS */}
           <Card>
             <CardHeader>
@@ -350,61 +518,54 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Busca */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Buscar Aluno</label>
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                     <Input
                       value={busca}
-                      onChange={(e) => setBusca(e.target.value)}
+                      onChange={e => setBusca(e.target.value)}
                       placeholder="Nome ou email..."
-                      className="pl-10"
+                      className="pl-9"
                     />
                   </div>
                 </div>
 
+                {/* Série */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Série</label>
-                  <Select value={filtroSerie} onValueChange={setFiltroSerie}>
+                  <Select
+                    value={filtroSerie}
+                    onValueChange={setFiltroSerie}
+                  >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Todas as séries" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="todas">Todas</SelectItem>
                       {series.map(serie => (
                         <SelectItem key={serie} value={serie}>
-                          {serie === 'todas' ? 'Todas as Séries' : serie}
+                          {serie}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Disciplina</label>
-                  <Select value={filtroDisciplina} onValueChange={setFiltroDisciplina}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas as Disciplinas</SelectItem>
-                      {disciplinas.map(disc => (
-                        <SelectItem key={disc.id} value={disc.id}>
-                          {disc.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
+                {/* Bimestre */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Bimestre</label>
-                  <Select value={filtroBimestre} onValueChange={setFiltroBimestre}>
+                  <Select
+                    value={filtroBimestre}
+                    onValueChange={setFiltroBimestre}
+                  >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Todos os bimestres" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todos os Bimestres</SelectItem>
+                      <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="1">1º Bimestre</SelectItem>
                       <SelectItem value="2">2º Bimestre</SelectItem>
                       <SelectItem value="3">3º Bimestre</SelectItem>
@@ -412,147 +573,438 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                <div className="flex items-end">
-                  <Button onClick={exportarPDF} className="w-full bg-blue-600 hover:bg-blue-700">
-                    <Download className="w-4 h-4 mr-2" />
-                    Exportar PDF
-                  </Button>
-                </div>
+              <div className="mt-4 flex justify-end">
+                <Button
+                  onClick={aplicarFiltros}
+                  disabled={carregando}
+                  className="bg-black text-white px-6"
+                >
+                  {carregando ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Aplicando...
+                    </>
+                  ) : (
+                    'Aplicar filtros'
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* LOADING */}
-          {carregando && (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mr-3" />
-              <span className="text-gray-600">Carregando boletins...</span>
-            </div>
-          )}
-
-          {/* ERRO */}
-          {erro && !carregando && (
+          {/* ERRO GLOBAL */}
+          {erro && (
             <Card className="border-red-200 bg-red-50">
-              <CardContent className="p-6 flex items-start gap-3">
-                <AlertCircle className="w-6 h-6 text-red-600 mt-0.5" />
+              <CardContent className="flex items-center gap-3 p-4">
+                <AlertCircle className="w-5 h-5 text-red-600" />
                 <div>
-                  <h3 className="font-semibold text-red-900">Erro ao carregar boletins</h3>
-                  <p className="text-sm text-red-700 mt-1">{erro}</p>
-                  <Button variant="outline" size="sm" onClick={carregarDados} className="mt-3">
-                    Tentar novamente
-                  </Button>
+                  <p className="text-sm font-semibold text-red-800">
+                    Erro ao carregar boletins
+                  </p>
+                  <p className="text-sm text-red-700">{erro}</p>
                 </div>
               </CardContent>
             </Card>
           )}
 
           {/* LISTA DE BOLETINS */}
-          {!carregando && !erro && (
-            <div className="space-y-4">
-              {boletinsFiltrados.length === 0 ? (
+          {!carregando && filtrosAplicados && alunos.length === 0 && (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Search className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                <h3 className="font-medium text-gray-900 mb-2">
+                  Nenhum aluno encontrado
+                </h3>
+                <p className="text-gray-600">
+                  Não foram encontrados alunos com os filtros selecionados.
+                  Ajuste os filtros e tente novamente.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {!carregando && filtrosAplicados && alunos.length > 0 && (
+            <>
+              {boletins.length === 0 ? (
                 <Card>
                   <CardContent className="p-12 text-center">
-                    <Search className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="font-medium text-gray-900 mb-2">Nenhum boletim encontrado</h3>
+                    <User className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="font-medium text-gray-900 mb-2">
+                      Alunos encontrados, mas sem notas lançadas
+                    </h3>
                     <p className="text-gray-600">
-                      Ajuste os filtros ou aguarde o lançamento de notas pelos professores.
+                      Há alunos na série/bimestre selecionados, porém ainda não
+                      existem notas lançadas pelos professores.
                     </p>
                   </CardContent>
                 </Card>
               ) : (
-                boletinsFiltrados.map((boletim) => (
-                  <Card key={boletim.aluno.id}>
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <h3 className="font-medium text-gray-900 mb-1">{boletim.aluno.nome}</h3>
-                          <p className="text-sm text-gray-600">
-                            {boletim.aluno.serie} • {boletim.aluno.email}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="text-sm text-gray-600">Média Geral</p>
-                            <p className={`text-2xl font-bold ${getMediaColor(boletim.mediaGeral)}`}>
-                              {boletim.mediaGeral.toFixed(1)}
-                            </p>
-                          </div>
-                          <Badge className={getSituacaoColor(boletim.situacao)}>
-                            {boletim.situacao}
-                          </Badge>
-                        </div>
-                      </div>
+                <div className="space-y-4">
+                  {boletins.map(boletim => {
+                    const expandido = alunosExpandidos.has(boletim.id);
 
-                      {/* Disciplinas */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                        {boletim.notas.map((nota) => (
-                          <div key={nota.id} className="border rounded-lg p-3">
-                            <h4 className="font-medium text-sm mb-2">
-                              {nota.disciplina?.nome || 'Disciplina'}
-                            </h4>
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-xs text-gray-600">
-                                <span>Bimestre:</span>
-                                <span className="font-medium">{nota.bimestre}º</span>
+                    return (
+                      <Card
+                        key={boletim.id}
+                        className="overflow-hidden border border-gray-200"
+                      >
+                        <CardHeader
+                          className="bg-white cursor-pointer"
+                          onClick={() => toggleAluno(boletim.id)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-green-500 flex items-center justify-center text-white font-semibold">
+                                {boletim.nomeAluno
+                                  .split(' ')
+                                  .map(p => p[0])
+                                  .join('')
+                                  .slice(0, 2)
+                                  .toUpperCase()}
                               </div>
-                              {nota.av1 !== null && (
-                                <div className="flex justify-between text-xs text-gray-600">
-                                  <span>AV1:</span>
-                                  <span className="font-medium">{nota.av1.toFixed(2)}</span>
-                                </div>
-                              )}
-                              {nota.av2 !== null && (
-                                <div className="flex justify-between text-xs text-gray-600">
-                                  <span>AV2:</span>
-                                  <span className="font-medium">{nota.av2.toFixed(2)}</span>
-                                </div>
-                              )}
-                              {nota.recuperacao !== null && (
-                                <div className="flex justify-between text-xs text-orange-600">
-                                  <span>Recuperação:</span>
-                                  <span className="font-medium">{nota.recuperacao.toFixed(2)}</span>
-                                </div>
-                              )}
-                              <div className="flex justify-between items-center pt-2 border-t">
-                                <span className="text-sm font-medium">Média:</span>
-                                <span className={`text-sm font-bold ${getMediaColor(nota.media_final ?? nota.media ?? 0)}`}>
-                                  {(nota.media_final ?? nota.media ?? 0).toFixed(1)}
+                              <div>
+                                <CardTitle className="text-base">
+                                  {boletim.nomeAluno}
+                                </CardTitle>
+                                <p className="text-xs text-gray-500">
+                                  {boletim.email || 'Sem e-mail'} •{' '}
+                                  {boletim.serie || 'Série não informada'}{' '}
+                                  {boletim.bimestreNumero > 0 &&
+                                    `• ${boletim.bimestreLabel}`}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1">
+                                <User className="w-4 h-4 text-gray-400" />
+                                <span className="text-xs text-gray-500">
+                                  {boletim.notas.length} disciplinas com nota
                                 </span>
                               </div>
-                              {nota.faltas !== null && (
-                                <div className="text-xs text-gray-500">
-                                  Faltas: {nota.faltas}
-                                </div>
-                              )}
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="rounded-full"
+                              >
+                                {expandido ? (
+                                  <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4" />
+                                )}
+                              </Button>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        </CardHeader>
 
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm text-gray-600">
-                          Total de Faltas: <span className="font-medium">{boletim.totalFaltas}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" onClick={() => visualizarBoletim(boletim.aluno.id)}>
-                            <Eye className="w-4 h-4 mr-1" />
-                            Visualizar
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={exportarPDF}>
-                            <Download className="w-4 h-4 mr-1" />
-                            Baixar PDF
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                        <CardContent className="bg-gray-50">
+                          {expandido && (
+                            <div className="pt-4">
+                              {boletim.notas.length === 0 ? (
+                                <div className="py-8 text-center text-sm text-gray-500">
+                                  Nenhuma nota lançada para este aluno no{' '}
+                                  {boletim.bimestreNumero > 0
+                                    ? boletim.bimestreLabel
+                                    : 'período selecionado'}
+                                  .
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="bg-white">
+                                          <th className="py-2 px-4 text-left text-xs font-semibold text-gray-600">
+                                            Disciplina
+                                          </th>
+                                          <th className="py-2 px-4 text-center text-xs font-semibold text-gray-600">
+                                            AV1
+                                          </th>
+                                          <th className="py-2 px-4 text-center text-xs font-semibold text-gray-600">
+                                            AV2
+                                          </th>
+                                          <th className="py-2 px-4 text-center text-xs font-semibold text-gray-600">
+                                            REC
+                                          </th>
+                                          <th className="py-2 px-4 text-center text-xs font-semibold text-gray-600">
+                                            Média
+                                          </th>
+                                          <th className="py-2 px-4 text-center text-xs font-semibold text-gray-600">
+                                            Situação
+                                          </th>
+                                          <th className="py-2 px-4 text-center text-xs font-semibold text-gray-600">
+                                            Ações
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {boletim.notas.map(nota => {
+                                          const media = calcularMedia(nota);
+                                          const situacao =
+                                            calcularSituacao(nota);
+
+                                          return (
+                                            <tr
+                                              key={nota.disciplinaId}
+                                              className="border-t"
+                                            >
+                                              <td className="py-3 px-4 text-sm text-gray-900">
+                                                {nota.disciplinaNome}
+                                              </td>
+                                              <td className="py-3 px-4 text-center text-sm">
+                                                {nota.av1 !== null
+                                                  ? nota.av1.toFixed(1)
+                                                  : '-'}
+                                              </td>
+                                              <td className="py-3 px-4 text-center text-sm">
+                                                {nota.av2 !== null
+                                                  ? nota.av2.toFixed(1)
+                                                  : '-'}
+                                              </td>
+                                              <td className="py-3 px-4 text-center text-sm">
+                                                {nota.rec !== null ? (
+                                                  <span className="text-blue-600 font-semibold">
+                                                    {nota.rec.toFixed(1)}
+                                                  </span>
+                                                ) : (
+                                                  '-'
+                                                )}
+                                              </td>
+                                              <td className="py-3 px-4 text-center text-sm font-semibold">
+                                                <span
+                                                  className={getMediaColor(
+                                                    media,
+                                                  )}
+                                                >
+                                                  {media.toFixed(1)}
+                                                </span>
+                                              </td>
+                                              <td className="py-3 px-4 text-center">
+                                                <Badge
+                                                  className={getSituacaoColor(
+                                                    situacao,
+                                                  )}
+                                                >
+                                                  {situacao}
+                                                </Badge>
+                                              </td>
+                                              <td className="py-3 px-4 text-center">
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={e => {
+                                                    e.stopPropagation();
+                                                    abrirEdicaoNota(
+                                                      boletim,
+                                                      nota,
+                                                    );
+                                                  }}
+                                                  className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                                                >
+                                                  <Edit className="w-3 h-3 mr-1" />
+                                                  Editar
+                                                </Button>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+
+                                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                    <p className="text-sm text-blue-900">
+                                      <strong>Legenda:</strong> A média é
+                                      calculada por (AV1 + AV2) / 2. Se houver
+                                      REC (Recuperação), a nota substitui a
+                                      menor entre AV1 e AV2. Média ≥ 7,0 =
+                                      Aprovado | Média menor 7,0 = Recuperação.
+                                    </p>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               )}
+            </>
+          )}
+
+          {carregando && (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" />
+              <span>Carregando boletins...</span>
             </div>
           )}
         </div>
       </div>
+
+      {/* DIALOG DE EDIÇÃO */}
+      <Dialog open={!!notaEmEdicao} onOpenChange={cancelarEdicao}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="w-5 h-5 text-orange-600" />
+              Editar Nota
+            </DialogTitle>
+            <DialogDescription>
+              Edite as notas do aluno. As notas devem estar entre 0 e 10.
+            </DialogDescription>
+          </DialogHeader>
+
+          {notaEmEdicao && (
+            <div className="space-y-4 py-4">
+              <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                <p className="text-sm font-semibold text-orange-900">
+                  {notaEmEdicao.nomeAluno}
+                </p>
+                <p className="text-sm text-orange-700">
+                  {notaEmEdicao.disciplinaNome} • {notaEmEdicao.bimestre}º
+                  Bimestre
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="av1">AV1</Label>
+                  <Input
+                    id="av1"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.1}
+                    value={
+                      notaEmEdicao.av1 !== null ? notaEmEdicao.av1 : ''
+                    }
+                    onChange={e => handleChangeNota('av1', e.target.value)}
+                    placeholder="0.0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="av2">AV2</Label>
+                  <Input
+                    id="av2"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.1}
+                    value={
+                      notaEmEdicao.av2 !== null ? notaEmEdicao.av2 : ''
+                    }
+                    onChange={e => handleChangeNota('av2', e.target.value)}
+                    placeholder="0.0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="rec">REC</Label>
+                  <Input
+                    id="rec"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.1}
+                    value={
+                      notaEmEdicao.rec !== null ? notaEmEdicao.rec : ''
+                    }
+                    onChange={e => handleChangeNota('rec', e.target.value)}
+                    placeholder="0.0"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-green-900">
+                    Média Calculada:
+                  </span>
+                  <span
+                    className={`text-lg font-bold ${getMediaColor(
+                      calcularMedia({
+                        disciplinaId: notaEmEdicao.disciplinaId,
+                        disciplinaNome: notaEmEdicao.disciplinaNome,
+                        av1: notaEmEdicao.av1,
+                        av2: notaEmEdicao.av2,
+                        rec: notaEmEdicao.rec,
+                      }),
+                    )}`}
+                  >
+                    {calcularMedia({
+                      disciplinaId: notaEmEdicao.disciplinaId,
+                      disciplinaNome: notaEmEdicao.disciplinaNome,
+                      av1: notaEmEdicao.av1,
+                      av2: notaEmEdicao.av2,
+                      rec: notaEmEdicao.rec,
+                    }).toFixed(1)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm font-medium text-green-900">
+                    Situação:
+                  </span>
+                  <Badge
+                    className={getSituacaoColor(
+                      calcularSituacao({
+                        disciplinaId: notaEmEdicao.disciplinaId,
+                        disciplinaNome: notaEmEdicao.disciplinaNome,
+                        av1: notaEmEdicao.av1,
+                        av2: notaEmEdicao.av2,
+                        rec: notaEmEdicao.rec,
+                      }),
+                    )}
+                  >
+                    {calcularSituacao({
+                      disciplinaId: notaEmEdicao.disciplinaId,
+                      disciplinaNome: notaEmEdicao.disciplinaNome,
+                      av1: notaEmEdicao.av1,
+                      av2: notaEmEdicao.av2,
+                      rec: notaEmEdicao.rec,
+                    })}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                💡 Deixe o campo vazio para indicar nota não lançada. A
+                recuperação substitui a menor nota entre AV1 e AV2.
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={cancelarEdicao}
+              disabled={salvandoNota}
+            >
+              <X className="w-4 h-4 mr-2" />
+              Cancelar
+            </Button>
+            <Button
+              onClick={salvarNota}
+              disabled={salvandoNota}
+              className="bg-gradient-to-r from-orange-500 to-green-600 hover:from-orange-600 hover:to-green-700"
+            >
+              {salvandoNota ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Salvar Alterações
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -365,18 +365,20 @@ export function DashboardProfessor() {
 
   if (viewAtual === "boletim") {
     return renderLayout(
-      // Conteúdo do BoletimProfessor ou seleção de turma
-      <div className="p-6 h-full"> {/* Adicionado p-6 aqui para o conteúdo interno */}
+      <div className="p-6 h-full">
         <Button
           variant="ghost"
           onClick={() => {
             setViewAtual("dashboard");
             setTurmaSelecionada(null);
+            setDisciplinaSelecionada(null);
           }}
           className="mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Painel
         </Button>
+
+        {/* 1) Selecionar TURMA */}
         {!turmaSelecionada ? (
           <Card className="max-w-md mx-auto mt-10">
             <CardContent className="p-6 space-y-4">
@@ -388,9 +390,11 @@ export function DashboardProfessor() {
                 </p>
               </div>
               <Select
-                onValueChange={(val) =>
-                  setTurmaSelecionada(turmas.find((t) => t.id === val) || null)
-                }
+                onValueChange={(val) => {
+                  const turma = turmas.find((t) => t.id === val) || null;
+                  setTurmaSelecionada(turma);
+                  setDisciplinaSelecionada(null); // garante reset da disciplina
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a turma..." />
@@ -405,19 +409,52 @@ export function DashboardProfessor() {
               </Select>
             </CardContent>
           </Card>
-        ) : (
+        ) : null}
+
+        {/* 2) Selecionar DISCIPLINA (igual Agenda) */}
+        {turmaSelecionada && !disciplinaSelecionada && (
+          <Card className="max-w-md mx-auto mt-10">
+            <CardContent className="p-6 space-y-4">
+              <div className="text-center">
+                <BookOpen className="w-12 h-12 mx-auto text-blue-600 mb-2" />
+                <h2 className="text-xl font-bold">Selecione a Disciplina</h2>
+                <p className="text-gray-500 text-sm">
+                  Para qual disciplina você deseja lançar as notas?
+                </p>
+              </div>
+              <Select
+                onValueChange={(val) =>
+                  setDisciplinaSelecionada(
+                    turmaSelecionada.disciplinas.find((d: any) => d.id === val) ||
+                      null
+                  )
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a disciplina..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {turmaSelecionada.disciplinas.map((d: any) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 3) Boletim quando já há TURMA + DISCIPLINA */}
+        {turmaSelecionada && disciplinaSelecionada && (
           <BoletimProfessor
             disciplina={{
-              id: turmaSelecionada.disciplinas[0]?.id,
-              nome: turmaSelecionada.disciplinas[0]?.nome,
+              id: disciplinaSelecionada.id,
+              nome: disciplinaSelecionada.nome,
             }}
             serie={{
               id: turmaSelecionada.serieId,
               nome: turmaSelecionada.nomeSerie,
-            }}
-            onVoltar={() => {
-              setViewAtual("dashboard");
-              setTurmaSelecionada(null);
             }}
           />
         )}

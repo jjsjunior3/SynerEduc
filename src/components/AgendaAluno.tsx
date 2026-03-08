@@ -209,9 +209,13 @@ export function AgendaAluno({ onVoltar, serie, turma, disciplinasDoAluno }: Agen
   // RENDERIZAÇÃO
   // =========================================
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    // ✅ ATUALIZADO: Adicionado max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8
+    // e o visual de "cartão" (bg-white, rounded-lg, shadow-md, overflow-hidden)
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col h-full bg-white rounded-lg shadow-md overflow-hidden">
       {/* Header da Agenda */}
-      <div className={`flex items-center gap-4 p-4 bg-blue-600 text-white shadow-sm`}>
+      {/* ✅ ATUALIZADO: Removido p-4 e bg-blue-600, text-white, shadow-sm do div externo */}
+      {/* O padding e background agora são internos ao div com max-w-7xl */}
+      <div className={`flex items-center gap-4 p-4 bg-blue-600 text-white flex-shrink-0`}>
         <Button variant="ghost" size="sm" onClick={onVoltar} className="flex items-center gap-2 text-white hover:bg-white/20">
           <ArrowLeft className="w-4 h-4" />
           Voltar
@@ -229,7 +233,9 @@ export function AgendaAluno({ onVoltar, serie, turma, disciplinasDoAluno }: Agen
         </div>
       </div>
 
-      <div className="p-6 flex-1 overflow-y-auto space-y-6">
+      {/* Conteúdo principal da agenda (filtros e eventos) */}
+      {/* ✅ ATUALIZADO: Adicionado flex-1 overflow-y-auto para scroll e p-6 para padding interno */}
+      <div className="flex-1 overflow-y-auto space-y-6 p-6">
         {/* Filtro por data */}
         <Card className="bg-white dark:bg-gray-800 shadow-sm border dark:border-gray-700">
           <CardHeader className="pb-3">

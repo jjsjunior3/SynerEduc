@@ -1,4 +1,4 @@
-// GerenciadorUsuariosFixed.tsx - Versão FINAL E CORRIGIDA
+// GerenciadorUsuariosFixed.tsx - Versão AJUSTADA PARA BUSCAR SÉRIES DO SUPABASE
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -39,7 +39,8 @@ const tiposUsuario = [
   { value: 'professor_conteudista', label: 'Professor Conteudista' }
 ];
 
-const seriesEscolaresHardcoded = [
+// Mantido apenas como fallback em caso de erro ao buscar do Supabase
+const seriesEscolhidasHardcoded = [
   '5º ano (Fundamental)',
   '6º ano (Fundamental)',
   '7º ano (Fundamental)',
@@ -57,11 +58,12 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [usuarioEditando, setUsuarioEditando] = useState<Usuario | null>(null);
   const [mostrarDialogEditarUsuario, setMostrarDialogEditarUsuario] = useState(false);
-  const [mostrarSenhas, setMostrarSenhas] = useState<{[key: string]: boolean}>({});
+  const [mostrarSenhas, setMostrarSenhas] = useState<{ [key: string]: boolean }>({});
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   const [disciplinasDisponiveis, setDisciplinasDisponiveis] = useState<string[]>([]);
-  const [seriesDisponiveis, setSeriesDisponiveis] = useState<string[]>(seriesEscolaresHardcoded);
+  // AGORA séries vêm do Supabase; mantemos o array hardcoded apenas como fallback
+  const [seriesDisponiveis, setSeriesDisponiveis] = useState<string[]>(seriesEscolhidasHardcoded);
 
   const [dadosEdicao, setDadosEdicao] = useState({
     nome: '',
@@ -123,7 +125,8 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
     } catch (error: any) {
       console.error('[GERENCIADOR] Erro ao carregar séries do Supabase:', error.message);
       toast.error('Erro ao carregar séries.');
-      setSeriesDisponiveis(seriesEscolaresHardcoded);
+      // fallback para não quebrar a tela
+      setSeriesDisponiveis(seriesEscolhidasHardcoded);
     }
   };
 
@@ -395,7 +398,6 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>
-            {/* O botão "Novo Usuário" e seu Dialog foram removidos daqui */}
           </div>
         </div>
 
@@ -495,7 +497,6 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                               <div className="space-y-1">
                                 {usuario.disciplinas && usuario.disciplinas.length > 0 ? (
                                   <div className="flex flex-wrap gap-1">
-                                    {/* CORREÇÃO APLICADA: key={`${disc}-${index}`} para evitar erro de duplicidade */}
                                     {usuario.disciplinas.slice(0, 2).map((disc, index) => (
                                       <Badge key={`${disc}-${index}`} variant="secondary" className="text-xs">
                                         {disc}
@@ -549,7 +550,6 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                         </TableRow>
                       ))}
                     </TableBody>
-
                   </Table>
                   {usuariosFiltrados.length === 0 && (
                     <div className="text-center py-8 text-gray-500">
@@ -609,15 +609,20 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* EDIÇÃO DE SÉRIE DO ALUNO – AGORA USANDO séries DO SUPABASE */}
               {dadosEdicao.tipo === 'aluno' && (
                 <div>
                   <Label htmlFor="serie-edit">Série</Label>
-                  <Select value={dadosEdicao.serie} onValueChange={(value) => setDadosEdicao(prev => ({ ...prev, serie: value }))}>
+                  <Select
+                    value={dadosEdicao.serie}
+                    onValueChange={(value) => setDadosEdicao(prev => ({ ...prev, serie: value }))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione a série" />
                     </SelectTrigger>
                     <SelectContent>
-                      {seriesEscolaresHardcoded.map((serie) => (
+                      {seriesDisponiveis.map((serie) => (
                         <SelectItem key={serie} value={serie}>
                           {serie}
                         </SelectItem>
@@ -626,6 +631,7 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                   </Select>
                 </div>
               )}
+
               {(dadosEdicao.tipo === 'professor' || dadosEdicao.tipo === 'professor_conteudista') && (
                 <>
                   <div>

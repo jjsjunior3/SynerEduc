@@ -139,14 +139,14 @@ export default function LoginCompleto({
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <Label htmlFor="loginField" className="text-gray-700 font-medium">
-                Email
+                Usuário
               </Label>
               <Input
                 id="loginField"
                 type="email"
                 value={loginField}
                 onChange={(e) => setLoginField(e.target.value)}
-                placeholder="seu@email.com"
+                placeholder="seu@conexaoead"
                 className="mt-1"
                 required
                 disabled={loading}

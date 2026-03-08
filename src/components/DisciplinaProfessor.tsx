@@ -327,26 +327,42 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
 
             {/* Visualizador de PDF */}
             <div className="lg:col-span-3">
-              <PDFViewerProfessor // ✅ Usando PDFViewerProfessor
-                bimestre={materialSelecionado} // ✅ Passando materialSelecionado como bimestre
-                onClose={() => setMaterialSelecionado(null)} // ✅ Ajustado onClose
-                sidebarAberta={true} // ✅ Mantido sidebar aberta
-                onToggleSidebar={() => {}} // ✅ Função vazia
+              <PDFViewerProfessor
+                bimestre={
+                  materialSelecionado
+                    ? {
+                        numero: materialSelecionado.bimestre,
+                        nome: materialSelecionado.nome,
+                        descricao: materialSelecionado.descricao ?? "",
+                        pdfUrl: materialSelecionado.url,
+                        id: materialSelecionado.id,
+                        autor_nome: materialSelecionado.autor_nome,
+                      }
+                    : null
+                }
+                onClose={() => setMaterialSelecionado(null)}
+                sidebarAberta={true}
+                onToggleSidebar={() => {}}
                 hasProximo={materialSelecionado ? materialSelecionado.bimestre < 4 : false}
                 hasAnterior={materialSelecionado ? materialSelecionado.bimestre > 1 : false}
                 onProximo={() => {
                   if (materialSelecionado && materialSelecionado.bimestre < 4) {
-                    const prox = materiais.find((m) => m.bimestre === materialSelecionado.bimestre + 1);
+                    const prox = materiais.find(
+                      (m) => m.bimestre === materialSelecionado.bimestre + 1
+                    );
                     if (prox) setMaterialSelecionado(prox);
                   }
                 }}
                 onAnterior={() => {
                   if (materialSelecionado && materialSelecionado.bimestre > 1) {
-                    const ant = materiais.find((m) => m.bimestre === materialSelecionado.bimestre - 1);
+                    const ant = materiais.find(
+                      (m) => m.bimestre === materialSelecionado.bimestre - 1
+                    );
                     if (ant) setMaterialSelecionado(ant);
                   }
                 }}
               />
+
             </div>
           </div>
         )}

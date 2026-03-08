@@ -11,18 +11,26 @@ import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { ArrowLeft, Printer, Download, Trophy, TrendingUp, AlertCircle, Loader2, AlertTriangle, Info } from 'lucide-react';
+import {
+  ArrowLeft,
+  Printer,
+  Download,
+  Trophy,
+  TrendingUp,
+  AlertCircle,
+  Loader2,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
 
-// Não é necessário 'import logoEscola from ...' se o arquivo está em 'public/'.
-
-// Interfaces adaptadas para os dados do Supabase e o layout do Figma
+// Interfaces dos dados
 interface UsuarioProps {
   id: string;
   nome: string;
   serie?: string; // Nome da série (ex: "8º ano")
 }
 
-interface DisciplinaData { // ✅ NOVO: Interface para as disciplinas do aluno
+interface DisciplinaData {
   id: string;
   nome: string;
   cor?: string;
@@ -34,13 +42,13 @@ interface TurmaProps {
   serieId: string;
   serieNome: string;
   totalAlunos: number;
-  disciplinas: DisciplinaData[]; // ✅ ATUALIZADO: Tipo correto para disciplinas
+  disciplinas: DisciplinaData[]; // Lista de disciplinas da turma
 }
 
 interface BoletimProps {
   onVoltar: () => void;
   usuario: UsuarioProps | null;
-  turma: TurmaProps | null; // Usado para obter serieNome e a lista de disciplinas
+  turma: TurmaProps | null; // Necessário para obter série e disciplinas
 }
 
 interface NotaBimestre {
@@ -51,8 +59,8 @@ interface NotaBimestre {
 }
 
 interface NotaDisciplina {
-  disciplina_id: string; // ID da disciplina
-  disciplina_nome: string; // Nome da disciplina
+  disciplina_id: string;
+  disciplina_nome: string;
   bimestre1: NotaBimestre;
   bimestre2: NotaBimestre;
   bimestre3: NotaBimestre;
@@ -69,9 +77,13 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
   const [erro, setErro] = useState<string | null>(null);
   const [vaiImprimir, setVaiImprimir] = useState(false);
 
+  // -------------------------------------------------
+  // Busca de notas
+  // -------------------------------------------------
   const buscarBoletim = useCallback(async () => {
-    if (!usuario?.id || !turma?.serieNome || !turma?.disciplinas) { // ✅ ATUALIZADO: Verifica se tem disciplinas da turma
-      setErro("Informações do aluno, série ou disciplinas não disponíveis.");
+    // Verifica se temos as informações necessárias
+    if (!usuario?.id || !turma?.serieNome || !turma?.disciplinas) {
+      setErro('Informações do aluno, série ou disciplinas não disponíveis.');
       setLoading(false);
       return;
     }
@@ -80,33 +92,31 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
     setErro(null);
 
     try {
-      // 1. Buscar todas as notas existentes do aluno
+      // 1️⃣ Busca todas as notas do aluno
       const { data: notasExistentes, error: notasError } = await supabase
-        .from("notas")
+        .from('notas')
         .select(
           `
-          disciplina_id,
-          bimestre,
-          av1,
-          av2,
-          recuperacao,
-          media,
-          media_final,
-          status_final,
-          disciplinas(nome)
-        `
+            disciplina_id,
+            bimestre,
+            av1,
+            av2,
+            recuperacao,
+            media,
+            media_final,
+            status_final,
+            disciplinas(nome)
+          `
         )
-        .eq("user_id", usuario.id)
-        .order("nome", { foreignTable: "disciplinas", ascending: true })
-        .order("bimestre", { ascending: true });
+        .eq('user_id', usuario.id)
+        .order('nome', { foreignTable: 'disciplinas', ascending: true })
+        .order('bimestre', { ascending: true });
 
       if (notasError) throw notasError;
 
-      // 2. Inicializar o objeto de notas para todas as disciplinas do aluno
-      const todasDisciplinasDoAluno = turma.disciplinas;
+      // 2️⃣ Cria estrutura vazia para **todas** as disciplinas da turma
       const notasPorDisciplina: Record<string, NotaDisciplina> = {};
-
-      todasDisciplinasDoAluno.forEach(disc => {
+      turma.disciplinas.forEach(disc => {
         notasPorDisciplina[disc.id] = {
           disciplina_id: disc.id,
           disciplina_nome: disc.nome,
@@ -121,12 +131,13 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
         };
       });
 
-      // 3. Preencher com as notas existentes
+      // 3️⃣ Preenche a estrutura com as notas que realmente existem
       (notasExistentes || []).forEach((nota: any) => {
         const disciplinaId = nota.disciplina_id;
         const bimestreNum = nota.bimestre;
 
-        // Garante que a disciplina existe no mapa (caso haja notas para uma disciplina não listada em turma.disciplinas, o que seria um erro de dados)
+        // Caso a nota pertença a uma disciplina que não está na lista da turma,
+        // criamos dinamicamente (proteção contra dados inconsistentes)
         if (!notasPorDisciplina[disciplinaId]) {
           notasPorDisciplina[disciplinaId] = {
             disciplina_id: disciplinaId,
@@ -149,26 +160,38 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
           med: nota.media,
         };
 
+        // Distribui a nota no bimestre correto
         switch (bimestreNum) {
-          case 1: notasPorDisciplina[disciplinaId].bimestre1 = notaBimestre; break;
-          case 2: notasPorDisciplina[disciplinaId].bimestre2 = notaBimestre; break;
-          case 3: notasPorDisciplina[disciplinaId].bimestre3 = notaBimestre; break;
-          case 4: notasPorDisciplina[disciplinaId].bimestre4 = notaBimestre; break;
-          default: break;
+          case 1:
+            notasPorDisciplina[disciplinaId].bimestre1 = notaBimestre;
+            break;
+          case 2:
+            notasPorDisciplina[disciplinaId].bimestre2 = notaBimestre;
+            break;
+          case 3:
+            notasPorDisciplina[disciplinaId].bimestre3 = notaBimestre;
+            break;
+          case 4:
+            notasPorDisciplina[disciplinaId].bimestre4 = notaBimestre;
+            break;
+          default:
+            break;
         }
 
-        // A média final e situação são da última nota registrada para a disciplina (geralmente 4º bimestre)
-        // Ou a média final da disciplina, se já calculada no DB
+        // Média final e situação podem já vir do DB
         if (nota.media_final !== null) {
           notasPorDisciplina[disciplinaId].mediaFinal = nota.media_final;
         }
         if (nota.status_final) {
-          notasPorDisciplina[disciplinaId].situacao = nota.status_final.charAt(0).toUpperCase() + nota.status_final.slice(1) as NotaDisciplina['situacao'];
+          notasPorDisciplina[disciplinaId].situacao =
+            (nota.status_final.charAt(0).toUpperCase() +
+              nota.status_final.slice(1)) as NotaDisciplina['situacao'];
         }
-        notasPorDisciplina[disciplinaId].recupFinal = null; // Assumindo que não há coluna para recuperação final por enquanto
+        // Por enquanto não há coluna de recuperação final
+        notasPorDisciplina[disciplinaId].recupFinal = null;
       });
 
-      // 4. Calcular ptsTotal e mediaFinal (se não vierem do DB) e determinar situação final
+      // 4️⃣ Calcula total de pontos, média final (se não vier do DB) e situação
       Object.values(notasPorDisciplina).forEach(nd => {
         let somaMedias = 0;
         let bimestresComMedia = 0;
@@ -182,82 +205,86 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
 
         nd.ptsTotal = somaMedias;
         if (bimestresComMedia > 0) {
-          if (nd.mediaFinal === null) { // Se mediaFinal não veio do DB, calcula a média das médias bimestrais
+          if (nd.mediaFinal === null) {
             nd.mediaFinal = somaMedias / bimestresComMedia;
           }
         } else {
           nd.mediaFinal = null;
         }
 
-        // Determinar situação final se ainda for N/A
+        // Caso a situação ainda seja "N/A", determina-a a partir da média
         if (nd.situacao === 'N/A' && nd.mediaFinal !== null) {
-          if (nd.mediaFinal >= 7) {
-            nd.situacao = 'Aprovado';
-          } else if (nd.mediaFinal >= 5) {
-            nd.situacao = 'Recuperação';
-          } else {
-            nd.situacao = 'Reprovado';
-          }
+          if (nd.mediaFinal >= 7) nd.situacao = 'Aprovado';
+          else if (nd.mediaFinal >= 5) nd.situacao = 'Recuperação';
+          else nd.situacao = 'Reprovado';
         }
       });
 
-      // Ordenar as disciplinas pelo nome antes de definir o estado
+      // Ordena disciplinas por nome antes de atualizar o estado
       const finalNotasBoletim = Object.values(notasPorDisciplina).sort((a, b) =>
         a.disciplina_nome.localeCompare(b.disciplina_nome)
       );
 
       setNotasBoletim(finalNotasBoletim);
-
     } catch (err: any) {
-      console.error("❌ Erro ao buscar boletim:", err);
-      setErro(err.message || "Erro ao carregar boletim. Tente novamente mais tarde.");
+      console.error('❌ Erro ao buscar boletim:', err);
+      setErro(err.message || 'Erro ao carregar boletim. Tente novamente mais tarde.');
     } finally {
       setLoading(false);
     }
-  }, [usuario?.id, turma?.serieNome, turma?.disciplinas]); // ✅ ATUALIZADO: Adicionado turma.disciplinas às dependências
+  }, [usuario?.id, turma?.serieNome, turma?.disciplinas]); // ← dependências corretas
 
+  // -------------------------------------------------
+  // Efeito de carregamento
+  // -------------------------------------------------
   useEffect(() => {
     buscarBoletim();
   }, [buscarBoletim]);
 
-  // =========================================
-  // CÁLCULO DE ESTATÍSTICAS GERAIS
-  // =========================================
+  // -------------------------------------------------
+  // Cálculo de estatísticas gerais
+  // -------------------------------------------------
   const calcularEstatisticas = () => {
     if (notasBoletim.length === 0) {
       return { mediaGeral: 0, aprovados: 0, totalDisciplinas: 0, melhorNota: 0, disciplinaMelhorNota: '' };
     }
 
-    const mediasFinaisValidas = notasBoletim
+    const mediasValidas = notasBoletim
       .filter(n => n.mediaFinal !== null)
       .map(n => n.mediaFinal as number);
 
-    const mediaGeral = mediasFinaisValidas.length > 0
-      ? mediasFinaisValidas.reduce((acc, media) => acc + media, 0) / mediasFinaisValidas.length
-      : 0;
+    const mediaGeral =
+      mediasValidas.length > 0
+        ? mediasValidas.reduce((s, m) => s + m, 0) / mediasValidas.length
+        : 0;
 
     const aprovados = notasBoletim.filter(n => n.situacao === 'Aprovado').length;
     const totalDisciplinas = notasBoletim.length;
 
-    const melhorNotaObj = notasBoletim.reduce((prev, current) => {
-      if (current.mediaFinal === null) return prev;
-      if (prev.mediaFinal === null || current.mediaFinal > prev.mediaFinal) {
-        return current;
-      }
-      return prev;
-    }, { mediaFinal: null, disciplina_nome: '' } as Partial<NotaDisciplina>);
+    const melhorObj = notasBoletim.reduce(
+      (prev, cur) => {
+        if (cur.mediaFinal === null) return prev;
+        if (prev.mediaFinal === null || cur.mediaFinal > prev.mediaFinal) return cur;
+        return prev;
+      },
+      { mediaFinal: null, disciplina_nome: '' } as Partial<NotaDisciplina>
+    );
 
-    const melhorNota = melhorNotaObj.mediaFinal || 0;
-    const disciplinaMelhorNota = melhorNotaObj.disciplina_nome || '';
-
-    return { mediaGeral, aprovados, totalDisciplinas, melhorNota, disciplinaMelhorNota };
+    return {
+      mediaGeral,
+      aprovados,
+      totalDisciplinas,
+      melhorNota: melhorObj.mediaFinal || 0,
+      disciplinaMelhorNota: melhorObj.disciplina_nome || '',
+    };
   };
 
-  const { mediaGeral, aprovados, totalDisciplinas, melhorNota, disciplinaMelhorNota } = calcularEstatisticas();
+  const { mediaGeral, aprovados, totalDisciplinas, melhorNota, disciplinaMelhorNota } =
+    calcularEstatisticas();
 
-  // =========================================
-  // FUNÇÕES DE ESTILO
-  // =========================================
+  // -------------------------------------------------
+  // Funções auxiliares de estilo
+  // -------------------------------------------------
   const getNotaColor = (nota: number | null) => {
     if (nota === null) return 'text-gray-400';
     if (nota >= 9) return 'text-green-700 font-bold';
@@ -268,16 +295,20 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
 
   const getSituacaoColor = (situacao: NotaDisciplina['situacao']) => {
     switch (situacao) {
-      case 'Aprovado': return 'bg-green-100 text-green-700 border border-green-300';
-      case 'Recuperação': return 'bg-yellow-100 text-yellow-700 border border-yellow-300';
-      case 'Reprovado': return 'bg-red-100 text-red-700 border border-red-300';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'Aprovado':
+        return 'bg-green-100 text-green-700 border border-green-300';
+      case 'Recuperação':
+        return 'bg-yellow-100 text-yellow-700 border border-yellow-300';
+      case 'Reprovado':
+        return 'bg-red-100 text-red-700 border border-red-300';
+      default:
+        return 'bg-gray-100 text-gray-700';
     }
   };
 
-  // =========================================
-  // FUNÇÃO DE IMPRESSÃO
-  // =========================================
+  // -------------------------------------------------
+  // Impressão
+  // -------------------------------------------------
   const handleImprimir = () => {
     setVaiImprimir(true);
     setTimeout(() => {
@@ -286,9 +317,9 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
     }, 100);
   };
 
-  // =========================================
-  // RENDERIZAÇÃO
-  // =========================================
+  // -------------------------------------------------
+  // Renderização
+  // -------------------------------------------------
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-blue-600 dark:text-blue-400">
@@ -305,16 +336,19 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
           <AlertTriangle className="w-6 h-6 mr-2" />
           <span>{erro}</span>
         </div>
-        <Button variant="outline" onClick={buscarBoletim} className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 hover:dark:bg-gray-600">
+        <Button
+          variant="outline"
+          onClick={buscarBoletim}
+          className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 hover:dark:bg-gray-600"
+        >
           Tentar novamente
         </Button>
       </div>
     );
   }
 
-  // ✅ ATUALIZADO: Mensagem de "Nenhuma nota" agora considera se há disciplinas, mas sem notas.
-  // Se não há disciplinas para o aluno, ou se há disciplinas mas nenhuma nota foi lançada.
-  if (notasBoletim.length === 0 && (turma?.disciplinas?.length === 0 || !turma?.disciplinas)) {
+  // Nenhuma disciplina encontrada para a turma do aluno
+  if (turma?.disciplinas?.length === 0 || !turma?.disciplinas) {
     return (
       <div className="text-center text-gray-600 dark:text-gray-400 mt-10 p-4">
         <Info className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
@@ -328,26 +362,19 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
     );
   }
 
-  // Se há disciplinas, mas todas estão sem notas
-  const todasSemNotas = notasBoletim.every(nd => nd.mediaFinal === null);
-  if (todasSemNotas) {
-    return (
-      <div className="text-center text-gray-600 dark:text-gray-400 mt-10 p-4">
-        <Info className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-          Nenhuma nota registrada ainda.
-        </h3>
-        <p className="text-sm">
-          Seu boletim será preenchido assim que os professores lançarem as notas para as disciplinas.
-        </p>
-      </div>
-    );
-  }
+  // ✅ REMOVIDO: O bloco condicional `if (todasSemNotas)` foi removido.
+  // O componente agora sempre renderizará a tabela.
 
-
+  // -------------------------------------------------
+  // Boletim completo
+  // -------------------------------------------------
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-purple-950 ${vaiImprimir ? 'print-mode' : ''}`}>
-      {/* Header - Oculto na impressão */}
+    <div
+      className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-purple-950 ${
+        vaiImprimir ? 'print-mode' : ''
+      }`}
+    >
+      {/* Header (não aparece na impressão) */}
       <div className="print:hidden sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -365,33 +392,36 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
               <div className="h-8 w-px bg-gray-300 dark:bg-gray-700" />
 
               <div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Boletim Escolar</h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Visualize suas notas e desempenho</p>
+                <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  Boletim Escolar
+                </h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Visualize suas notas e desempenho
+                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={handleImprimir}
-                variant="outline"
-                className="border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Imprimir
-              </Button>
-            </div>
+            <Button
+              onClick={handleImprimir}
+              variant="outline"
+              className="border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Imprimir
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Conteúdo Principal */}
+      {/* Conteúdo principal */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:px-8 print:py-4">
-
-        {/* Cabeçalho do Boletim - Visível na impressão */}
+        {/* Cabeçalho (visível apenas na impressão) */}
         <div className="hidden print:block mb-6 text-center border-b-2 border-gray-800 pb-4">
           <img src="/logo-colegio-conexao.png" alt="Logo" className="h-16 mx-auto mb-2" />
           <h1 className="text-2xl font-bold text-gray-900">Colégio Conexão EAD Maranhense</h1>
-          <h2 className="text-lg font-semibold mt-2">Boletim Escolar - Ano Letivo {new Date().getFullYear()}</h2>
+          <h2 className="text-lg font-semibold mt-2">
+            Boletim Escolar - Ano Letivo {new Date().getFullYear()}
+          </h2>
           <div className="mt-3 text-sm">
             <p><strong>Aluno:</strong> {usuario?.nome || 'N/A'}</p>
             <p><strong>Série:</strong> {turma?.serieNome || 'N/A'}</p>
@@ -399,7 +429,7 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
           </div>
         </div>
 
-        {/* Cards de Estatísticas - Oculto na impressão */}
+        {/* Cards de estatísticas (não imprimem) */}
         <div className="print:hidden grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 dark:from-blue-700 dark:to-blue-800">
             <CardContent className="p-6">
@@ -439,7 +469,7 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
           </Card>
         </div>
 
-        {/* Informações do Aluno - Oculto na impressão */}
+        {/* Informações do aluno (não imprimem) */}
         <Card className="print:hidden mb-6 dark:bg-gray-800 dark:border-gray-700">
           <CardHeader>
             <CardTitle className="dark:text-gray-100">Informações do Aluno</CardTitle>
@@ -462,7 +492,7 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
           </CardContent>
         </Card>
 
-        {/* Tabela de Notas */}
+        {/* Tabela de notas */}
         <Card className="dark:bg-gray-800 dark:border-gray-700">
           <CardHeader className="print:hidden">
             <CardTitle className="flex items-center gap-2 dark:text-gray-100">
@@ -475,9 +505,14 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
               <table className="w-full text-xs print:text-[10px] border-collapse">
                 <thead className="bg-gray-100 dark:bg-gray-700 print:bg-gray-200">
                   <tr>
-                    <th rowSpan={2} className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-left font-bold sticky left-0 bg-gray-100 dark:bg-gray-700 print:bg-gray-200 dark:text-gray-100">
+                    <th
+                      rowSpan={2}
+                      className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-left font-bold sticky left-0 bg-gray-100 dark:bg-gray-700 print:bg-gray-200 dark:text-gray-100"
+                    >
                       Disciplina
                     </th>
+
+                    {/* Cabeçalhos dos bimestres */}
                     <th colSpan={4} className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center font-bold bg-blue-100 dark:bg-blue-900 dark:text-blue-100">
                       1º Bimestre
                     </th>
@@ -490,6 +525,8 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
                     <th colSpan={4} className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center font-bold bg-purple-100 dark:bg-purple-900 dark:text-purple-100">
                       4º Bimestre
                     </th>
+
+                    {/* Totais */}
                     <th rowSpan={2} className="border border-gray-300 dark:border-gray-600 px-2 py-2 text-center font-bold bg-gray-100 dark:bg-gray-700 dark:text-gray-100">
                       Pts Total
                     </th>
@@ -505,33 +542,66 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
                   </tr>
                   <tr>
                     {/* 1º Bimestre */}
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-blue-50 dark:bg-blue-800 dark:text-blue-100">AV1</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-blue-50 dark:bg-blue-800 dark:text-blue-100">AV2</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-blue-50 dark:bg-blue-800 dark:text-blue-100">REC</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-blue-50 dark:bg-blue-800 dark:text-blue-100">MÉD</th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-blue-50 dark:bg-blue-800 dark:text-blue-100">
+                      AV1
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-blue-50 dark:bg-blue-800 dark:text-blue-100">
+                      AV2
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-blue-50 dark:bg-blue-800 dark:text-blue-100">
+                      REC
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-blue-50 dark:bg-blue-800 dark:text-blue-100">
+                      MÉD
+                    </th>
 
                     {/* 2º Bimestre */}
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-green-50 dark:bg-green-800 dark:text-green-100">AV1</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-green-50 dark:bg-green-800 dark:text-green-100">AV2</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-green-50 dark:bg-green-800 dark:text-green-100">REC</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-green-50 dark:bg-green-800 dark:text-green-100">MÉD</th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-green-50 dark:bg-green-800 dark:text-green-100">
+                      AV1
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-green-50 dark:bg-green-800 dark:text-green-100">
+                      AV2
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-green-50 dark:bg-green-800 dark:text-green-100">
+                      REC
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-green-50 dark:bg-green-800 dark:text-green-100">
+                      MÉD
+                    </th>
 
                     {/* 3º Bimestre */}
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-yellow-50 dark:bg-yellow-800 dark:text-yellow-100">AV1</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-yellow-50 dark:bg-yellow-800 dark:text-yellow-100">AV2</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-yellow-50 dark:bg-yellow-800 dark:text-yellow-100">REC</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-yellow-50 dark:bg-yellow-800 dark:text-yellow-100">MÉD</th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-yellow-50 dark:bg-yellow-800 dark:text-yellow-100">
+                      AV1
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-yellow-50 dark:bg-yellow-800 dark:text-yellow-100">
+                      AV2
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-yellow-50 dark:bg-yellow-800 dark:text-yellow-100">
+                      REC
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-yellow-50 dark:bg-yellow-800 dark:text-yellow-100">
+                      MÉD
+                    </th>
 
                     {/* 4º Bimestre */}
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-purple-50 dark:bg-purple-800 dark:text-purple-100">AV1</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-purple-50 dark:bg-purple-800 dark:text-purple-100">AV2</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-purple-50 dark:bg-purple-800 dark:text-purple-100">REC</th>
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-purple-50 dark:bg-purple-800 dark:text-purple-100">MÉD</th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-purple-50 dark:bg-purple-800 dark:text-purple-100">
+                      AV1
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-purple-50 dark:bg-purple-800 dark:text-purple-100">
+                      AV2
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-purple-50 dark:bg-purple-800 dark:text-purple-100">
+                      REC
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-center bg-purple-50 dark:bg-purple-800 dark:text-purple-100">
+                      MÉD
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {notasBoletim.map((nota, index) => (
-                    <tr key={nota.disciplina_id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700 print:hover:bg-transparent">
+                  {notasBoletim.map((nota, idx) => (
+                    <tr key={nota.disciplina_id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-700 print:hover:bg-transparent">
+                      {/* Disciplina */}
                       <td className="border border-gray-300 dark:border-gray-600 px-3 py-2 font-semibold sticky left-0 bg-white dark:bg-gray-800 dark:text-gray-100">
                         {nota.disciplina_nome}
                       </td>
@@ -636,6 +706,11 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
                     <div className="w-3 h-3 rounded-full bg-green-500"></div>
                     <span>Média Final ≥ 7.0: Aprovado</span>
                   </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <span>Média Final menor que 7.0: Recuperação</span>
+                  </li>
+              
                 </ul>
               </div>
             </div>
@@ -658,7 +733,6 @@ export default function Boletim({ onVoltar, usuario, turma }: BoletimProps) {
           </div>
         </div>
       </div>
-
       {/* Estilos de impressão */}
       <style>{`
         @media print {
