@@ -55,7 +55,7 @@ export function RelatorioConteudo() {
     {
       titulo: 'Visualizações',
       valor: '4,328',
-      mudança: '+18%',
+      mudanca: '+18%',
       tipo: 'positivo',
       icone: <Eye className="w-5 h-5" />,
       cor: 'text-purple-600'

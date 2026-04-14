@@ -16,9 +16,37 @@ interface HorarioAula {
 
 interface HorarioEscolarProps {
   className?: string;
-  usuario?: Usuario; // Opcional (usado pelo aluno)
-  turmaSelecionada?: string; // Opcional (usado pelo professor)
+  usuario?: Usuario;
+  turmaSelecionada?: string;
   onVoltar?: () => void;
+}
+
+const coresDisciplinas: Record<string, { bg: string; text: string; border: string }> = {
+  'Matemática':        { bg: '#dbeafe', text: '#1e3a8a', border: '#93c5fd' },
+  'Português':         { bg: '#fee2e2', text: '#7f1d1d', border: '#fca5a5' },
+  'História':          { bg: '#fef3c7', text: '#78350f', border: '#fcd34d' },
+  'Geografia':         { bg: '#ffedd5', text: '#7c2d12', border: '#fdba74' },
+  'Ciências':          { bg: '#d1fae5', text: '#064e3b', border: '#6ee7b7' },
+  'Inglês':            { bg: '#ede9fe', text: '#4c1d95', border: '#c4b5fd' },
+  'Arte':              { bg: '#fce7f3', text: '#831843', border: '#f9a8d4' },
+  'Ed. Física':        { bg: '#f5f5f4', text: '#292524', border: '#d6d3d1' },
+  'Educação Física':   { bg: '#f5f5f4', text: '#292524', border: '#d6d3d1' },
+  'Biologia':          { bg: '#ecfdf5', text: '#065f46', border: '#6ee7b7' },
+  'Física':            { bg: '#e0f2fe', text: '#0c4a6e', border: '#7dd3fc' },
+  'Química':           { bg: '#f0fdf4', text: '#14532d', border: '#86efac' },
+  'Filosofia':         { bg: '#f5f3ff', text: '#4c1d95', border: '#ddd6fe' },
+  'Sociologia':        { bg: '#fdf2f8', text: '#701a75', border: '#f0abfc' },
+  'Gramática':         { bg: '#fff7ed', text: '#7c2d12', border: '#fdba74' },
+  'Literatura':        { bg: '#fef9c3', text: '#713f12', border: '#fde047' },
+  'Redação':           { bg: '#f0f9ff', text: '#0c4a6e', border: '#7dd3fc' },
+  'Produção de Texto': { bg: '#f0f9ff', text: '#0c4a6e', border: '#7dd3fc' },
+};
+
+const corPadrao = { bg: '#eef2ff', text: '#312e81', border: '#a5b4fc' };
+
+function getCorDisciplina(disciplina?: string) {
+  if (!disciplina) return corPadrao;
+  return coresDisciplinas[disciplina] || corPadrao;
 }
 
 export default function HorarioEscolar({ className, usuario, turmaSelecionada, onVoltar }: HorarioEscolarProps) {
@@ -27,54 +55,29 @@ export default function HorarioEscolar({ className, usuario, turmaSelecionada, o
   const [error, setError] = useState<string>('');
 
   const diasOrdem = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
-
-  // Lógica inteligente: Se o professor selecionou uma turma, usa ela. 
-  // Se não, tenta usar a série do usuário logado (caso seja aluno).
   const serieAlvo = turmaSelecionada || usuario?.serie;
-
-  // Ordena os horários únicos para montar as linhas da tabela
-  const horariosUnicos = Array.from(new Set(horarios.map(h => `${h.horario_inicio} - ${h.horario_fim}`))).sort();
-
-  // Cores para deixar o horário visualmente organizado
-  const coresDisciplinas: Record<string, string> = {
-    'Matemática': 'bg-blue-100 text-blue-800 border-blue-200',
-    'Português': 'bg-red-100 text-red-800 border-red-200',
-    'História': 'bg-amber-100 text-amber-800 border-amber-200',
-    'Geografia': 'bg-orange-100 text-orange-800 border-orange-200',
-    'Ciências': 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    'Inglês': 'bg-purple-100 text-purple-800 border-purple-200',
-    'Arte': 'bg-pink-100 text-pink-800 border-pink-200',
-    'Ed. Física': 'bg-stone-200 text-stone-800 border-stone-300',
-  };
+  const horariosUnicos = Array.from(
+    new Set(horarios.map(h => `${h.horario_inicio} - ${h.horario_fim}`))
+  ).sort();
 
   useEffect(() => {
-    if (serieAlvo) {
-      carregarHorario();
-    }
+    if (serieAlvo) carregarHorario();
   }, [serieAlvo]);
 
   const carregarHorario = async () => {
     if (!serieAlvo) return;
-
     try {
       setLoading(true);
       setError('');
-
-      // Limpa o nome da série para busca (ex: "1ª Série A" -> busca por "1ª Série")
-      // Isso ajuda a encontrar o horário mesmo se o nome da turma for um pouco diferente
       const termoBusca = serieAlvo.split('-')[0].trim();
-
       const { data, error } = await supabase
         .from('horarios_escolar')
         .select('*')
-        .ilike('serie', `%${termoBusca}%`) // Busca flexível pelo nome da série
+        .ilike('serie', `%${termoBusca}%`)
         .order('ordem', { ascending: true });
-
       if (error) throw error;
-
       setHorarios(data || []);
-    } catch (err: any) {
-      console.error('Erro ao carregar horário:', err);
+    } catch {
       setError('Não foi possível carregar o horário escolar.');
     } finally {
       setLoading(false);
@@ -83,61 +86,44 @@ export default function HorarioEscolar({ className, usuario, turmaSelecionada, o
 
   const getDisciplinaDoDia = (horarioLabel: string, dia: string) => {
     const [inicio] = horarioLabel.split(' - ');
-    // Encontra a aula que bate com o dia e o horário de início
     return horarios.find(h => h.dia_semana === dia && h.horario_inicio.startsWith(inicio));
-  };
-
-  const getCorDisciplina = (disciplina?: string) => {
-    if (!disciplina) return 'bg-gray-50';
-    // Retorna a cor mapeada ou um cinza padrão se não tiver cor definida
-    return coresDisciplinas[disciplina] || 'bg-indigo-50 text-indigo-800 border-indigo-200';
   };
 
   if (!serieAlvo) return null;
 
   return (
-    <div className={`space-y-6 animate-in fade-in duration-500 ${className}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-full">
-            <Clock className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Grade Horária</h2>
-            <p className="text-gray-500">Visualizando: {serieAlvo}</p>
-          </div>
-        </div>
+    <div className={`space-y-6 ${className || ''}`}>
 
-        {onVoltar && (
-          <Button variant="outline" onClick={onVoltar}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar
-          </Button>
-        )}
-      </div>
+      
 
-      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+      {/* Tabela */}
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex justify-center p-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
         ) : error ? (
-          <div className="flex items-center gap-2 text-red-600 bg-red-50 p-6 m-4 rounded-md">
+          <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-6 m-4 rounded-md">
             <AlertTriangle className="w-5 h-5" /> {error}
           </div>
         ) : horarios.length === 0 ? (
-          <div className="text-center p-12 text-gray-500">
-            <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <div className="text-center p-12 text-muted-foreground">
+            <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p>Nenhum horário encontrado para <strong>{serieAlvo}</strong>.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b">
-                  <th className="p-4 text-left font-semibold text-gray-600 w-32">Horário</th>
+                <tr className="bg-muted border-b border-border">
+                  <th className="p-4 text-left font-semibold text-muted-foreground w-36">
+                    Horário
+                  </th>
                   {diasOrdem.map(dia => (
-                    <th key={dia} className="p-4 text-center font-semibold text-gray-600 border-l">
+                    <th
+                      key={dia}
+                      className="p-4 text-center font-semibold text-muted-foreground border-l border-border"
+                    >
                       {dia}
                     </th>
                   ))}
@@ -146,41 +132,55 @@ export default function HorarioEscolar({ className, usuario, turmaSelecionada, o
               <tbody>
                 {horariosUnicos.map((horarioLabel, idx) => (
                   <Fragment key={idx}>
-                    {/* Exemplo de Intervalo Fixo (opcional, pode remover se quiser) */}
                     {idx === 3 && (
-                      <tr className="bg-yellow-50 border-b">
-                        <td className="p-2 text-center font-bold text-yellow-700 text-xs border-r border-yellow-100">
-                          Intervalo
-                        </td>
-                        <td className="p-2 text-center font-bold text-yellow-700 text-xs" colSpan={5}>
-                          RECREIO
+                      <tr className="border-b border-border">
+                        <td
+                          colSpan={6}
+                          className="p-2 text-center text-xs font-bold"
+                          style={{ backgroundColor: '#fef9c3', color: '#713f12' }}
+                        >
+                          INTERVALO — RECREIO
                         </td>
                       </tr>
                     )}
-
-                    <tr className="border-b last:border-0 hover:bg-gray-50/50 transition-colors">
-                      <td className="p-4 font-medium text-gray-700 bg-gray-50/30 whitespace-nowrap border-r">
+                    <tr className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="p-4 font-medium text-muted-foreground bg-muted/20 whitespace-nowrap border-r border-border text-xs">
                         {horarioLabel}
                       </td>
                       {diasOrdem.map(dia => {
                         const aula = getDisciplinaDoDia(horarioLabel, dia);
+                        const cor = getCorDisciplina(aula?.disciplina);
                         return (
-                          <td key={dia} className="p-2 border-l align-top h-24 w-1/5">
+                          <td key={dia} className="p-2 border-l border-border align-top h-24 w-1/5">
                             {aula ? (
-                              <div className={`h-full p-3 rounded-md flex flex-col justify-center items-center text-center gap-1 shadow-sm border ${getCorDisciplina(aula.disciplina)}`}>
-                                <div className="font-bold leading-tight">{aula.disciplina}</div>
+                              <div
+                                className="h-full p-3 rounded-md flex flex-col justify-center items-center text-center gap-1 shadow-sm border"
+                                style={{
+                                  backgroundColor: cor.bg,
+                                  color: cor.text,
+                                  borderColor: cor.border,
+                                }}
+                              >
+                                <div className="font-bold leading-tight text-xs">
+                                  {aula.disciplina}
+                                </div>
                                 {aula.professor && (
-                                  <div className="text-[10px] opacity-80">{aula.professor}</div>
+                                  <div className="text-[10px] opacity-80">
+                                    {aula.professor}
+                                  </div>
                                 )}
                                 {aula.sala && (
-                                  <div className="text-[9px] mt-1 pt-1 border-t border-black/10 w-full opacity-60">
+                                  <div
+                                    className="text-[9px] mt-1 pt-1 w-full opacity-60"
+                                    style={{ borderTop: `1px solid ${cor.border}` }}
+                                  >
                                     Sala {aula.sala}
                                   </div>
                                 )}
                               </div>
                             ) : (
-                              <div className="h-full flex items-center justify-center text-gray-300">
-                                -
+                              <div className="h-full flex items-center justify-center text-muted-foreground opacity-30 text-lg">
+                                —
                               </div>
                             )}
                           </td>

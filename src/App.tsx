@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext"; // <-- Importação adicionada
 import { Usuario } from "./types/auth";
 
 // Dashboards
@@ -109,21 +110,23 @@ export default function App() {
 
   // Renderização das telas principais (Website / Login / AVA)
   return (
-    <AuthProvider>
-      {currentView === "website" && (
-        <SiteInstitucional onAccessPortal={handleAccessPortal} />
-      )}
+    <ThemeProvider> {/* <-- ThemeProvider abraçando todo o App */}
+      <AuthProvider>
+        {currentView === "website" && (
+          <SiteInstitucional onAccessPortal={handleAccessPortal} />
+        )}
 
-      {currentView === "login" && (
-        <LoginCompleto
-          onLogin={handleLogin}
-          onBackToSite={handleBackToSite}
-        />
-      )}
+        {currentView === "login" && (
+          <LoginCompleto
+            onLogin={handleLogin}
+            onBackToSite={handleBackToSite}
+          />
+        )}
 
-      {currentView === "ava" && user && renderDashboard(user)}
+        {currentView === "ava" && user && renderDashboard(user)}
 
-      <Toaster richColors position="top-center" />
-    </AuthProvider>
+        <Toaster richColors position="top-center" />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

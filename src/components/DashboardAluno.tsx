@@ -1,17 +1,15 @@
 // src/components/DashboardAluno.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../supabase/supabaseClient";
 import { useAuth } from "../contexts/AuthContext";
 
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 import {
   Bell,
-  FileText,
   BarChart3,
   Calendar,
   Clock,
@@ -23,17 +21,15 @@ import {
   Loader2,
   LogOut,
   User,
-  Users,
   ArrowLeft,
 } from "lucide-react";
 
 import { PerfilUsuario } from "./PerfilUsuario";
 import { Notificacoes } from "./Notificacoes";
-import { AtividadesAluno } from "./AtividadesAluno";
-import { AgendaAluno } from "./AgendaAluno"; // Importa o componente AgendaAluno
+import { AgendaAluno } from "./AgendaAluno";
 import HorarioEscolar from "./HorarioEscolar";
 import Boletim from "./Boletim";
-import {DisciplinaPage} from "./DisciplinaPage";
+import { DisciplinaPage } from "./DisciplinaPage";
 import { SchoolHeader } from "./SchoolHeader";
 
 type ViewType =
@@ -78,6 +74,161 @@ function formatarData(dataISO: string) {
   }
 }
 
+// ============================================================
+// Header padrão
+// ============================================================
+function HeaderPadrao({
+  usuario,
+  turma,
+  notificacoesNaoLidas,
+  mostrarMenuUsuario,
+  setMostrarMenuUsuario,
+  setMostrarNotificacoes,
+  setMostrarPerfil,
+  logout,
+}: any) {
+  const avatarRef = useRef<HTMLButtonElement>(null);
+
+  const getDropdownPos = () => {
+    if (!avatarRef.current) return { top: 68, right: 16 };
+    const rect = avatarRef.current.getBoundingClientRect();
+    return {
+      top: rect.bottom + 8,
+      right: window.innerWidth - rect.right,
+    };
+  };
+
+  const pos = getDropdownPos();
+
+  return (
+    <header className="bg-card border-b border-border sticky top-0 z-30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <SchoolHeader subtitle="Painel do Aluno" />
+
+        <div className="flex items-center gap-4">
+          {/* Sino */}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMostrarNotificacoes(true)}
+              className="hover:bg-accent"
+            >
+              <Bell className="w-5 h-5 text-muted-foreground" />
+              {notificacoesNaoLidas > 0 && (
+                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-background" />
+              )}
+            </Button>
+          </div>
+
+          {/* Avatar + dropdown */}
+          <div className="flex items-center gap-3 pl-4 border-l border-border">
+            <div className="text-right hidden md:block">
+              <p className="text-sm font-medium text-foreground">{usuario?.nome}</p>
+              <p className="text-xs text-muted-foreground">{turma?.serieNome || "Aluno"}</p>
+            </div>
+
+            <button
+              ref={avatarRef}
+              onClick={() => setMostrarMenuUsuario(!mostrarMenuUsuario)}
+              className="focus:outline-none"
+            >
+              <Avatar className="h-9 w-9 border-2 border-border cursor-pointer">
+                <AvatarImage src={(usuario as any)?.avatar} />
+                <AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                  {usuario?.nome?.charAt(0) || "A"}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Dropdown via portal — fora de qualquer stacking context */}
+      {mostrarMenuUsuario && createPortal(
+        <>
+          {/* Overlay invisível fecha ao clicar fora */}
+          <div
+            className="fixed inset-0 z-[99998]"
+            onClick={() => setMostrarMenuUsuario(false)}
+          />
+
+          {/* Menu alinhado ao avatar */}
+          <div
+            className="fixed w-48 rounded-xl border border-border shadow-2xl z-[99999] overflow-hidden"
+            style={{
+              backgroundColor: 'var(--card)',
+              top: pos.top,
+              right: pos.right,
+            }}
+          >
+            <button
+              onClick={() => {
+                setMostrarMenuUsuario(false);
+                setMostrarPerfil(true);
+              }}
+              className="w-full px-4 py-3 text-left text-sm text-foreground hover:bg-accent flex items-center gap-2 transition-colors"
+            >
+              <User className="w-4 h-4 text-muted-foreground" />
+              Meu Perfil
+            </button>
+
+            <div className="h-px bg-border mx-3" />
+
+            <button
+              onClick={() => {
+                setMostrarMenuUsuario(false);
+                logout();
+              }}
+              className="w-full px-4 py-3 text-left text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+    </header>
+  );
+}
+
+// ============================================================
+// Barra azul padrão
+// ============================================================
+function BarraAzul({
+  titulo,
+  subtitulo,
+  onVoltar,
+}: {
+  titulo: string;
+  subtitulo?: string;
+  onVoltar: () => void;
+}) {
+  return (
+    <div className="bg-blue-600 text-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onVoltar}
+          className="text-white hover:bg-white/20"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Voltar
+        </Button>
+        <div>
+          <h1 className="font-semibold text-lg leading-tight">{titulo}</h1>
+          {subtitulo && <p className="text-sm opacity-90">{subtitulo}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Dashboard principal
+// ============================================================
 export default function DashboardAluno() {
   const { usuario, logout } = useAuth();
 
@@ -86,7 +237,7 @@ export default function DashboardAluno() {
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
   const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
 
-  const [turma, setTurma] = useState<TurmaData | null>(null); // Estado para a turma do aluno
+  const [turma, setTurma] = useState<TurmaData | null>(null);
   const [comunicados, setComunicados] = useState<ComunicadoData[]>([]);
 
   const [loadingTurma, setLoadingTurma] = useState(true);
@@ -95,367 +246,194 @@ export default function DashboardAluno() {
   const [erroTurma, setErroTurma] = useState<string | null>(null);
   const [erroComunicados, setErroComunicados] = useState<string | null>(null);
 
-  const [disciplinaSelecionada, setDisciplinaSelecionada] = useState<
-    DisciplinaData | null
-  >(null);
-
+  const [disciplinaSelecionada, setDisciplinaSelecionada] = useState<DisciplinaData | null>(null);
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
 
-  // ✅ FUNÇÃO handleVoltar DEFINIDA
-  const handleVoltar = useCallback(() => { // Usar useCallback para otimização
-    setViewAtual("dashboard");
-  }, []);
+  const handleVoltar = useCallback(() => setViewAtual("dashboard"), []);
 
-  // ========================================================
-  // CARREGAR TURMA + DISCIPLINAS DO ALUNO
-  // ========================================================
+  const headerProps = {
+    usuario, turma, notificacoesNaoLidas,
+    mostrarMenuUsuario, setMostrarMenuUsuario,
+    setMostrarNotificacoes, setMostrarPerfil, logout,
+  };
+
+  // ---- Carregar turma ----
   const carregarTurma = useCallback(async () => {
     if (!usuario?.id) return;
-
     setLoadingTurma(true);
     setErroTurma(null);
-
     try {
-      // 1. Buscar série textual do aluno em users.serie
       const { data: aluno, error: alunoError } = await supabase
-        .from("users")
-        .select("serie")
-        .eq("id", usuario.id)
-        .single();
-
+        .from("users").select("serie").eq("id", usuario.id).single();
       if (alunoError) throw alunoError;
+      if (!aluno?.serie) { setErroTurma("Sua série não está definida no sistema."); return; }
 
-      if (!aluno?.serie) {
-        setErroTurma("Sua série não está definida no sistema.");
-        setTurma(null);
-        return;
-      }
-
-      const serieNomeAluno: string = aluno.serie;
-
-      // 2. Buscar registro da série real em 'series' usando o nome
       const { data: serieRow, error: serieError } = await supabase
-        .from("series")
-        .select("id, nome")
-        .eq("nome", serieNomeAluno)
-        .single();
-
+        .from("series").select("id, nome").eq("nome", aluno.serie).single();
       if (serieError) throw serieError;
+      if (!serieRow) { setErroTurma(`Série "${aluno.serie}" não encontrada.`); return; }
 
-      if (!serieRow) {
-        setErroTurma(`Série "${serieNomeAluno}" não encontrada.`);
-        setTurma(null);
-        return;
-      }
-
-      // 3. Buscar turma(s) pela série_id (no seu caso existe 1 turma por série)
       const { data: turmasResult, error: turmasError } = await supabase
-        .from("turmas")
-        .select("id, nome, total_alunos")
-        .eq("serie_id", serieRow.id);
-
+        .from("turmas").select("id, nome, total_alunos").eq("serie_id", serieRow.id);
       if (turmasError) throw turmasError;
-
       if (!turmasResult || turmasResult.length === 0) {
-        setErroTurma(
-          `Nenhuma turma encontrada para a série "${serieRow.nome}".`
-        );
-        setTurma(null);
-        return;
+        setErroTurma(`Nenhuma turma encontrada para "${serieRow.nome}".`); return;
       }
 
-      const turmaRow = turmasResult[0];
-
-      // 4. Buscar disciplinas APENAS pela série_id (SEM filtrar turma_id)
       const { data: vinculos, error: vinculosError } = await supabase
         .from("professores_disciplinas_series")
         .select("disciplinas(id, nome, cor)")
         .eq("serie_id", serieRow.id);
-
       if (vinculosError) throw vinculosError;
 
-      const disciplinas: DisciplinaData[] =
-        vinculos?.flatMap((v: any) =>
-          v.disciplinas
-            ? [
-                {
-                  id: v.disciplinas.id,
-                  nome: v.disciplinas.nome,
-                  cor: v.disciplinas.cor || "bg-blue-500",
-                },
-              ]
-            : []
-        ) || [];
+      const disciplinas: DisciplinaData[] = vinculos?.flatMap((v: any) =>
+        v.disciplinas ? [{ id: v.disciplinas.id, nome: v.disciplinas.nome, cor: v.disciplinas.cor || "bg-blue-500" }] : []
+      ) || [];
 
-      // remover duplicadas por id
       const disciplinasUnicas: DisciplinaData[] = [];
       const setIds = new Set<string>();
       for (const d of disciplinas) {
-        if (!setIds.has(d.id)) {
-          setIds.add(d.id);
-          disciplinasUnicas.push(d);
-        }
+        if (!setIds.has(d.id)) { setIds.add(d.id); disciplinasUnicas.push(d); }
       }
 
       setTurma({
-        id: turmaRow.id,
-        nome: turmaRow.nome,
+        id: turmasResult[0].id,
+        nome: turmasResult[0].nome,
         serieId: serieRow.id,
         serieNome: serieRow.nome,
-        totalAlunos: turmaRow.total_alunos || 0,
+        totalAlunos: turmasResult[0].total_alunos || 0,
         disciplinas: disciplinasUnicas,
       });
     } catch (e: any) {
-      console.error("Erro ao carregar dados da turma do aluno:", e);
-      setErroTurma(
-        e?.message || "Erro ao carregar informações da sua turma/série."
-      );
+      setErroTurma(e?.message || "Erro ao carregar informações da sua turma.");
       setTurma(null);
     } finally {
       setLoadingTurma(false);
     }
   }, [usuario?.id]);
 
-  useEffect(() => {
-    if (usuario?.id) {
-      carregarTurma();
-    }
-  }, [usuario?.id, carregarTurma]);
+  useEffect(() => { if (usuario?.id) carregarTurma(); }, [usuario?.id, carregarTurma]);
 
-  // ========================================================
-  // COMUNICADOS – usando colunas reais da tabela
-  // ========================================================
+  // ---- Carregar comunicados ----
   const carregarComunicados = useCallback(async () => {
     if (!usuario) return;
-
     setLoadingComunicados(true);
     setErroComunicados(null);
-
     try {
       const { data, error } = await supabase
         .from("comunicados")
-        .select(
-          `
-          id,
-          titulo,
-          conteudo,
-          criado_em,
-          publico_alvo,
-          importante,
-          users!comunicados_autor_id_fkey ( nome )
-        `
-        )
+        .select(`id, titulo, conteudo, criado_em, publico_alvo, importante, users!comunicados_autor_id_fkey ( nome )`)
         .order("criado_em", { ascending: false })
         .limit(20);
-
       if (error) throw error;
 
       const serieNomeAluno = (usuario.serie || "").toLowerCase();
+      const filtrados = data?.filter((c: any) => {
+        const publico = (c.publico_alvo || "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        if (publico.length === 0) return true;
+        return publico.includes("todos") || publico.includes("todos-alunos") || publico.includes("alunos") || publico.includes(serieNomeAluno);
+      }) || [];
 
-      const filtrados =
-        data?.filter((c: any) => {
-          const publico = (c.publico_alvo || "")
-            .split(",")
-            .map((s: string) => s.trim().toLowerCase())
-            .filter(Boolean);
-
-          if (publico.length === 0) return true;
-
-          return (
-            publico.includes("todos") ||
-            publico.includes("todos-alunos") ||
-            publico.includes("alunos") ||
-            publico.includes(serieNomeAluno)
-          );
-        }) || [];
-
-      const comunicadosFormatados: ComunicadoData[] = filtrados.map(
-        (c: any) => ({
-          id: c.id,
-          titulo: c.titulo,
-          conteudo: c.conteudo,
-          tipo: c.importante ? "urgente" : "informativo",
-          dataPublicacao: c.criado_em,
-          autorNome:
-            Array.isArray(c.users) && c.users.length > 0
-              ? c.users[0].nome
-              : c.users?.nome || "Coordenação",
-          lido: false,
-          publico_alvo_raw: c.publico_alvo || "",
-        })
-      );
-
-      setComunicados(comunicadosFormatados);
+      setComunicados(filtrados.map((c: any) => ({
+        id: c.id, titulo: c.titulo, conteudo: c.conteudo,
+        tipo: c.importante ? "urgente" : "informativo",
+        dataPublicacao: c.criado_em,
+        autorNome: Array.isArray(c.users) && c.users.length > 0 ? c.users[0].nome : c.users?.nome || "Coordenação",
+        lido: false, publico_alvo_raw: c.publico_alvo || "",
+      })));
     } catch (e: any) {
-      console.error("Erro ao carregar comunicados (aluno):", e);
-      setErroComunicados(
-        e?.message || "Erro ao carregar comunicados para você."
-      );
+      setErroComunicados(e?.message || "Erro ao carregar comunicados.");
       setComunicados([]);
     } finally {
       setLoadingComunicados(false);
     }
   }, [usuario]);
 
-  useEffect(() => {
-    if (usuario) {
-      carregarComunicados();
-    }
-  }, [usuario, carregarComunicados]);
+  useEffect(() => { if (usuario) carregarComunicados(); }, [usuario, carregarComunicados]);
+  useEffect(() => { setNotificacoesNaoLidas(0); }, []);
 
-  useEffect(() => {
-    setNotificacoesNaoLidas(0);
-  }, []);
-
-  // ========================================================
+  // ============================================================
   // VIEWS SECUNDÁRIAS
-  // ========================================================
+  // ============================================================
 
   if (viewAtual === "boletim") {
     return (
-      <Boletim
-        onVoltar={handleVoltar} // ✅ Usando handleVoltar
-        turma={turma}
-        usuario={usuario}
-      />
+      <div className="min-h-screen bg-background">
+        <HeaderPadrao {...headerProps} />
+        <BarraAzul titulo="Boletim Escolar" subtitulo={turma?.serieNome} onVoltar={handleVoltar} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Boletim turma={turma} usuario={usuario} />
+        </main>
+        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
+      </div>
     );
   }
 
-  // ✅ AGENDA DO ALUNO: Simplificada para usar a série/turma do aluno logado
-  if (viewAtual === "agenda" && turma) { // Só renderiza se a turma do aluno já estiver carregada
+  if (viewAtual === "agenda" && turma) {
     return (
-      <AgendaAluno
-        onVoltar={handleVoltar} // ✅ Usando handleVoltar
-        serie={{ id: turma.serieId, nome: turma.serieNome }}
-        turma={{ id: turma.id, nome: turma.nome }}
-        disciplinasDoAluno={turma.disciplinas} // ✅ ESSENCIAL: Passa as disciplinas do aluno
-      />
+      <div className="min-h-screen bg-background">
+        <HeaderPadrao {...headerProps} />
+        <BarraAzul titulo="Agenda Diária" subtitulo={turma.serieNome} onVoltar={handleVoltar} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <AgendaAluno
+            serie={{ id: turma.serieId, nome: turma.serieNome }}
+            turma={{ id: turma.id, nome: turma.nome }}
+            disciplinasDoAluno={turma.disciplinas}
+          />
+        </main>
+        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
+      </div>
     );
   }
 
   if (viewAtual === "horarios") {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white border-b sticky top-0 z-30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <SchoolHeader subtitle="Painel do Aluno" />
-            <Button
-              variant="ghost"
-              onClick={handleVoltar} // ✅ Usando handleVoltar
-              className="text-sm"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao painel
-            </Button>
-          </div>
-        </header>
-
-        <main className="max-w-6xl mx-auto px-4 py-6">
+      <div className="min-h-screen bg-background">
+        <HeaderPadrao {...headerProps} />
+        <BarraAzul titulo="Grade Horária" subtitulo={turma?.serieNome} onVoltar={handleVoltar} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <HorarioEscolar turmaSelecionada={turma?.serieNome || ""} />
         </main>
+        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
   }
 
   if (viewAtual === "disciplina" && disciplinaSelecionada && turma) {
     return (
-      <DisciplinaPage
-        disciplina={disciplinaSelecionada}
-        turma={turma}
-        onVoltar={handleVoltar} // ✅ Usando handleVoltar
-        usuario={usuario}
-      />
+      <div className="min-h-screen bg-background">
+        <HeaderPadrao {...headerProps} />
+        <BarraAzul titulo={disciplinaSelecionada.nome} subtitulo={turma.serieNome} onVoltar={handleVoltar} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <DisciplinaPage
+            disciplina={disciplinaSelecionada}
+            turma={turma}
+            usuario={usuario}
+          />
+        </main>
+        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
+      </div>
     );
   }
 
-  // ========================================================
+  // ============================================================
   // DASHBOARD PRINCIPAL
-  // ========================================================
-
+  // ============================================================
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header igual ao do professor, mas com subtitle de aluno */}
-      <header className="bg-white border-b sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <SchoolHeader subtitle="Painel do Aluno" />
+    <div className="min-h-screen bg-background text-foreground">
+      <HeaderPadrao {...headerProps} />
 
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMostrarNotificacoes(true)}
-              >
-                <Bell className="w-5 h-5 text-gray-500" />
-                {notificacoesNaoLidas > 0 && (
-                  <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
-                )}
-              </Button>
-            </div>
+      {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
 
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-              <div className="text-right hidden md:block">
-                <p className="text-sm font-medium text-gray-900">
-                  {usuario?.nome}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {turma?.serieNome || "Aluno"}
-                </p>
-              </div>
-
-              <div className="relative">
-                <button
-                  onClick={() => setMostrarMenuUsuario(!mostrarMenuUsuario)}
-                  className="focus:outline-none"
-                >
-                  <Avatar className="h-9 w-9 border-2 border-gray-100">
-                    <AvatarImage src={(usuario as any)?.avatar} />
-                    <AvatarFallback className="bg-blue-100 text-blue-700">
-                      {usuario?.nome?.charAt(0) || "A"}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-
-                {mostrarMenuUsuario && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-[9999]">
-                    <button
-                      onClick={() => {
-                        setMostrarMenuUsuario(false);
-                        setMostrarPerfil(true);
-                      }}
-                      className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-                    >
-                      <User className="w-4 h-4" />
-                      Meu Perfil
-                    </button>
-                    <div className="border-t border-gray-200 my-2" />
-                    <button
-                      onClick={() => {
-                        setMostrarMenuUsuario(false);
-                        logout();
-                      }}
-                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Sair
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Notificações iguais às do professor */}
-      {mostrarNotificacoes && (
-        <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
-      )}
-
-      {/* Body com mesma estrutura do professor */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Faixa azul de boas-vindas */}
-        <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-8 md:p-10 overflow-visible pointer-events-none">
-          <div className="relative z-10 pointer-events-auto">
+
+        {/* Banner */}
+        <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-8 md:p-10 overflow-hidden">
+          <div className="relative z-10">
             <h1 className="text-3xl font-bold mb-2">
               Olá, {usuario?.nome?.split(" ")[0]}! 👋
             </h1>
@@ -464,166 +442,97 @@ export default function DashboardAluno() {
             </p>
             {turma && (
               <div className="mt-4 flex flex-wrap gap-2">
-                <Badge
-                  variant="secondary"
-                  className="bg-white/10 text-white border border-white/20"
-                >
+                <Badge variant="secondary" className="bg-white/10 text-white border border-white/20">
                   {turma.serieNome}
                 </Badge>
-                <Badge
-                  variant="secondary"
-                  className="bg-white/10 text-white border border-white/20"
-                >
+                <Badge variant="secondary" className="bg-white/10 text-white border border-white/20">
                   Turma {turma.nome}
                 </Badge>
               </div>
             )}
           </div>
-
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
         </section>
 
-        {/* Acesso Rápido (como no professor) */}
+        {/* Acesso Rápido */}
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <div className="w-1 h-6 bg-blue-600 rounded-full" />
             Acesso Rápido
           </h2>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Boletim */}
-            <Button
-              onClick={() => setViewAtual("boletim")}
-              variant="outline"
-              className="h-24 flex flex-col items-center justify-center gap-2 hover:border-green-500 hover:bg-green-50 transition-all"
-            >
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-green-600" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">
-                Boletim
-              </span>
-            </Button>
-
-            {/* Agenda */}
-            <Button
-              onClick={() => setViewAtual("agenda")}
-              variant="outline"
-              className="h-24 flex flex-col items-center justify-center gap-2 hover:border-purple-500 hover:bg-purple-50 transition-all"
-            >
-              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-purple-600" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">
-                Agenda
-              </span>
-            </Button>
-
-            {/* Horários */}
-            <Button
-              onClick={() => setViewAtual("horarios")}
-              variant="outline"
-              className="h-24 flex flex-col items-center justify-center gap-2 hover:border-orange-500 hover:bg-orange-50 transition-all"
-            >
-              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                <Clock className="w-5 h-5 text-orange-600" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">
-                Horários
-              </span>
-            </Button>
+            {[
+              { view: "boletim" as ViewType, icon: <BarChart3 className="w-5 h-5 text-green-600 dark:text-green-400" />, label: "Boletim", iconBg: "bg-green-100 dark:bg-green-900/30" },
+              { view: "agenda" as ViewType, icon: <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />, label: "Agenda", iconBg: "bg-purple-100 dark:bg-purple-900/30" },
+              { view: "horarios" as ViewType, icon: <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />, label: "Horários", iconBg: "bg-orange-100 dark:bg-orange-900/30" },
+            ].map((item) => (
+              <Button
+                key={item.view}
+                onClick={() => setViewAtual(item.view)}
+                variant="outline"
+                className="h-24 flex flex-col items-center justify-center gap-2 bg-card border-border hover:bg-accent transition-all shadow-sm"
+              >
+                <div className={`w-10 h-10 ${item.iconBg} rounded-full flex items-center justify-center`}>
+                  {item.icon}
+                </div>
+                <span className="text-sm font-medium text-foreground">{item.label}</span>
+              </Button>
+            ))}
           </div>
         </section>
 
-        {/* Minhas Disciplinas + Comunicados (grid 2x1 igual professor) */}
+        {/* Disciplinas + Comunicados */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          {/* Minhas Disciplinas */}
+
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-gray-400" />
-                Minhas Disciplinas
-              </h3>
-            </div>
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-muted-foreground" />
+              Minhas Disciplinas
+            </h3>
 
             {loadingTurma ? (
-              <div className="flex items-center justify-center p-8 bg-white rounded-lg shadow-sm">
+              <div className="flex items-center justify-center p-8 bg-card rounded-lg border border-border">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                <span className="ml-2 text-gray-600">
-                  Carregando suas disciplinas...
-                </span>
+                <span className="ml-2 text-muted-foreground">Carregando disciplinas...</span>
               </div>
             ) : erroTurma ? (
-              <Card className="border-red-200 bg-red-50">
-                <CardContent className="p-6 flex items-start gap-3">
-                  <AlertCircle className="w-6 h-6 text-red-600 mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-red-900 mb-1">
-                      Erro ao carregar suas informações
-                    </h3>
-                    <p className="text-sm text-red-700 mb-3">{erroTurma}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={carregarTurma}
-                    >
-                      Tentar novamente
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : !turma ? (
-              <Card className="p-8 text-center bg-white shadow-sm">
-                <CardContent>
-                  <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Nenhuma turma encontrada
-                  </h3>
-                  <p className="text-gray-600">
-                    Parece que você ainda não está vinculado a nenhuma turma.
-                  </p>
-                </CardContent>
-              </Card>
-            ) : turma.disciplinas.length === 0 ? (
-              <Card className="p-8 text-center bg-white shadow-sm">
-                <CardContent>
-                  <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Nenhuma disciplina cadastrada
-                  </h3>
-                  <p className="text-gray-600">
-                    Ainda não há disciplinas vinculadas à sua série no sistema.
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/50 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-900 dark:text-red-400 text-sm mb-1">Erro ao carregar informações</p>
+                  <p className="text-sm text-red-700 dark:text-red-300 mb-3">{erroTurma}</p>
+                  <Button variant="outline" size="sm" onClick={carregarTurma}>Tentar novamente</Button>
+                </div>
+              </div>
+            ) : !turma || turma.disciplinas.length === 0 ? (
+              <div className="p-12 text-center bg-card rounded-lg border border-border">
+                <BookOpen className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-30" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  {!turma ? "Nenhuma turma encontrada" : "Nenhuma disciplina cadastrada"}
+                </h3>
+                <p className="text-muted-foreground text-sm">
+                  {!turma ? "Você ainda não está vinculado a nenhuma turma." : "Não há disciplinas vinculadas à sua série."}
+                </p>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {turma.disciplinas.map((disc) => (
-                  <Card
+                  <div
                     key={disc.id}
-                    className="group cursor-pointer hover:border-blue-300 transition-all bg-white border shadow-sm hover:shadow-md"
-                    onClick={() => {
-                      setDisciplinaSelecionada(disc);
-                      setViewAtual("disciplina");
-                    }}
+                    className="group cursor-pointer bg-card border border-border rounded-lg shadow-sm hover:bg-accent hover:border-blue-500/50 transition-all p-4 flex items-center justify-between"
+                    onClick={() => { setDisciplinaSelecionada(disc); setViewAtual("disciplina"); }}
                   >
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${disc.cor}`}
-                        >
-                          <BookOpen className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-semibold">{disc.nome}</p>
-                          <p className="text-xs text-gray-500">
-                            {turma.serieNome} — Turma {turma.nome}
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${disc.cor}`}>
+                        <BookOpen className="h-5 w-5" />
                       </div>
-                      <ChevronRight className="h-5 w-5 text-gray-400" />
-                    </CardContent>
-                  </Card>
+                      <div>
+                        <p className="font-semibold text-foreground text-sm">{disc.nome}</p>
+                        <p className="text-xs text-muted-foreground">{turma.serieNome} — Turma {turma.nome}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-blue-500 transition-colors" />
+                  </div>
                 ))}
               </div>
             )}
@@ -631,90 +540,56 @@ export default function DashboardAluno() {
 
           {/* Comunicados */}
           <div>
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Megaphone className="w-5 h-5 text-gray-400" /> Comunicados
+            <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-muted-foreground" /> Comunicados
             </h3>
 
             {loadingComunicados ? (
-              <div className="flex items-center justify-center p-8 bg-white rounded-lg shadow-sm">
+              <div className="flex items-center justify-center p-8 bg-card rounded-lg border border-border">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                <span className="ml-2 text-gray-600">
-                  Carregando comunicados...
-                </span>
+                <span className="ml-2 text-muted-foreground">Carregando...</span>
               </div>
             ) : erroComunicados ? (
-              <Card className="border-red-200 bg-red-50">
-                <CardContent className="p-6 flex items-start gap-3">
-                  <AlertCircle className="w-6 h-6 text-red-600 mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-red-900 mb-1">
-                      Erro ao carregar comunicados
-                    </h3>
-                    <p className="text-sm text-red-700 mb-3">
-                      {erroComunicados}
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={carregarComunicados}
-                    >
-                      Tentar novamente
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/50 rounded-lg">
+                <p className="text-sm text-red-700 dark:text-red-300 mb-3">{erroComunicados}</p>
+                <Button variant="outline" size="sm" onClick={carregarComunicados}>Tentar novamente</Button>
+              </div>
             ) : comunicados.length === 0 ? (
-              <Card className="p-8 text-center bg-white shadow-sm">
-                <CardContent>
-                  <Info className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Nenhum comunicado
-                  </h3>
-                  <p className="text-gray-600">
-                    Não há comunicados recentes para você.
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="p-8 text-center bg-card rounded-lg border border-border">
+                <Info className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-30" />
+                <p className="font-semibold text-foreground text-sm">Nenhum comunicado</p>
+                <p className="text-muted-foreground text-xs mt-1">Não há comunicados recentes.</p>
+              </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {comunicados.map((c) => (
-                  <Card
+                  <div
                     key={c.id}
-                    className="bg-white shadow-sm border overflow-hidden"
+                    className="bg-card border border-border rounded-lg p-4 cursor-pointer hover:border-blue-500/40 hover:bg-accent transition-all"
                   >
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        {c.tipo === "urgente" && (
-                          <AlertCircle className="w-4 h-4 text-red-500" />
-                        )}
-                        {c.tipo === "informativo" && (
-                          <Info className="w-4 h-4 text-blue-500" />
-                        )}
-                        <Badge
-                          variant="secondary"
-                          className={`text-[10px] font-medium ${
-                            c.tipo === "urgente"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-blue-100 text-blue-800"
-                          }`}
-                        >
-                          {c.tipo === "urgente"
-                            ? "Urgente"
-                            : "Informativo"}
-                        </Badge>
-                      </div>
-                      <h4 className="font-semibold text-sm text-gray-900 mb-1">
-                        {c.titulo}
-                      </h4>
-                      <p className="text-xs text-gray-700 line-clamp-3 mb-2">
-                        {c.conteudo}
-                      </p>
-                      <div className="flex items-center justify-between text-[11px] text-gray-500">
-                        <span>{c.autorNome}</span>
-                        <span>{formatarData(c.dataPublicacao)}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                    <div className="flex items-center gap-2 mb-2">
+                      {c.tipo === "urgente"
+                        ? <AlertCircle className="w-4 h-4 text-red-500" />
+                        : <Info className="w-4 h-4 text-blue-500" />
+                      }
+                      <Badge
+                        variant="secondary"
+                        className={`text-[10px] font-medium ${
+                          c.tipo === "urgente"
+                            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                            : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+                        }`}
+                      >
+                        {c.tipo === "urgente" ? "Urgente" : "Informativo"}
+                      </Badge>
+                    </div>
+                    <h4 className="font-semibold text-sm text-foreground mb-1">{c.titulo}</h4>
+                    <p className="text-xs text-muted-foreground line-clamp-3 mb-2">{c.conteudo}</p>
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>{c.autorNome}</span>
+                      <span>{formatarData(c.dataPublicacao)}</span>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
@@ -722,7 +597,6 @@ export default function DashboardAluno() {
         </section>
       </main>
 
-      {/* Modais */}
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
     </div>
   );

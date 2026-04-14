@@ -91,7 +91,7 @@ export default function AdminUsuariosSimples({ onVoltar }: Props) {
       toast.error("Erro ao atualizar status");
       console.error(error);
     } else {
-      toast.success(`Usuário ${novoStatus ? "ativado" : "inativado"}`);
+      toast.success(`Ufsuário ${novoStatus ? "ativado" : "inativado"}`);
       carregarUsuarios();
     }
   };
@@ -100,7 +100,7 @@ export default function AdminUsuariosSimples({ onVoltar }: Props) {
   //   EXCLUIR USUÁRIO
   // ----------------------------------------------
   const confirmarExclusao = async () => {
-    if (!deletando);
+    if (!deletando) return;
     const { error } = await supabase.from("users").delete().eq("id", deletando.id);
     if (error) {
       toast.error("Erro ao excluir usuário");

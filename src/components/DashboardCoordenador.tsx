@@ -1,366 +1,267 @@
 // src/components/DashboardCoordenador.tsx
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  Clock,
-  Loader2,
-  Bell,
-  Calendar,
-  FileText,
-  BarChart3,
-  UserCheck,
-  Send,
-  MessageSquare,
-  ArrowLeft,
-  ChevronDown,
-  Users,
-  Eye,
+  Clock, Loader2, Bell, Calendar, FileText, BarChart3,
+  UserCheck, Send, MessageSquare, Sun, Moon, User, LogOut,
 } from 'lucide-react';
 
 import { Card, CardContent, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { useTheme } from '../contexts/ThemeContext';
 
 import { Notificacoes } from './Notificacoes';
 import { PerfilUsuario } from './PerfilUsuario';
 import { SchoolHeader } from './SchoolHeader';
 import { Usuario } from '../types/auth';
 
-// ---------- Lazy imports dos subpainéis ----------
-const BoletinsGerais = lazy(() => import('./BoletinsGerais'));
-const RelatorioTurma = lazy(() => import('./RelatorioTurma'));
-const FrequenciaAlunos = lazy(() => import('./FrequenciaAluno'));
-const EnviarComunicado = lazy(() => import('./EnviarComunicado'));
-const ForumCoordenador = lazy(() => import('./ForumCoordenador'));
-const AgendaProfessores = lazy(() => import('./AgendaProfessores'));
-const GestaoHorarios = lazy(() => import('./GestaoHorarios'));
+const BoletinsGerais     = lazy(() => import('./BoletinsGerais'));
+const RelatorioTurma     = lazy(() => import('./RelatorioTurma'));
+const FrequenciaAlunos   = lazy(() => import('./FrequenciaAluno'));
+const EnviarComunicado   = lazy(() => import('./EnviarComunicado'));
+const ForumCoordenador   = lazy(() => import('./ForumCoordenador'));
+const AgendaProfessores  = lazy(() => import('./AgendaProfessores'));
+const GestaoHorarios     = lazy(() => import('./GestaoHorarios'));
 
-// ---------- Props ----------
 interface DashboardCoordenadorProps {
   onBackToSite?: () => void;
   usuario?: Usuario;
   logout?: () => void;
 }
 
-// ---------- Componente principal ----------
-export default function DashboardCoordenador({
-  onBackToSite,
-  usuario,
-  logout,
-}: DashboardCoordenadorProps) {
+type ViewType = 'dashboard' | 'boletins' | 'relatorio' | 'frequencia' | 'comunicado' | 'agenda' | 'horarios' | 'forum';
+
+export default function DashboardCoordenador({ onBackToSite, usuario, logout }: DashboardCoordenadorProps) {
+  const { theme, toggleTheme } = useTheme();
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
   const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
-  const [viewAtual, setViewAtual] = useState<
-    | 'dashboard'
-    | 'boletins'
-    | 'relatorio'
-    | 'frequencia'
-    | 'comunicado'
-    | 'agenda'
-    | 'horarios'
-    | 'forum'
-  >('dashboard');
+  const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
+  const [viewAtual, setViewAtual] = useState<ViewType>('dashboard');
+  const avatarRef = useRef<HTMLButtonElement>(null);
 
-  // ----------------- Itens de menu -----------------
+  const getDropdownPos = () => {
+    if (!avatarRef.current) return { top: 68, right: 16 };
+    const rect = avatarRef.current.getBoundingClientRect();
+    return { top: rect.bottom + 8, right: window.innerWidth - rect.right };
+  };
+
   const menuItems = [
     {
-      id: 'boletins',
-      title: 'Boletins Gerais',
+      id: 'boletins', title: 'Boletins Gerais',
       description: 'Visualizar boletins de todos os alunos',
-      icon: <FileText className="w-8 h-8" />,
-      color: 'bg-blue-200',
-      iconColor: 'text-blue-600',
+      icon: FileText, bg: '#dbeafe', iconColor: '#2563eb',
     },
     {
-      id: 'relatorio',
-      title: 'Relatório de Turma',
+      id: 'relatorio', title: 'Relatório de Turma',
       description: 'Relatórios detalhados por turma',
-      icon: <BarChart3 className="w-8 h-8" />,
-      color: 'bg-green-200',
-      iconColor: 'text-green-600',
+      icon: BarChart3, bg: '#dcfce7', iconColor: '#16a34a',
     },
     {
-      id: 'frequencia',
-      title: 'Frequência de Alunos',
+      id: 'frequencia', title: 'Frequência de Alunos',
       description: 'Verificar frequência e faltas',
-      icon: <UserCheck className="w-8 h-8" />,
-      color: 'bg-purple-200',
-      iconColor: 'text-purple-600',
+      icon: UserCheck, bg: '#ede9fe', iconColor: '#7c3aed',
     },
     {
-      id: 'comunicado',
-      title: 'Enviar Comunicado',
+      id: 'comunicado', title: 'Enviar Comunicado',
       description: 'Enviar mensagens para alunos e professores',
-      icon: <Send className="w-8 h-8" />,
-      color: 'bg-orange-200',
-      iconColor: 'text-orange-600',
+      icon: Send, bg: '#ffedd5', iconColor: '#ea580c',
     },
     {
-      id: 'agenda',
-      title: 'Agenda dos Professores',
+      id: 'agenda', title: 'Agenda dos Professores',
       description: 'Visualizar agendas de todos os professores',
-      icon: <Calendar className="w-8 h-8" />,
-      color: 'bg-pink-200',
-      iconColor: 'text-pink-600',
+      icon: Calendar, bg: '#fce7f3', iconColor: '#db2777',
     },
     {
-      id: 'horarios',
-      title: 'Gestão de Horários',
+      id: 'horarios', title: 'Gestão de Horários',
       description: 'Cadastrar e editar grade horária das turmas',
-      icon: <Clock className="w-8 h-8" />,
-      color: 'bg-cyan-200',
-      iconColor: 'text-cyan-600',
+      icon: Clock, bg: '#cffafe', iconColor: '#0891b2',
     },
     {
-      id: 'forum',
-      title: 'Fórum das Disciplinas',
+      id: 'forum', title: 'Fórum das Disciplinas',
       description: 'Visualizar mensagens dos fóruns',
-      icon: <MessageSquare className="w-8 h-8" />,
-      color: 'bg-indigo-200',
-      iconColor: 'text-indigo-600',
+      icon: MessageSquare, bg: '#e0e7ff', iconColor: '#4f46e5',
     },
   ];
 
-  const handleVoltar = () => setViewAtual('dashboard');
-  const handleMenuClick = (id: string) => setViewAtual(id as any);
+  const tituloPorView: Record<string, string> = {
+    boletins: 'Boletins Gerais', relatorio: 'Relatório de Turma',
+    frequencia: 'Frequência de Alunos', comunicado: 'Enviar Comunicado',
+    agenda: 'Agenda dos Professores', horarios: 'Gestão de Horários',
+    forum: 'Fórum das Disciplinas',
+  };
 
-  // ----------------- Renderização dos módulos -----------------
   const renderConteudo = () => {
     switch (viewAtual) {
-      case 'boletins':
-        return <BoletinsGerais onVoltar={handleVoltar} />;
-      case 'relatorio':
-        return <RelatorioTurma onVoltar={handleVoltar} />;
-      case 'frequencia':
-        return <FrequenciaAlunos onVoltar={handleVoltar} />;
-      case 'comunicado':
-        return <EnviarComunicado onVoltar={handleVoltar} />;
-      case 'agenda':
-        return <AgendaProfessores onVoltar={handleVoltar} />;
-      case 'horarios':
-        return <GestaoHorarios onVoltar={handleVoltar} />;
-      case 'forum':
-        return <ForumCoordenador onVoltar={handleVoltar} />;
-      default:
-        return null;
+      case 'boletins':    return <BoletinsGerais onVoltar={() => setViewAtual('dashboard')} />;
+      case 'relatorio':   return <RelatorioTurma onVoltar={() => setViewAtual('dashboard')} />;
+      case 'frequencia':  return <FrequenciaAlunos onVoltar={() => setViewAtual('dashboard')} />;
+      case 'comunicado':  return <EnviarComunicado onVoltar={() => setViewAtual('dashboard')} />;
+      case 'agenda':      return <AgendaProfessores onVoltar={() => setViewAtual('dashboard')} />;
+      case 'horarios':    return <GestaoHorarios onVoltar={() => setViewAtual('dashboard')} />;
+      case 'forum':       return <ForumCoordenador onVoltar={() => setViewAtual('dashboard')} />;
+      default: return null;
     }
   };
 
-  // ----------------- VIEW: SUBPAINÉIS (Agenda, Boletins etc.) -----------------
-  if (viewAtual !== 'dashboard') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        {/* Header fixo, sempre igual e na mesma largura */}
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
-            {/* Escola + subtítulo */}
-            <SchoolHeader subtitle="Painel do Coordenador" />
+  const pos = getDropdownPos();
 
-            {/* Ações à direita */}
-            <div className="flex items-center gap-3">
-              {onBackToSite && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onBackToSite}
-                  className="hidden sm:inline-flex"
-                >
-                  <ArrowLeft className="w-4 h-4 mr-1" />
-                  Voltar ao site
-                </Button>
-              )}
+  // ── Header padrão ──
+  const Header = () => (
+    <header className="bg-card border-b border-border py-4 sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+        <SchoolHeader subtitle="Painel do Coordenador" />
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  setMostrarNotificacoes(prev => !prev)
-                }
-              >
-                <Bell className="w-5 h-5" />
-              </Button>
+        <div className="flex items-center gap-3">
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMostrarPerfil(true)}
-                className="flex items-center gap-2"
-              >
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src={usuario?.avatar} />
-                  <AvatarFallback>
-                    {usuario?.nome?.slice(0, 2).toUpperCase() || 'CO'}
-                  </AvatarFallback>
-                </Avatar>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Dropdown de notificações */}
-          {mostrarNotificacoes && (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-              <div className="absolute right-0 mt-2 w-80 z-50">
+          <div className="relative">
+            <Button variant="ghost" size="icon" onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}>
+              <Bell className="w-5 h-5 text-muted-foreground" />
+            </Button>
+            {mostrarNotificacoes && (
+              <div className="absolute right-0 top-12 w-80 z-50">
                 <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
               </div>
-            </div>
-          )}
-        </header>
+            )}
+          </div>
 
-        {/* Conteúdo dos módulos – mesma largura do header */}
-        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-          <Suspense
-            fallback={
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                <span>Carregando módulo...</span>
-              </div>
-            }
+          <button
+            ref={avatarRef}
+            onClick={() => setMostrarMenuUsuario(!mostrarMenuUsuario)}
+            className="focus:outline-none"
           >
+            <Avatar className="w-9 h-9 border-2 border-border cursor-pointer">
+              <AvatarImage src={usuario?.avatar} />
+              <AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                {usuario?.nome?.slice(0, 2).toUpperCase() || 'CO'}
+              </AvatarFallback>
+            </Avatar>
+          </button>
+        </div>
+      </div>
+
+      {mostrarMenuUsuario && createPortal(
+        <>
+          <div className="fixed inset-0 z-[99998]" onClick={() => setMostrarMenuUsuario(false)} />
+          <div
+            className="fixed w-48 rounded-xl border border-border shadow-2xl z-[99999] overflow-hidden"
+            style={{ backgroundColor: 'var(--card)', top: pos.top, right: pos.right }}
+          >
+            <button
+              onClick={() => { setMostrarMenuUsuario(false); setMostrarPerfil(true); }}
+              className="w-full px-4 py-3 text-left text-sm text-foreground hover:bg-accent flex items-center gap-2 transition-colors"
+            >
+              <User className="w-4 h-4 text-muted-foreground" /> Meu Perfil
+            </button>
+            <div className="h-px bg-border mx-3" />
+            <button
+              onClick={() => { setMostrarMenuUsuario(false); logout?.(); }}
+              className="w-full px-4 py-3 text-left text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors"
+            >
+              <LogOut className="w-4 h-4" /> Sair
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+    </header>
+  );
+
+  // ── Barra azul ──
+  const BarraAzul = ({ titulo }: { titulo: string }) => (
+    <div className="bg-blue-600 text-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-4">
+        <Button variant="ghost" size="sm" onClick={() => setViewAtual('dashboard')} className="text-white hover:bg-white/20">
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Voltar
+        </Button>
+        <h1 className="font-semibold text-lg">{titulo}</h1>
+      </div>
+    </div>
+  );
+
+  // ── View subpainel ──
+  if (viewAtual !== 'dashboard') {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <BarraAzul titulo={tituloPorView[viewAtual] || ''} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Suspense fallback={
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin mr-2 text-blue-600" />
+              <span className="text-muted-foreground">Carregando módulo...</span>
+            </div>
+          }>
             {renderConteudo()}
           </Suspense>
         </main>
-
-        {/* Perfil */}
-        <PerfilUsuario
-          open={mostrarPerfil}
-          onOpenChange={setMostrarPerfil}
-          usuario={usuario}
-          logout={logout}
-        />
+        <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
       </div>
     );
   }
 
-  // ----------------- VIEW: DASHBOARD PRINCIPAL -----------------
+  // ── Dashboard principal ──
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header principal reaproveitando o mesmo padrão */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
-          <SchoolHeader subtitle="Painel do Coordenador" />
+    <div className="min-h-screen bg-background">
+      <Header />
 
-          <div className="flex items-center gap-3">
-            {onBackToSite && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onBackToSite}
-                className="hidden sm:inline-flex"
-              >
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                Voltar ao site
-              </Button>
-            )}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                setMostrarNotificacoes(prev => !prev)
-              }
-            >
-              <Bell className="w-5 h-5" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setMostrarPerfil(true)}
-              className="flex items-center gap-2"
-            >
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={usuario?.avatar} />
-                <AvatarFallback>
-                  {usuario?.nome?.slice(0, 2).toUpperCase() || 'CO'}
-                </AvatarFallback>
-              </Avatar>
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            </Button>
+        {/* Banner */}
+        <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-8 overflow-hidden">
+          <div className="relative z-10">
+            <h1 className="text-3xl font-bold mb-2">
+              Olá, {usuario?.nome?.split(' ')[0]}! 👋
+            </h1>
+            <p className="text-blue-100 text-lg max-w-xl">
+              Bem-vindo ao painel de coordenação.
+            </p>
           </div>
-        </div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
+        </section>
 
-        {mostrarNotificacoes && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-            <div className="absolute right-0 mt-2 w-80 z-50">
-              <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
-            </div>
+        {/* Menu de módulos */}
+        <section>
+          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <div className="w-1 h-6 bg-blue-600 rounded-full" />
+            Módulos
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {menuItems.map(item => {
+              const Icon = item.icon;
+              return (
+                <Card
+                  key={item.id}
+                  onClick={() => setViewAtual(item.id as ViewType)}
+                  className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 border border-border bg-card"
+                >
+                  <CardContent className="p-8 text-center space-y-4">
+                    <div
+                      className="w-14 h-14 mx-auto rounded-full flex items-center justify-center shadow-sm"
+                      style={{ backgroundColor: item.bg }}
+                    >
+                      <Icon style={{ width: 26, height: 26, color: item.iconColor }} />
+                    </div>
+                    <div>
+                      <CardTitle className="font-semibold text-foreground text-sm mb-1">
+                        {item.title}
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {item.description}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
-        )}
-      </header>
-
-      {/* Conteúdo principal do Dashboard - mesma largura do header */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Menu Principal */}
-          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {menuItems.map(item => (
-              <Card
-                key={item.id}
-                onClick={() => handleMenuClick(item.id)}
-                className={`${item.color} cursor-pointer border-0 hover:shadow-lg transition-all duration-200 hover:scale-105`}
-              >
-                <CardContent className="p-6 text-center space-y-3">
-                  <div
-                    className={`w-16 h-16 mx-auto bg-white rounded-full flex items-center justify-center ${item.iconColor} shadow-md`}
-                  >
-                    {item.icon}
-                  </div>
-                  <div>
-                    <CardTitle className="font-semibold text-gray-800 text-base mb-1">
-                      {item.title}
-                    </CardTitle>
-                    <p className="text-xs text-gray-600">
-                      {item.description}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Sidebar */}
-          <aside className="space-y-6">
-            <Card>
-              <CardContent className="p-4 text-center">
-                <Eye className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                <p className="text-sm text-gray-500">
-                  Nenhum alerta no momento
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Sistema funcionando normalmente
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <BarChart3 className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                <p className="text-sm text-gray-500">
-                  Nenhuma atividade recente
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Histórico será exibido aqui
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <Users className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                <p className="text-sm text-gray-500">Professores online</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Em desenvolvimento
-                </p>
-              </CardContent>
-            </Card>
-          </aside>
-        </div>
+        </section>
       </main>
 
-      <PerfilUsuario
-        open={mostrarPerfil}
-        onOpenChange={setMostrarPerfil}
-        usuario={usuario}
-        logout={logout}
-      />
+      <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
     </div>
   );
 }

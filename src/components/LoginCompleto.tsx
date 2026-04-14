@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
+import { useTheme } from "../contexts/ThemeContext";
 import {
   BookOpen,
   Eye,
@@ -13,6 +14,8 @@ import {
   AlertCircle,
   ArrowLeft,
   Phone,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { Usuario, TipoUsuario } from "../types/auth";
 import { supabase } from "../supabase/supabaseClient";
@@ -22,10 +25,8 @@ interface LoginCompletoProps {
   onBackToSite: () => void;
 }
 
-export default function LoginCompleto({
-  onLogin,
-  onBackToSite,
-}: LoginCompletoProps) {
+export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoProps) {
+  const { theme, toggleTheme } = useTheme();
   const [loginField, setLoginField] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,17 +39,13 @@ export default function LoginCompleto({
     setErro("");
 
     try {
-      console.log("[Login] Tentando autenticar:", loginField);
-
-      // 1. Autenticação no Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email: loginField,
         password: senha,
       });
 
       if (error) {
-        console.error("❌ Erro de login:", error.message);
-        setErro("Usuário ou senha incorretos");
+        setErro("Usuário ou senha incorretos.");
         return;
       }
 
@@ -58,23 +55,16 @@ export default function LoginCompleto({
         return;
       }
 
-      console.log("[Login] Autenticado com sucesso:", user.id);
-
-      // 2. Busca perfil na tabela `users`, campo `tipo`
       const { data: perfil, error: perfilError } = await supabase
         .from("users")
-        .select("nome, tipo")
+        .select("nome, tipo, serie, avatar")
         .eq("id", user.id)
         .single();
 
       if (perfilError) {
-        console.warn(
-          "[Login] Não foi possível carregar perfil da tabela users:",
-          perfilError.message
-        );
+        setErro("Não foi possível carregar seu perfil. Tente novamente.");
+        return;
       }
-
-      console.log("[Login] Perfil carregado:", perfil);
 
       const tipoBanco = perfil?.tipo as TipoUsuario | undefined;
       const tipoNormalizado: TipoUsuario =
@@ -85,14 +75,13 @@ export default function LoginCompleto({
         nome: perfil?.nome || user.email || "Usuário",
         email: user.email || "",
         tipo: tipoNormalizado,
+        serie: perfil?.serie,
+        avatar: perfil?.avatar,
       };
 
-      // 3. Salva sessão e sobe pro App
       localStorage.setItem("ava_user", JSON.stringify(usuario));
-      console.log("✅ Login completo:", usuario);
       onLogin(usuario);
-    } catch (err: any) {
-      console.error("💥 Erro inesperado durante o login:", err);
+    } catch {
       setErro("Ocorreu um erro inesperado durante o login.");
     } finally {
       setLoading(false);
@@ -101,44 +90,54 @@ export default function LoginCompleto({
 
   const handleForgotPassword = () => {
     const phone = "5598988887777";
-    const message =
-      "Olá! Esqueci minha senha do Portal AVA. Podem me ajudar?";
-    window.open(
-      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
-      "_blank"
-    );
+    const message = "Olá! Esqueci minha senha do Portal AVA. Podem me ajudar?";
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/20" />
+    <div className="min-h-screen flex items-center justify-center p-4 relative bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950">
+      {/* Overlay sutil */}
+      <div className="absolute inset-0 bg-black/30" />
 
-      <Card className="w-full max-w-md relative z-10 shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
-        <CardHeader className="text-center space-y-4">
+      {/* Toggle de tema — canto superior direito */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 z-20 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/20"
+        aria-label="Alternar tema"
+      >
+        {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+      </button>
+
+      <Card className="w-full max-w-md relative z-10 shadow-2xl border border-border bg-card backdrop-blur-sm">
+        <CardHeader className="text-center space-y-4 pb-2">
+          {/* Botão voltar */}
           <Button
             onClick={onBackToSite}
             variant="ghost"
             size="sm"
-            className="absolute top-4 left-4 text-gray-500 hover:text-gray-700"
+            className="absolute top-4 left-4 text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="w-4 h-4 mr-1" />
             Voltar
           </Button>
 
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center mx-auto shadow-lg">
+          {/* Ícone */}
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center mx-auto shadow-lg mt-4">
             <BookOpen className="w-10 h-10 text-white" />
           </div>
 
           <div>
-            <CardTitle className="text-2xl text-blue-800">Portal AVA</CardTitle>
-            <p className="text-gray-600">Colégio Conexão EAD Maranhense</p>
+            <CardTitle className="text-2xl text-foreground">Portal AVA</CardTitle>
+            <p className="text-muted-foreground text-sm mt-1">
+              Colégio Conexão EAD Maranhense
+            </p>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-4">
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <Label htmlFor="loginField" className="text-gray-700 font-medium">
+              <Label htmlFor="loginField" className="text-foreground font-medium">
                 Usuário
               </Label>
               <Input
@@ -146,7 +145,7 @@ export default function LoginCompleto({
                 type="email"
                 value={loginField}
                 onChange={(e) => setLoginField(e.target.value)}
-                placeholder="seu@conexaoead"
+                placeholder="seu@email.com"
                 className="mt-1"
                 required
                 disabled={loading}
@@ -154,7 +153,7 @@ export default function LoginCompleto({
             </div>
 
             <div>
-              <Label htmlFor="senha" className="text-gray-700 font-medium">
+              <Label htmlFor="senha" className="text-foreground font-medium">
                 Senha
               </Label>
               <div className="relative mt-1">
@@ -168,62 +167,57 @@ export default function LoginCompleto({
                   required
                   disabled={loading}
                 />
-
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-muted-foreground hover:text-foreground"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={loading}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 h-4" />
-                  ) : (
-                    <Eye className="h-4 h-4" />
-                  )}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
 
             {erro && (
               <Alert variant="destructive">
-                <AlertCircle className="h-4 h-4" />
+                <AlertCircle className="w-4 h-4" />
                 <AlertDescription>{erro}</AlertDescription>
               </Alert>
             )}
 
             <Button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold"
               disabled={loading}
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 h-4 animate-spin" />
+                  <Loader2 className="mr-2 w-4 h-4 animate-spin" />
                   Entrando...
                 </>
               ) : (
-                "Entrar no Portal"
+                "Entrar no Portal"
               )}
             </Button>
           </form>
 
-          <div className="space-y-3 pt-4 border-t text-center">
+          <div className="space-y-3 pt-4 border-t border-border text-center">
             <Button
               type="button"
               variant="ghost"
               onClick={handleForgotPassword}
-              className="w-full text-gray-600 hover:text-blue-600 text-sm"
+              className="w-full text-muted-foreground hover:text-blue-600 text-sm"
               disabled={loading}
             >
-              <Phone className="mr-2 h-4 h-4" />
-              Esqueci minha senha
+              <Phone className="mr-2 w-4 h-4" />
+              Esqueci minha senha
             </Button>
- <p className="text-xs text-gray-500">
-              Problemas para acessar?{" "}
-              <a href="tel:+5598988887777" className="text-blue-600 hover:underline">
-                (98) 98888‑7777
+            <p className="text-xs text-muted-foreground">
+              Problemas para acessar?{" "}
+              <a href="tel:+559889255294" className="text-blue-500 hover:underline">
+                (98) 98 8925-5294
               </a>
             </p>
           </div>

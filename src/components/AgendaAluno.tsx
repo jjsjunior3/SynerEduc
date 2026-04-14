@@ -1,21 +1,10 @@
 // src/components/AgendaAluno.tsx
-/**
- * Agenda do Aluno
- * Exibe eventos e compromissos criados pelos professores da série do aluno,
- * filtrados por série e data.
- *
- * O contexto de série e turma é recebido via props do DashboardAluno.
- * A filtragem de dados no Supabase agora considera APENAS a série do aluno,
- * conforme o requisito de que a tabela 'users' não possui coluna 'turma'.
- */
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import {
-  ArrowLeft,
   Loader2,
   AlertCircle,
   Calendar as CalendarIcon,
@@ -23,28 +12,25 @@ import {
   BookOpen,
   Home,
   Info,
-  ListFilter, // ✅ ADICIONADO: Importar ListFilter
+  ListFilter,
 } from 'lucide-react';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { toast } from 'sonner';
-import { Badge } from './ui/badge'; // ✅ ADICIONADO: Importar Badge para usar a cor da disciplina
 
-// Interfaces atualizadas para refletir as colunas do banco de dados
 interface DisciplinaProps {
-  id: string; // UUID da disciplina
+  id: string;
   nome: string;
-  cor?: string; // ✅ Adicionado cor para exibir no badge
+  cor?: string;
 }
 
 interface SerieProps {
-  id: string; // ID real da série (UUID)
-  nome: string; // Nome da série (ex: "7º ano")
+  id: string;
+  nome: string;
 }
 
 interface TurmaProps {
-  id: string; // ID da turma (UUID)
-  nome: string; // Nome da turma (string)
+  id: string;
+  nome: string;
 }
 
 interface EventoAgenda {
@@ -57,21 +43,40 @@ interface EventoAgenda {
   data_entrega: string | null;
   disciplina_id: string;
   professor_id: string;
-  serie: string; // Nome da série
-  turma: string | null; // Pode ser null ou string vazia
+  serie: string;
+  turma: string | null;
   criado_em: string;
   professor?: { nome: string };
-  disciplina?: { nome: string; cor?: string }; // ✅ ATUALIZADO: Inclui cor da disciplina
+  disciplina?: { nome: string; cor?: string };
 }
 
 interface AgendaAlunoProps {
-  onVoltar: () => void;
   serie: SerieProps;
   turma: TurmaProps;
   disciplinasDoAluno: DisciplinaProps[];
 }
 
-export function AgendaAluno({ onVoltar, serie, turma, disciplinasDoAluno }: AgendaAlunoProps) {
+function resolverCorDisciplina(cor?: string): string {
+  if (!cor) return '#3b82f6';
+  if (cor.startsWith('#')) return cor;
+  const mapa: Record<string, string> = {
+    'bg-blue-500': '#3b82f6', 'bg-blue-600': '#2563eb',
+    'bg-green-500': '#22c55e', 'bg-green-600': '#16a34a',
+    'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
+    'bg-purple-500': '#a855f7', 'bg-purple-600': '#9333ea',
+    'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
+    'bg-yellow-500': '#eab308', 'bg-yellow-600': '#ca8a04',
+    'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777',
+    'bg-indigo-500': '#6366f1', 'bg-indigo-600': '#4f46e5',
+    'bg-teal-500': '#14b8a6', 'bg-teal-600': '#0d9488',
+    'bg-emerald-500': '#10b981', 'bg-emerald-600': '#059669',
+    'bg-violet-500': '#8b5cf6', 'bg-violet-600': '#7c3aed',
+    'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
+  };
+  return mapa[cor] || '#3b82f6';
+}
+
+export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoProps) {
   const { usuario } = useAuth();
 
   const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([]);
@@ -80,110 +85,56 @@ export function AgendaAluno({ onVoltar, serie, turma, disciplinasDoAluno }: Agen
 
   const hojeISO = new Date().toISOString().slice(0, 10);
   const [dataFiltro, setDataFiltro] = useState<string>(hojeISO);
-  const [disciplinaFiltro, setDisciplinaFiltro] = useState<string>('todas'); // ✅ NOVO: Estado para filtro de disciplina
+  const [disciplinaFiltro, setDisciplinaFiltro] = useState<string>('todas');
 
-  // =========================================
-  // FUNÇÕES AUXILIARES
-  // =========================================
   const formatarDataBR = (dataISO: string) => {
     if (!dataISO) return "Data inválida";
-    try {
-      return new Date(dataISO + 'T00:00:00').toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-    } catch (e) {
-      console.error("Erro ao formatar data:", e);
-      return "Data inválida";
-    }
+    try { return new Date(dataISO + 'T00:00:00').toLocaleDateString('pt-BR', { timeZone: 'UTC' }); }
+    catch { return "Data inválida"; }
   };
 
   const formatarDataCurta = (dataISO: string) => {
     if (!dataISO) return "Data inválida";
     try {
       return new Date(dataISO + 'T00:00:00').toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        timeZone: 'UTC'
+        day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC'
       });
-    } catch (e) {
-      console.error("Erro ao formatar data curta:", e);
-      return "Data inválida";
-    }
+    } catch { return "Data inválida"; }
   };
 
-  // =========================================
-  // CARREGAR EVENTOS DA AGENDA DO PROFESSOR
-  // =========================================
   const carregarEventos = useCallback(async () => {
     if (!usuario?.id || !serie?.nome) {
       setErro("Informações do aluno ou série não disponíveis.");
       setCarregando(false);
-      setEventosAgenda([]);
       return;
     }
-
     try {
       setCarregando(true);
       setErro(null);
 
-      console.log("🔍 Carregando eventos da agenda do aluno com:", {
-        serieNome: serie.nome,
-        dataAula: dataFiltro,
-        disciplinasDoAlunoIds: disciplinasDoAluno.map(d => d.id),
-        disciplinaFiltro: disciplinaFiltro,
-      });
-
       let query = supabase
         .from("agenda_professor")
-        .select(
-          `
-          id,
-          titulo_unidade,
-          conteudo_sala,
-          atividade_casa,
-          observacao,
-          data_aula,
-          data_entrega,
-          disciplina_id,
-          professor_id,
-          serie,
-          turma,
-          criado_em,
-          professor:users(nome),
-          disciplina:disciplinas(nome, cor)
-        ` // ✅ ATUALIZADO: Buscando 'cor' da disciplina
-        )
+        .select(`id, titulo_unidade, conteudo_sala, atividade_casa, observacao,
+          data_aula, data_entrega, disciplina_id, professor_id, serie, turma, criado_em,
+          professor:users(nome), disciplina:disciplinas(nome, cor)`)
         .eq("serie", serie.nome)
-        .eq("data_aula", dataFiltro); // Filtra pelo "Dia da Aula"
+        .eq("data_aula", dataFiltro);
 
-      // Filtra pelas disciplinas que o aluno realmente cursa (se houver)
       if (disciplinasDoAluno.length > 0) {
         query = query.in("disciplina_id", disciplinasDoAluno.map(d => d.id));
       } else {
-        // Se o aluno não tem disciplinas, não há eventos para mostrar
-        setEventosAgenda([]);
-        setCarregando(false);
-        return;
+        setEventosAgenda([]); setCarregando(false); return;
       }
 
-      // Aplica filtro de disciplina se selecionado
-      if (disciplinaFiltro !== 'todas') {
-        query = query.eq("disciplina_id", disciplinaFiltro);
-      }
+      if (disciplinaFiltro !== 'todas') query = query.eq("disciplina_id", disciplinaFiltro);
 
-      // ✅ CORRIGIDO: Sintaxe de ordenação para tabelas relacionadas
       const { data, error } = await query
-        .order("nome", { foreignTable: "disciplina", ascending: true }) // Ordena pelo nome da disciplina
-        .order("criado_em", { ascending: true }); // Ordena por data de criação para eventos da mesma disciplina
-
-      console.log("DEBUG: Data returned from agenda_professor:", data);
-      console.log("DEBUG: Error from agenda_professor:", error);
+        .order("nome", { foreignTable: "disciplina", ascending: true })
+        .order("criado_em", { ascending: true });
 
       if (error) throw error;
-
       setEventosAgenda((data || []) as EventoAgenda[]);
-      console.log("✅ Dados da agenda recebidos:", data);
     } catch (e: any) {
-      console.error("❌ Erro ao carregar agenda do aluno:", e);
       setErro(e.message || "Erro ao carregar eventos da agenda.");
       setEventosAgenda([]);
     } finally {
@@ -191,264 +142,186 @@ export function AgendaAluno({ onVoltar, serie, turma, disciplinasDoAluno }: Agen
     }
   }, [usuario?.id, serie?.nome, dataFiltro, disciplinasDoAluno, disciplinaFiltro]);
 
-  useEffect(() => {
-    carregarEventos();
-  }, [carregarEventos]);
+  useEffect(() => { carregarEventos(); }, [carregarEventos]);
 
-  // Agrupar eventos por disciplina para exibição
-  const eventosAgrupadosPorDisciplina = eventosAgenda.reduce((acc, evento) => {
-    const disciplinaNome = evento.disciplina?.nome || 'Disciplina Desconhecida';
-    if (!acc[disciplinaNome]) {
-      acc[disciplinaNome] = [];
-    }
-    acc[disciplinaNome].push(evento);
+  const eventosAgrupados = eventosAgenda.reduce((acc, evento) => {
+    const nome = evento.disciplina?.nome || 'Disciplina Desconhecida';
+    if (!acc[nome]) acc[nome] = [];
+    acc[nome].push(evento);
     return acc;
   }, {} as Record<string, EventoAgenda[]>);
 
-  // =========================================
-  // RENDERIZAÇÃO
-  // =========================================
   return (
-    // ✅ ATUALIZADO: Adicionado max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8
-    // e o visual de "cartão" (bg-white, rounded-lg, shadow-md, overflow-hidden)
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col h-full bg-white rounded-lg shadow-md overflow-hidden">
-      {/* Header da Agenda */}
-      {/* ✅ ATUALIZADO: Removido p-4 e bg-blue-600, text-white, shadow-sm do div externo */}
-      {/* O padding e background agora são internos ao div com max-w-7xl */}
-      <div className={`flex items-center gap-4 p-4 bg-blue-600 text-white flex-shrink-0`}>
-        <Button variant="ghost" size="sm" onClick={onVoltar} className="flex items-center gap-2 text-white hover:bg-white/20">
-          <ArrowLeft className="w-4 h-4" />
-          Voltar
-        </Button>
-        <div>
-          <h1 className="font-semibold text-lg">Agenda Diária</h1>
-          <p className="text-sm opacity-90">
-            <span className="font-medium">{serie?.nome || 'Série'}</span>
-            {/* ✅ REMOVIDO: Turma não é mais usada para filtragem principal */}
-            {/* <span className="mx-1">•</span>
-            <span className="text-white/80">
-              Turma {turma?.nome || 'Turma'}
-            </span> */}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
 
-      {/* Conteúdo principal da agenda (filtros e eventos) */}
-      {/* ✅ ATUALIZADO: Adicionado flex-1 overflow-y-auto para scroll e p-6 para padding interno */}
-      <div className="flex-1 overflow-y-auto space-y-6 p-6">
-        {/* Filtro por data */}
-        <Card className="bg-white dark:bg-gray-800 shadow-sm border dark:border-gray-700">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
-              <CalendarIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              Filtro por data
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
-              <p>
-                Selecione uma data para ver os eventos da agenda. Por padrão,
-                mostramos os eventos do <strong>Dia da Aula</strong> selecionado.
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Na data selecionada ({formatarDataBR(dataFiltro)}) há{" "}
-                <strong>{eventosAgenda.length}</strong>{" "}
-                {eventosAgenda.length === 1 ? "evento" : "eventos"} registrado(s).
-              </p>
-            </div>
-
-            <div className="flex flex-col items-start gap-1">
-              <Label htmlFor="filtro-data" className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                Dia da Aula
-              </Label>
-              <Input
-                id="filtro-data"
-                type="date"
-                value={dataFiltro}
-                onChange={(e) => setDataFiltro(e.target.value)}
-                className="w-48 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Filtro por disciplina */}
-        <Card className="bg-white dark:bg-gray-800 shadow-sm border dark:border-gray-700">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
-              <ListFilter className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              Filtro por disciplina
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
-              <p>
-                Selecione uma disciplina para filtrar os eventos.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-start gap-1">
-              <Label htmlFor="filtro-disciplina" className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                Disciplina
-              </Label>
-              <select
-                id="filtro-disciplina"
-                value={disciplinaFiltro}
-                onChange={(e) => setDisciplinaFiltro(e.target.value)}
-                className="w-48 p-2 border rounded-md bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-              >
-                <option value="todas">Todas as Disciplinas</option>
-                {disciplinasDoAluno.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Mensagens de estado */}
-        {carregando && (
-          <div className="flex items-center justify-center p-8 text-blue-600 dark:text-blue-400">
-            <Loader2 className="w-8 h-8 animate-spin mr-2" />
-            <p className="text-lg">Carregando agenda...</p>
-          </div>
-        )}
-
-        {erro && (
-          <div className="flex flex-col items-center justify-center p-8 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
-            <AlertCircle className="w-8 h-8 mb-4" />
-            <p className="text-lg font-semibold">Erro ao carregar agenda:</p>
-            <p className="text-sm text-center">{erro}</p>
-            <Button onClick={carregarEventos} className="mt-4 bg-red-500 hover:bg-red-600 text-white">
-              Tentar Novamente
-            </Button>
-          </div>
-        )}
-
-        {!carregando && !erro && eventosAgenda.length === 0 && (
-          <Card className="flex flex-col items-center justify-center p-8 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700">
-            <Info className="w-8 h-8 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Nenhum evento encontrado
-            </h3>
-            <p className="text-sm text-center">
-              Não há eventos registrados para a data e filtros selecionados.
+      {/* Filtro por data */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <CalendarIcon className="w-4 h-4 text-blue-600" />
+            Filtro por data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+          <div className="space-y-1 text-sm text-muted-foreground">
+            <p>Selecione uma data para ver os eventos da agenda.</p>
+            <p className="text-xs">
+              Em {formatarDataBR(dataFiltro)} há{" "}
+              <strong className="text-foreground">{eventosAgenda.length}</strong>{" "}
+              {eventosAgenda.length === 1 ? "evento" : "eventos"} registrado(s).
             </p>
-          </Card>
-        )}
-
-        {/* Lista de Eventos Agrupados por Disciplina */}
-        {!carregando && !erro && eventosAgenda.length > 0 && (
-          <div className="space-y-6">
-            {Object.entries(eventosAgrupadosPorDisciplina).map(([disciplinaNome, eventos]) => (
-              <div key={disciplinaNome} className="space-y-4">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 border-b pb-2 mb-4 border-gray-200 dark:border-gray-700">
-                  {disciplinaNome}
-                </h2>
-                {eventos.map((evento) => (
-                  <Card key={evento.id} className="bg-white dark:bg-gray-800 shadow-sm border dark:border-gray-700">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        {evento.professor?.nome || 'Professor Desconhecido'}
-                      </CardTitle>
-                      <Badge
-                        className="text-[10px] font-medium"
-                        style={{
-                          backgroundColor: evento.disciplina?.cor || '#6B7280', // Cor da disciplina ou cinza padrão
-                          color: '#FFFFFF', // Texto branco para contraste
-                        }}
-                      >
-                        {evento.disciplina?.nome || 'Disciplina'}
-                      </Badge>
-                    </CardHeader>
-
-                    <CardContent className="space-y-4">
-                      {/* Título da Unidade */}
-                      <div>
-                        <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-2">
-                          {evento.titulo_unidade}
-                        </h3>
-                      </div>
-
-                      {/* Em Sala */}
-                      {evento.conteudo_sala && (
-                        <div className="bg-green-50 dark:bg-green-950 rounded-lg p-4 border border-green-200 dark:border-green-800">
-                          <div className="flex items-center gap-2 mb-2">
-                            <BookOpen className="w-5 h-5 text-green-700 dark:text-green-400" />
-                            <h4 className="font-semibold text-green-900 dark:text-green-100">Conteúdo em Sala:</h4>
-                          </div>
-                          <p className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap">
-                            {evento.conteudo_sala}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Para Casa */}
-                      {evento.atividade_casa && (
-                        <div className="bg-amber-50 dark:bg-amber-950 rounded-lg p-4 border border-amber-200 dark:border-amber-800">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Home className="w-5 h-5 text-amber-700 dark:text-amber-400" />
-                            <h4 className="font-semibold text-amber-900 dark:text-amber-100">Atividade Para Casa:</h4>
-                          </div>
-                          <p className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap">
-                            {evento.atividade_casa}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Data de Entrega */}
-                      {evento.data_entrega && (
-                        <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                          <div className="flex items-center gap-2">
-                            <CalendarIcon className="w-5 h-5 text-blue-700 dark:text-blue-400" />
-                            <h4 className="font-semibold text-blue-900 dark:text-blue-100">Prazo de Entrega:</h4>
-                            <span className="text-blue-700 dark:text-blue-300 font-medium">
-                              {formatarDataCurta(evento.data_entrega)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Observação */}
-                      {evento.observacao && (
-                        <div className="bg-purple-50 dark:bg-purple-950 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
-                          <div className="flex items-center gap-2 mb-2">
-                            <AlertCircle className="w-5 h-5 text-purple-700 dark:text-purple-400" />
-                            <h4 className="font-semibold text-purple-900 dark:text-purple-100">Observação:</h4>
-                          </div>
-                          <p className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap">
-                            {evento.observacao}
-                          </p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ))}
           </div>
-        )}
+          <div className="flex flex-col items-start gap-1">
+            <Label htmlFor="filtro-data" className="text-xs font-medium text-muted-foreground">Dia da Aula</Label>
+            <Input id="filtro-data" type="date" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value)} className="w-48" />
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Informação */}
-        <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-900 dark:text-blue-100">
-                <p className="font-medium mb-1">Sobre a Agenda:</p>
-                <ul className="list-disc list-inside space-y-1 text-blue-800 dark:text-blue-300">
-                  <li>A agenda é atualizada diariamente pelos professores após cada aula.</li>
-                  <li>Use o filtro de data para consultar atividades de dias anteriores.</li>
-                  <li>Fique atento aos prazos de entrega destacados em azul.</li>
-                  <li>Leia as observações dos professores com atenção.</li>
-                </ul>
-              </div>
+      {/* Filtro por disciplina */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <ListFilter className="w-4 h-4 text-blue-600" />
+            Filtro por disciplina
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+          <p className="text-sm text-muted-foreground">Selecione uma disciplina para filtrar os eventos.</p>
+          <div className="flex flex-col items-start gap-1">
+            <Label htmlFor="filtro-disciplina" className="text-xs font-medium text-muted-foreground">Disciplina</Label>
+            <select
+              id="filtro-disciplina"
+              value={disciplinaFiltro}
+              onChange={(e) => setDisciplinaFiltro(e.target.value)}
+              className="w-48 p-2 border border-border rounded-md bg-background text-foreground"
+            >
+              <option value="todas">Todas as Disciplinas</option>
+              {disciplinasDoAluno.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Loading */}
+      {carregando && (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mr-3" />
+          <p className="text-muted-foreground">Carregando agenda...</p>
+        </div>
+      )}
+
+      {/* Erro */}
+      {erro && (
+        <Card className="border-destructive bg-destructive/10">
+          <CardContent className="p-6 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-destructive mt-0.5" />
+            <div>
+              <p className="font-semibold text-destructive mb-1">Erro ao carregar agenda</p>
+              <p className="text-sm text-muted-foreground mb-3">{erro}</p>
+              <Button variant="outline" size="sm" onClick={carregarEventos}>Tentar novamente</Button>
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Vazio */}
+      {!carregando && !erro && eventosAgenda.length === 0 && (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Info className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">Nenhum evento encontrado</h3>
+            <p className="text-muted-foreground text-sm">Não há eventos registrados para a data e filtros selecionados.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Eventos */}
+      {!carregando && !erro && eventosAgenda.length > 0 && (
+        <div className="space-y-8">
+          {Object.entries(eventosAgrupados).map(([disciplinaNome, eventos]) => (
+            <div key={disciplinaNome}>
+              <h2 className="text-lg font-bold text-foreground border-b border-border pb-2 mb-4">{disciplinaNome}</h2>
+              <div className="space-y-4">
+                {eventos.map((evento) => {
+                  const corHex = resolverCorDisciplina(evento.disciplina?.cor);
+                  return (
+                    <Card key={evento.id}>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Clock className="w-4 h-4" />
+                          <span>{evento.professor?.nome || 'Professor'}</span>
+                        </div>
+                        <span className="text-[11px] font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: corHex }}>
+                          {evento.disciplina?.nome || disciplinaNome}
+                        </span>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <h3 className="font-semibold text-base text-foreground">{evento.titulo_unidade}</h3>
+
+                        {evento.conteudo_sala && (
+                          <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac', borderRadius: '0.5rem', padding: '1rem' }}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <BookOpen style={{ width: 16, height: 16, color: '#16a34a' }} />
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#15803d' }}>Conteúdo em Sala</span>
+                            </div>
+                            <p style={{ fontSize: 13, color: '#14532d', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{evento.conteudo_sala}</p>
+                          </div>
+                        )}
+
+                        {evento.atividade_casa && (
+                          <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '0.5rem', padding: '1rem' }}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Home style={{ width: 16, height: 16, color: '#d97706' }} />
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#b45309' }}>Atividade Para Casa</span>
+                            </div>
+                            <p style={{ fontSize: 13, color: '#78350f', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{evento.atividade_casa}</p>
+                          </div>
+                        )}
+
+                        {evento.data_entrega && (
+                          <div style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '0.5rem', padding: '1rem' }}>
+                            <div className="flex items-center gap-2">
+                              <CalendarIcon style={{ width: 16, height: 16, color: '#2563eb' }} />
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#1d4ed8' }}>Prazo de Entrega:</span>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: '#1e3a8a' }}>{formatarDataCurta(evento.data_entrega)}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {evento.observacao && (
+                          <div style={{ backgroundColor: '#faf5ff', border: '1px solid #c4b5fd', borderRadius: '0.5rem', padding: '1rem' }}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <AlertCircle style={{ width: 16, height: 16, color: '#9333ea' }} />
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#7e22ce' }}>Observação</span>
+                            </div>
+                            <p style={{ fontSize: 13, color: '#581c87', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{evento.observacao}</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Card informativo */}
+      <div style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '0.75rem', padding: '1rem' }}>
+        <div className="flex items-start gap-3">
+          <Info style={{ width: 18, height: 18, color: '#2563eb', marginTop: 2, flexShrink: 0 }} />
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#1d4ed8', marginBottom: 6 }}>Sobre a Agenda:</p>
+            <ul style={{ fontSize: 12, color: '#1e40af', paddingLeft: 16, lineHeight: 1.8 }}>
+              <li>A agenda é atualizada diariamente pelos professores após cada aula.</li>
+              <li>Use o filtro de data para consultar atividades de dias anteriores.</li>
+              <li>Fique atento aos prazos de entrega destacados em azul.</li>
+              <li>Leia as observações dos professores com atenção.</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -454,20 +454,19 @@ export function AtividadesAluno({
                               </Button>
                             )}
 
-                            {atividade.tipo !== "prova" && (
-                              <Button
-                                onClick={() =>
-                                  handleEnviarAtividade(atividade)
-                                }
-                                className="gap-2"
-                                disabled={isAtrasado}
-                              >
-                                <Send className="w-4 h-4" />
-                                {isAtrasado
-                                  ? "Prazo Expirado"
-                                  : "Enviar Resposta"}
-                              </Button>
-                            )}
+                            {/* AQUI ESTÁ A MUDANÇA: REMOVIDA A CONDIÇÃO DE TIPO */}
+                            <Button
+                              onClick={() =>
+                                handleEnviarAtividade(atividade)
+                              }
+                              className="gap-2"
+                              disabled={isAtrasado}
+                            >
+                              <Send className="w-4 h-4" />
+                              {isAtrasado
+                                ? "Prazo Expirado"
+                                : "Enviar Resposta"}
+                            </Button>
                           </div>
                         </div>
                       </div>

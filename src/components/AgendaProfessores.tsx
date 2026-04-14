@@ -1,49 +1,18 @@
 // src/components/AgendaProfessores.tsx
-
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from './ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from './ui/dialog';
-
-import {
-  ArrowLeft,
-  Calendar,
-  Clock,
-  Users,
-  BookOpen,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  CheckCircle,
-  AlertTriangle,
-  Clock3,
-  X,
-  Trash2,
-  Edit,
-  Send
+  Calendar, Clock, BookOpen, Filter, ChevronLeft, ChevronRight,
+  Eye, CheckCircle, AlertTriangle, Clock3, Trash2, Edit, Send, Loader2,
 } from 'lucide-react';
 
-interface AgendaProfessoresProps {
-  onVoltar: () => void;
-}
-
+interface AgendaProfessoresProps { onVoltar: () => void; }
 type StatusAgenda = 'pendente' | 'editada' | 'enviado';
 
 interface AgendaEvento {
@@ -52,496 +21,236 @@ interface AgendaEvento {
   conteudo_sala: string | null;
   atividade_casa: string | null;
   observacao: string | null;
-  data_aula: string;            // YYYY-MM-DD
-  horario: string | null;       // "07:30 - 08:20" ou similar
-  prazo_entrega: string | null; // YYYY-MM-DD
+  data_aula: string;
+  horario: string | null;
+  prazo_entrega: string | null;
   status: StatusAgenda;
   serie: string;
   turma: string | null;
   professor_nome: string;
   disciplina_nome: string;
   editado_por_nome: string | null;
-  enviado_em: string | null;    // ISO
+  enviado_em: string | null;
 }
 
-interface FiltroOpcao {
-  id: string;
-  nome: string;
-}
+interface FiltroOpcao { id: string; nome: string; }
 
 export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) {
-  // Filtros
   const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
   const [professores, setProfessores] = useState<FiltroOpcao[]>([]);
   const [disciplinas, setDisciplinas] = useState<FiltroOpcao[]>([]);
   const [series, setSeries] = useState<string[]>([]);
-  const [professorId, setProfessorId] = useState<string>('todos');
-  const [disciplinaId, setDisciplinaId] = useState<string>('todas');
-  const [serieSelecionada, setSerieSelecionada] = useState<string>('todas');
-  const [statusFiltro, setStatusFiltro] =
-    useState<'todos' | StatusAgenda>('todos');
-
-  // Dados
+  const [professorId, setProfessorId] = useState('todos');
+  const [disciplinaId, setDisciplinaId] = useState('todas');
+  const [serieSelecionada, setSerieSelecionada] = useState('todas');
+  const [statusFiltro, setStatusFiltro] = useState<'todos' | StatusAgenda>('todos');
   const [eventos, setEventos] = useState<AgendaEvento[]>([]);
-  const [carregando, setCarregando] = useState<boolean>(true);
+  const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [eventoSelecionado, setEventoSelecionado] = useState<AgendaEvento | null>(null);
 
-  // Modal
-  const [eventoSelecionado, setEventoSelecionado] =
-    useState<AgendaEvento | null>(null);
-
-  // =========================
-  // Helpers de formatação
-  // =========================
-  const dataISO = useMemo(
-    () => dataSelecionada.toISOString().split('T')[0],
-    [dataSelecionada]
-  );
+  const dataISO = useMemo(() => dataSelecionada.toISOString().split('T')[0], [dataSelecionada]);
 
   const formatarDataExtenso = (date: Date) =>
-    date.toLocaleDateString('pt-BR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
+    date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const formatarDataCurta = (iso: string | null) => {
     if (!iso) return '—';
     const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString('pt-BR');
+    return isNaN(d.getTime()) ? iso : d.toLocaleDateString('pt-BR');
   };
 
   const formatarDataHoraCurta = (iso: string | null) => {
     if (!iso) return '—';
     const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    const data = d.toLocaleDateString('pt-BR');
-    const hora = d.toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    return `${data} às ${hora}`;
+    if (isNaN(d.getTime())) return iso;
+    return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
   };
 
-  const mudarDia = (delta: number) => {
-    setDataSelecionada(prev => {
-      const n = new Date(prev);
-      n.setDate(n.getDate() + delta);
-      return n;
-    });
-  };
+  const mudarDia = (delta: number) => setDataSelecionada(prev => {
+    const n = new Date(prev); n.setDate(n.getDate() + delta); return n;
+  });
 
-  const irParaHoje = () => setDataSelecionada(new Date());
-
-  // =========================
-  // Filtros (prof, disc, série)
-  // =========================
   useEffect(() => {
     async function carregarFiltros() {
       try {
-        setErro(null);
-
-        // Professores
-        const { data: profs, error: errProfs } = await supabase
-          .from('users')
-          .select('id, nome')
-          .eq('tipo', 'professor')
-          .order('nome', { ascending: true });
-
-        if (errProfs) throw errProfs;
-
-        const professoresOptions: FiltroOpcao[] = (profs || []).map(p => ({
-          id: String(p.id),
-          nome: String(p.nome ?? 'Professor(a)')
-        }));
-
-        setProfessores([
-          { id: 'todos', nome: 'Todos os Professores' },
-          ...professoresOptions
+        const [{ data: profs }, { data: disc }, { data: seriesData }] = await Promise.all([
+          supabase.from('users').select('id, nome').eq('tipo', 'professor').order('nome'),
+          supabase.from('disciplinas').select('id, nome').order('nome'),
+          supabase.from('series').select('nome').order('nome'),
         ]);
-
-        // Disciplinas
-        const { data: disc, error: errDisc } = await supabase
-          .from('disciplinas')
-          .select('id, nome')
-          .order('nome', { ascending: true });
-
-        if (errDisc) throw errDisc;
-
-        const discOptions: FiltroOpcao[] = (disc || []).map(d => ({
-          id: String(d.id),
-          nome: String(d.nome ?? 'Disciplina')
-        }));
-
-        setDisciplinas([{ id: 'todas', nome: 'Todas' }, ...discOptions]);
-
-        // Séries
-        const { data: seriesData, error: errSer } = await supabase
-          .from('series')
-          .select('nome')
-          .order('nome', { ascending: true });
-
-        if (errSer) throw errSer;
-
-        const seriesLista = (seriesData || [])
-          .map((s: any) => String(s.nome ?? '').trim())
-          .filter(s => s.length > 0);
-
-        setSeries(['todas', ...Array.from(new Set(seriesLista))]);
-      } catch (e: any) {
-        console.error('Erro ao carregar filtros da agenda:', e);
-        setErro('Não foi possível carregar as opções de filtro da agenda.');
-      }
+        setProfessores([{ id: 'todos', nome: 'Todos os Professores' }, ...(profs || []).map((p: any) => ({ id: String(p.id), nome: String(p.nome) }))]);
+        setDisciplinas([{ id: 'todas', nome: 'Todas' }, ...(disc || []).map((d: any) => ({ id: String(d.id), nome: String(d.nome) }))]);
+        setSeries(['todas', ...Array.from(new Set((seriesData || []).map((s: any) => String(s.nome).trim()).filter(Boolean)))]);
+      } catch { setErro('Não foi possível carregar os filtros.'); }
     }
-
     carregarFiltros();
   }, []);
 
-  // =========================
-  // Carregar eventos
-  // =========================
   useEffect(() => {
     async function carregarEventos() {
+      setCarregando(true); setErro(null);
       try {
-        setErro(null);
-        setCarregando(true);
+        let query = supabase.from('agenda_professor').select(`
+          id, titulo_unidade, conteudo_sala, atividade_casa, observacao,
+          data_aula, horario, prazo_entrega, status, serie, turma,
+          editado_por, enviado_em,
+          professor:professor_id(id, nome),
+          disciplina:disciplina_id(id, nome)
+        `).eq('data_aula', dataISO).order('horario', { ascending: true });
 
-        let query = supabase
-          .from('agenda_professor')
-          .select(
-            `
-              id,
-              titulo_unidade,
-              conteudo_sala,
-              atividade_casa,
-              observacao,
-              data_aula,
-              horario,
-              prazo_entrega,
-              status,
-              serie,
-              turma,
-              editado_por,
-              enviado_em,
-              professor:professor_id ( id, nome ),
-              disciplina:disciplina_id ( id, nome )
-            `
-          )
-          .eq('data_aula', dataISO)
-          .order('horario', { ascending: true });
-
-        if (professorId !== 'todos') {
-          query = query.eq('professor_id', professorId);
-        }
-        if (disciplinaId !== 'todas') {
-          query = query.eq('disciplina_id', disciplinaId);
-        }
-        if (serieSelecionada !== 'todas') {
-          query = query.eq('serie', serieSelecionada);
-        }
-        if (statusFiltro !== 'todos') {
-          query = query.eq('status', statusFiltro);
-        }
+        if (professorId !== 'todos') query = query.eq('professor_id', professorId);
+        if (disciplinaId !== 'todas') query = query.eq('disciplina_id', disciplinaId);
+        if (serieSelecionada !== 'todas') query = query.eq('serie', serieSelecionada);
+        if (statusFiltro !== 'todos') query = query.eq('status', statusFiltro);
 
         const { data, error } = await query;
         if (error) throw error;
 
-        const eventosFormatados: AgendaEvento[] = (data || []).map(
-          (item: any) => ({
-            id: String(item.id),
-            titulo_unidade: String(item.titulo_unidade ?? 'Título não informado'),
-            conteudo_sala: item.conteudo_sala ?? null,
-            atividade_casa: item.atividade_casa ?? null,
-            observacao: item.observacao ?? null,
-            data_aula: String(item.data_aula),
-            horario: item.horario ? String(item.horario) : null,
-            prazo_entrega: item.prazo_entrega
-              ? String(item.prazo_entrega)
-              : null,
-            status: (item.status ?? 'pendente') as StatusAgenda,
-            serie: String(item.serie ?? 'Série'),
-            turma: item.turma ? String(item.turma) : null,
-            professor_nome: String(item.professor?.nome ?? 'Professor'),
-            disciplina_nome: String(item.disciplina?.nome ?? 'Disciplina'),
-            editado_por_nome: item.editado_por
-              ? String(item.editado_por)
-              : null,
-            enviado_em: item.enviado_em ? String(item.enviado_em) : null
-          })
-        );
-
-        setEventos(eventosFormatados);
-      } catch (e: any) {
-        console.error('Erro ao carregar eventos da agenda:', e);
-        setErro('Não foi possível carregar as agendas deste dia.');
-      } finally {
-        setCarregando(false);
-      }
+        setEventos((data || []).map((item: any) => ({
+          id: String(item.id),
+          titulo_unidade: String(item.titulo_unidade ?? 'Sem título'),
+          conteudo_sala: item.conteudo_sala ?? null,
+          atividade_casa: item.atividade_casa ?? null,
+          observacao: item.observacao ?? null,
+          data_aula: String(item.data_aula),
+          horario: item.horario ? String(item.horario) : null,
+          prazo_entrega: item.prazo_entrega ? String(item.prazo_entrega) : null,
+          status: (item.status ?? 'pendente') as StatusAgenda,
+          serie: String(item.serie ?? ''),
+          turma: item.turma ? String(item.turma) : null,
+          professor_nome: String(item.professor?.nome ?? 'Professor'),
+          disciplina_nome: String(item.disciplina?.nome ?? 'Disciplina'),
+          editado_por_nome: item.editado_por ? String(item.editado_por) : null,
+          enviado_em: item.enviado_em ? String(item.enviado_em) : null,
+        })));
+      } catch { setErro('Não foi possível carregar as agendas deste dia.'); }
+      finally { setCarregando(false); }
     }
-
     carregarEventos();
   }, [dataISO, professorId, disciplinaId, serieSelecionada, statusFiltro]);
 
-  // =========================
-  // Contadores
-  // =========================
   const totalAgendas = eventos.length;
   const totalEnviadas = eventos.filter(e => e.status === 'enviado').length;
   const totalEditadas = eventos.filter(e => e.status === 'editada').length;
   const totalPendentes = eventos.filter(e => e.status === 'pendente').length;
 
-  // =========================
-  // Ações do coordenador
-  // =========================
-  const handleDeletarAgenda = async (id: string) => {
+  const handleDeletar = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja deletar esta agenda?')) return;
     try {
-      const { error } = await supabase
-        .from('agenda_professor')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('agenda_professor').delete().eq('id', id);
       if (error) throw error;
-
       setEventos(prev => prev.filter(e => e.id !== id));
       setEventoSelecionado(null);
-    } catch (e: any) {
-      console.error('Erro ao deletar agenda:', e);
-      alert('Não foi possível deletar a agenda.');
-    }
+    } catch { alert('Não foi possível deletar a agenda.'); }
   };
 
-  const handleEnviarParaPais = async (id: string) => {
+  const handleEnviar = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('agenda_professor')
-        .update({
-          status: 'enviado',
-          enviado_em: new Date().toISOString()
-        })
-        .eq('id', id);
-
+      const enviado_em = new Date().toISOString();
+      const { error } = await supabase.from('agenda_professor').update({ status: 'enviado', enviado_em }).eq('id', id);
       if (error) throw error;
-
-      setEventos(prev =>
-        prev.map(e =>
-          e.id === id
-            ? {
-                ...e,
-                status: 'enviado',
-                enviado_em: new Date().toISOString()
-              }
-            : e
-        )
-      );
-
-      setEventoSelecionado(prev =>
-        prev?.id === id
-          ? {
-              ...prev,
-              status: 'enviado',
-              enviado_em: new Date().toISOString()
-            }
-          : prev
-      );
-    } catch (e: any) {
-      console.error('Erro ao enviar agenda para os pais:', e);
-      alert('Não foi possível enviar a agenda para os pais.');
-    }
+      setEventos(prev => prev.map(e => e.id === id ? { ...e, status: 'enviado', enviado_em } : e));
+      setEventoSelecionado(prev => prev?.id === id ? { ...prev, status: 'enviado', enviado_em } : prev);
+    } catch { alert('Não foi possível enviar a agenda.'); }
   };
 
-  const handleEditarAgenda = (id: string) => {
-    // Aqui você decide: abrir outra tela, modal de edição, etc.
-    alert(`Edição da agenda ${id} ainda não implementada.`);
-  };
-
-  const getStatusBadge = (status: StatusAgenda) => {
+  const getStatusStyle = (status: StatusAgenda) => {
     switch (status) {
-      case 'enviado':
-        return (
-          <Badge className="bg-green-100 text-green-800 border border-green-200">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Enviada
-          </Badge>
-        );
-      case 'editada':
-        return (
-          <Badge className="bg-orange-100 text-orange-800 border border-orange-200">
-            <AlertTriangle className="w-3 h-3 mr-1" />
-            Editada
-          </Badge>
-        );
-      case 'pendente':
-      default:
-        return (
-          <Badge className="bg-red-100 text-red-800 border border-red-200">
-            <Clock3 className="w-3 h-3 mr-1" />
-            Pendente
-          </Badge>
-        );
+      case 'enviado':  return { bg: '#dcfce7', text: '#14532d', border: '#86efac', icon: <CheckCircle className="w-3 h-3" />, label: 'Enviada' };
+      case 'editada':  return { bg: '#ffedd5', text: '#7c2d12', border: '#fdba74', icon: <AlertTriangle className="w-3 h-3" />, label: 'Editada' };
+      default:         return { bg: '#fee2e2', text: '#7f1d1d', border: '#fca5a5', icon: <Clock3 className="w-3 h-3" />, label: 'Pendente' };
     }
   };
 
-  // =========================
-  // Render
-  // =========================
-  return (
-    // IMPORTANTE: sem max-w aqui. Quem controla isso é o <main> do Dashboard.
-    <div className="w-full space-y-6">
-      {/* Header interno da Agenda */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onVoltar}
-          className="mr-1"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">
-            Agenda dos Professores
-          </h1>
-          <p className="text-sm text-gray-600">
-            Visualize e gerencie as agendas de aula dos professores.
-          </p>
-        </div>
-      </div>
+  const StatusBadge = ({ status }: { status: StatusAgenda }) => {
+    const s = getStatusStyle(status);
+    return (
+      <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border"
+        style={{ backgroundColor: s.bg, color: s.text, borderColor: s.border }}>
+        {s.icon} {s.label}
+      </span>
+    );
+  };
 
-      {/* Linha com "Hoje" e data em destaque */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <Calendar className="w-4 h-4 text-blue-600" />
-          <span>{formatarDataExtenso(dataSelecionada)}</span>
+  // Cards de resumo com cores fixas
+  const resumoCards = [
+    { label: 'Total', value: totalAgendas, icon: BookOpen, bg: '#dbeafe', text: '#1e3a8a', iconColor: '#3b82f6' },
+    { label: 'Enviadas', value: totalEnviadas, icon: CheckCircle, bg: '#dcfce7', text: '#14532d', iconColor: '#16a34a' },
+    { label: 'Editadas', value: totalEditadas, icon: AlertTriangle, bg: '#ffedd5', text: '#7c2d12', iconColor: '#ea580c' },
+    { label: 'Pendentes', value: totalPendentes, icon: Clock, bg: '#fee2e2', text: '#7f1d1d', iconColor: '#dc2626' },
+  ];
+
+  return (
+    <div className="space-y-6">
+
+      {/* Navegação de data */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Calendar className="w-4 h-4 text-blue-600 flex-shrink-0" />
+          <span className="font-medium text-foreground capitalize">{formatarDataExtenso(dataSelecionada)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => mudarDia(-1)}
-          >
+          <Button variant="outline" size="icon" onClick={() => mudarDia(-1)}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <input
             type="date"
-            className="border rounded-md px-3 py-1 text-sm"
+            className="border border-border rounded-md px-3 py-1.5 text-sm bg-background text-foreground"
             value={dataISO}
-            onChange={e => {
-              const nova = new Date(e.target.value);
-              if (!Number.isNaN(nova.getTime())) setDataSelecionada(nova);
-            }}
+            onChange={e => { const d = new Date(e.target.value); if (!isNaN(d.getTime())) setDataSelecionada(d); }}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => mudarDia(1)}
-          >
+          <Button variant="outline" size="icon" onClick={() => mudarDia(1)}>
             <ChevronRight className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={irParaHoje}>
+          <Button variant="outline" size="sm" onClick={() => setDataSelecionada(new Date())}>
             Hoje
           </Button>
         </div>
       </div>
 
-      {/* Card de filtros */}
+      {/* Filtros */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-base">
-                Filtros da Agenda
-              </CardTitle>
-              <p className="text-xs text-gray-500">
-                Refine por professor, disciplina, série e status.
-              </p>
-            </div>
-            <Filter className="w-4 h-4 text-gray-400" />
+        <CardHeader className="border-b border-border pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-foreground text-base">
+              <Filter className="w-4 h-4 text-blue-600" /> Filtros da Agenda
+            </CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            {/* Professor */}
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-gray-700">
-                Professor
-              </span>
-              <Select
-                value={professorId}
-                onValueChange={v => setProfessorId(v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
+        <CardContent className="p-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            <div className="space-y-2 px-3">
+              <Label className="text-xs text-muted-foreground">Professor</Label>
+              <Select value={professorId} onValueChange={setProfessorId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {professores.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nome}
-                    </SelectItem>
-                  ))}
+                  {professores.map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Disciplina */}
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-gray-700">
-                Disciplina
-              </span>
-              <Select
-                value={disciplinaId}
-                onValueChange={v => setDisciplinaId(v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
+            <div className="space-y-2 px-3">
+              <Label className="text-xs text-muted-foreground">Disciplina</Label>
+              <Select value={disciplinaId} onValueChange={setDisciplinaId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {disciplinas.map(d => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.nome}
-                    </SelectItem>
-                  ))}
+                  {disciplinas.map(d => <SelectItem key={d.id} value={d.id}>{d.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Série */}
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-gray-700">
-                Série
-              </span>
-              <Select
-                value={serieSelecionada}
-                onValueChange={v => setSerieSelecionada(v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
+            <div className="space-y-2 px-3">
+              <Label className="text-xs text-muted-foreground">Série</Label>
+              <Select value={serieSelecionada} onValueChange={setSerieSelecionada}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {series.map(s => (
-                    <SelectItem key={s} value={s}>
-                      {s === 'todas' ? 'Todas' : s}
-                    </SelectItem>
-                  ))}
+                  {series.map(s => <SelectItem key={s} value={s}>{s === 'todas' ? 'Todas' : s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Status */}
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-gray-700">
-                Status
-              </span>
-              <Select
-                value={statusFiltro}
-                onValueChange={v =>
-                  setStatusFiltro(v as 'todos' | StatusAgenda)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
+            <div className="space-y-2 px-3">
+              <Label className="text-xs text-muted-foreground">Status</Label>
+              <Select value={statusFiltro} onValueChange={v => setStatusFiltro(v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
@@ -553,7 +262,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           </div>
 
           {erro && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            <div className="mt-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg px-4 py-3">
               {erro}
             </div>
           )}
@@ -561,250 +270,141 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       </Card>
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border border-blue-100 bg-blue-50/70">
-          <CardContent className="py-3 px-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-blue-700">Total de agendas</p>
-              <p className="text-xl font-semibold text-blue-900">
-                {totalAgendas}
-              </p>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 gap-5">
+        {resumoCards.map(card => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className="rounded-xl flex items-center justify-between"
+              style={{ backgroundColor: card.bg, padding: '1.25rem 1.5rem' }}>
+              <div>
+                <p className="text-xs font-semibold mb-1.5" style={{ color: card.text }}>{card.label}</p>
+                <p className="text-3xl font-bold" style={{ color: card.text }}>{card.value}</p>
+              </div>
+              <Icon style={{ width: 32, height: 32, color: card.iconColor, opacity: 0.7 }} />
             </div>
-            <BookOpen className="w-6 h-6 text-blue-500" />
-          </CardContent>
-        </Card>
-        <Card className="border border-green-100 bg-green-50/70">
-          <CardContent className="py-3 px-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-green-700">Enviadas</p>
-              <p className="text-xl font-semibold text-green-900">
-                {totalEnviadas}
-              </p>
-            </div>
-            <CheckCircle className="w-6 h-6 text-green-500" />
-          </CardContent>
-        </Card>
-        <Card className="border border-orange-100 bg-orange-50/70">
-          <CardContent className="py-3 px-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-orange-700">Editadas</p>
-              <p className="text-xl font-semibold text-orange-900">
-                {totalEditadas}
-              </p>
-            </div>
-            <AlertTriangle className="w-6 h-6 text-orange-500" />
-          </CardContent>
-        </Card>
-        <Card className="border border-red-100 bg-red-50/70">
-          <CardContent className="py-3 px-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-red-700">Pendentes</p>
-              <p className="text-xl font-semibold text-red-900">
-                {totalPendentes}
-              </p>
-            </div>
-            <Clock className="w-6 h-6 text-red-500" />
-          </CardContent>
-        </Card>
+          );
+        })}
       </div>
 
-      {/* Lista de agendas do dia */}
-      <div className="space-y-3">
-        {carregando && (
-          <div className="text-center text-gray-600 py-6">
-            Carregando agendas...
+      {/* Lista de agendas */}
+      <div className="space-y-4">
+        {carregando ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-7 h-7 animate-spin text-blue-600 mr-2" />
+            <span className="text-muted-foreground">Carregando agendas...</span>
           </div>
-        )}
-
-        {!carregando && eventos.length === 0 && (
+        ) : eventos.length === 0 ? (
           <Card>
-            <CardContent className="py-10 text-center text-gray-600">
-              <Calendar className="w-10 h-10 mx-auto text-gray-400 mb-3" />
-              Nenhuma agenda cadastrada para esta data.
+            <CardContent className="py-12 text-center">
+              <Calendar className="w-10 h-10 mx-auto text-muted-foreground opacity-30 mb-3" />
+              <p className="text-muted-foreground text-sm">Nenhuma agenda cadastrada para esta data.</p>
             </CardContent>
           </Card>
-        )}
-
-        {!carregando &&
+        ) : (
           eventos.map(evento => (
-            <Card
-              key={evento.id}
-              className="hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => setEventoSelecionado(evento)}
-            >
-              <CardContent className="py-3 px-4 flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      {getStatusBadge(evento.status)}
-                    </div>
-                    <h2 className="font-semibold text-sm text-gray-900">
+            <Card key={evento.id} className="p-2 hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => setEventoSelecionado(evento)}>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between gap-6">
+                  <div className="flex-1 min-w-0 space-y-2.5">
+                    <StatusBadge status={evento.status} />
+                    <h2 className="font-semibold p-2 text-foreground text-base leading-snug">
                       {evento.titulo_unidade}
                     </h2>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-sm p-2 text-muted-foreground">
                       {evento.disciplina_nome} • {evento.serie}
-                      {evento.turma ? ` - Turma ${evento.turma}` : ''}
+                      {evento.turma ? ` — Turma ${evento.turma}` : ''}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-sm p-2 text-muted-foreground">
                       Prof. {evento.professor_nome}
                     </p>
+
+                    {evento.conteudo_sala && (
+                      <p className="text-sm p-2 text-muted-foreground line-clamp-1">
+                        <span className="font-medium text-foreground">Em sala:</span> {evento.conteudo_sala}
+                      </p>
+                    )}
+                    {evento.atividade_casa && (
+                      <p className="text-sm p-2 text-muted-foreground line-clamp-1">
+                        <span className="font-medium text-foreground">Para casa:</span> {evento.atividade_casa}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <Clock className="w-3 h-3" />
-                      <span>
-                        {evento.horario || 'Horário não informado'}
-                      </span>
+
+                  <div className="flex flex-col items-end gap-3 flex-shrink-0">
+                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{evento.horario || 'Horário não informado'}</span>
                     </div>
                     {evento.prazo_entrega && (
-                      <div className="flex items-center gap-1 text-[11px] text-yellow-700 bg-yellow-50 border border-yellow-100 rounded-full px-2 py-0.5">
-                        <Calendar className="w-3 h-3" />
-                        <span>
-                          Entrega: {formatarDataCurta(evento.prazo_entrega)}
-                        </span>
-                      </div>
+                      <span className="text-xs font-medium px-2.5 py-1 rounded-full"
+                        style={{ backgroundColor: '#fef9c3', color: '#713f12' }}>
+                        Entrega: {formatarDataCurta(evento.prazo_entrega)}
+                      </span>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-1 h-7 px-2 text-[11px] flex items-center gap-1"
-                      onClick={e => {
-                        e.stopPropagation();
-                        setEventoSelecionado(evento);
-                      }}
-                    >
-                      <Eye className="w-3 h-3" />
-                      Revisar
+                    <Button variant="outline" size="sm"
+                      className="gap-1.5 text-sm"
+                      onClick={e => { e.stopPropagation(); setEventoSelecionado(evento); }}>
+                      <Eye className="w-4 h-4" /> Revisar
                     </Button>
                   </div>
                 </div>
-
-                {evento.conteudo_sala && (
-                  <p className="text-xs text-gray-700 line-clamp-2">
-                    <span className="font-medium">Em sala:</span>{' '}
-                    {evento.conteudo_sala}
-                  </p>
-                )}
-
-                {evento.atividade_casa && (
-                  <p className="text-xs text-gray-700 line-clamp-2">
-                    <span className="font-medium">Para casa:</span>{' '}
-                    {evento.atividade_casa}
-                  </p>
-                )}
               </CardContent>
             </Card>
-          ))}
+          ))
+        )}
       </div>
 
       {/* Modal de detalhes */}
-      <Dialog
-        open={!!eventoSelecionado}
-        onOpenChange={open => {
-          if (!open) setEventoSelecionado(null);
-        }}
-      >
-        <DialogContent
-          className="max-w-2xl"
-          aria-describedby="agenda-dialog-descricao"
-        >
+      <Dialog open={!!eventoSelecionado} onOpenChange={open => { if (!open) setEventoSelecionado(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {eventoSelecionado && (
             <>
-              <DialogHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <DialogTitle className="text-lg font-semibold">
+              <DialogHeader className="pb-4 border-b border-border">
+                <div className="space-y-2">
+                  <DialogTitle className="text-foreground text-lg leading-tight">
                     {eventoSelecionado.titulo_unidade}
                   </DialogTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setEventoSelecionado(null)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                <div className="mt-1 flex items-center gap-2">
-                  {getStatusBadge(eventoSelecionado.status)}
+                  <StatusBadge status={eventoSelecionado.status} />
                 </div>
               </DialogHeader>
 
-              <div
-                id="agenda-dialog-descricao"
-                className="space-y-4 text-sm text-gray-900 mt-2"
-              >
-                {/* Prof / Disciplina */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-xs text-gray-500 block">
-                      Professor
-                    </span>
-                    <p className="font-medium">
-                      Prof. {eventoSelecionado.professor_nome}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-gray-500 block">
-                      Disciplina
-                    </span>
-                    <p className="font-medium">
-                      {eventoSelecionado.disciplina_nome}
-                    </p>
-                  </div>
+              <div className="space-y-5 py-4">
+                {/* Grid de metadados */}
+                <div className="grid p-2 grid-cols-2 gap-x-6 gap-y-4">
+                  {[
+                    { label: 'Professor', value: `Prof. ${eventoSelecionado.professor_nome}` },
+                    { label: 'Disciplina', value: eventoSelecionado.disciplina_nome },
+                    { label: 'Data', value: formatarDataExtenso(new Date(eventoSelecionado.data_aula)) },
+                    { label: 'Horário', value: eventoSelecionado.horario || 'Não informado' },
+                    { label: 'Série', value: eventoSelecionado.serie },
+                    { label: 'Turma', value: eventoSelecionado.turma || 'Não informada' },
+                  ].map(item => (
+                    <div key={item.label}>
+                      <span className="text-xs p-1 text-muted-foreground block mb-0.5">{item.label}</span>
+                      <p className="font-medium p-1 text-foreground text-sm">{item.value}</p>
+                    </div>
+                  ))}
                 </div>
 
-                {/* Data / Horário */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-xs text-gray-500 block">Data</span>
-                    <p className="font-medium">
-                      {formatarDataExtenso(
-                        new Date(eventoSelecionado.data_aula)
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-gray-500 block">
-                      Horário
-                    </span>
-                    <p className="font-medium">
-                      {eventoSelecionado.horario || 'Horário não informado'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Série / Turma */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-xs text-gray-500 block">Série</span>
-                    <p className="font-medium">{eventoSelecionado.serie}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-gray-500 block">Turma</span>
-                    <p className="font-medium">
-                      {eventoSelecionado.turma || 'Não informada'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Em Sala */}
+                {/* Conteúdo em sala */}
                 {eventoSelecionado.conteudo_sala && (
                   <div>
-                    <span className="text-xs text-gray-500 block mb-1">
-                      Em Sala
-                    </span>
-                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-sm whitespace-pre-wrap">
+                    <span className="text-xs p-2 text-muted-foreground block mb-1.5">Em Sala</span>
+                    <div className="rounded-lg p-4
+                     text-sm text-foreground whitespace-pre-wrap leading-relaxed"
+                      style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
                       {eventoSelecionado.conteudo_sala}
                     </div>
                   </div>
                 )}
 
-                {/* Para Casa */}
+                {/* Para casa */}
                 {eventoSelecionado.atividade_casa && (
                   <div>
-                    <span className="text-xs text-gray-500 block mb-1">
-                      Para Casa
-                    </span>
-                    <div className="bg-purple-50 rounded-lg p-3 border border-purple-100 text-sm whitespace-pre-wrap">
+                    <span className="text-xs p-2 text-muted-foreground block mb-1.5">Para Casa</span>
+                    <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
+                      style={{ backgroundColor: '#faf5ff', border: '1px solid #e9d5ff' }}>
                       {eventoSelecionado.atividade_casa}
                     </div>
                   </div>
@@ -813,10 +413,9 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                 {/* Prazo */}
                 {eventoSelecionado.prazo_entrega && (
                   <div>
-                    <span className="text-xs text-gray-500 block mb-1">
-                      Prazo para Entrega
-                    </span>
-                    <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-100 text-sm">
+                    <span className="text-xs text-muted-foreground block mb-1.5">Prazo de Entrega</span>
+                    <div className="rounded-lg p-4 text-sm text-foreground"
+                      style={{ backgroundColor: '#fef9c3', border: '1px solid #fde047' }}>
                       {formatarDataCurta(eventoSelecionado.prazo_entrega)}
                     </div>
                   </div>
@@ -825,79 +424,55 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                 {/* Observação */}
                 {eventoSelecionado.observacao && (
                   <div>
-                    <span className="text-xs text-gray-500 block mb-1">
-                      Observação
-                    </span>
-                    <div className="bg-green-50 rounded-lg p-3 border border-green-100 text-sm whitespace-pre-wrap">
+                    <span className="text-xs p-2 text-muted-foreground block mb-1.5">Observação</span>
+                    <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
+                      style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                       {eventoSelecionado.observacao}
                     </div>
                   </div>
                 )}
 
                 {/* Banners de status */}
-                {eventoSelecionado.status === 'editada' &&
-                  eventoSelecionado.editado_por_nome && (
-                    <div className="bg-orange-50 rounded-lg p-3 border border-orange-200 text-xs text-orange-800">
-                      <strong>Esta agenda foi editada</strong> por{' '}
-                      {eventoSelecionado.editado_por_nome}
-                    </div>
-                  )}
+                {eventoSelecionado.status === 'editada' && eventoSelecionado.editado_por_nome && (
+                  <div className="rounded-lg p-4 text-xs"
+                    style={{ backgroundColor: '#ffedd5', border: '1px solid #fdba74', color: '#7c2d12' }}>
+                    <strong>Esta agenda foi editada</strong> por {eventoSelecionado.editado_por_nome}
+                  </div>
+                )}
 
-                {eventoSelecionado.status === 'enviado' &&
-                  eventoSelecionado.enviado_em && (
-                    <div className="bg-green-50 rounded-lg p-3 border border-green-200 text-xs text-green-800 flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>
-                        <strong>Agenda enviada aos pais</strong> em{' '}
-                        {formatarDataHoraCurta(eventoSelecionado.enviado_em)}
-                      </span>
-                    </div>
-                  )}
+                {eventoSelecionado.status === 'enviado' && eventoSelecionado.enviado_em && (
+                  <div className="rounded-lg p-4 text-xs flex items-center gap-2"
+                    style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', color: '#14532d' }}>
+                    <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                    <span><strong>Agenda enviada aos pais</strong> em {formatarDataHoraCurta(eventoSelecionado.enviado_em)}</span>
+                  </div>
+                )}
 
                 {eventoSelecionado.status === 'pendente' && (
-                  <div className="bg-red-50 rounded-lg p-3 border border-red-200 text-xs text-red-800">
-                    <strong>
-                      Esta agenda ainda não foi enviada aos pais.
-                    </strong>
+                  <div className="rounded-lg p-4 text-xs"
+                    style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#7f1d1d' }}>
+                    <strong>Esta agenda ainda não foi enviada aos pais.</strong>
                   </div>
                 )}
               </div>
 
-              <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
-                <Button
-                  variant="destructive"
-                  className="flex items-center gap-2"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        'Tem certeza que deseja deletar esta agenda?'
-                      )
-                    ) {
-                      handleDeletarAgenda(eventoSelecionado.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Deletar
+              {/* Footer */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-border">
+                <Button variant="outline" className="flex-1 sm:flex-none gap-2 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20"
+                  onClick={() => handleDeletar(eventoSelecionado.id)}>
+                  <Trash2 className="w-4 h-4" /> Deletar
                 </Button>
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  onClick={() => handleEditarAgenda(eventoSelecionado.id)}
-                >
-                  <Edit className="w-4 h-4" />
-                  Editar
+                <Button variant="outline" className="flex-1 sm:flex-none gap-2"
+                  onClick={() => alert(`Edição ainda não implementada.`)}>
+                  <Edit className="w-4 h-4" /> Editar
                 </Button>
                 {eventoSelecionado.status !== 'enviado' && (
-                  <Button
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-                    onClick={() => handleEnviarParaPais(eventoSelecionado.id)}
-                  >
-                    <Send className="w-4 h-4" />
-                    Enviar aos Pais
+                  <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2"
+                    onClick={() => handleEnviar(eventoSelecionado.id)}>
+                    <Send className="w-4 h-4" /> Enviar aos Pais
                   </Button>
                 )}
-              </DialogFooter>
+              </div>
             </>
           )}
         </DialogContent>
