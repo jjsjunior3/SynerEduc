@@ -1,4 +1,137 @@
-🏫 AVA – Colégio Conexão
+# 🎓 AVA Conexão EAD Maranhense
+
+**Plataforma completa de Ambiente Virtual de Aprendizagem (AVA)** desenvolvida para gestão escolar de educação a distância, atendendo alunos, professores, coordenadores e administradores.
+
+![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?logo=supabase&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6.3-646CFF?logo=vite&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.x-06B6D4?logo=tailwindcss&logoColor=white)
+
+---
+
+## 📋 Sobre o Projeto
+
+O AVA Conexão é um sistema de gestão escolar completo que cobre todo o ciclo acadêmico — desde o lançamento de notas e frequência até comunicados, atividades com correção e feedback, relatórios pedagógicos e controle de agenda.
+
+### Funcionalidades Principais
+
+- **5 perfis de acesso** com dashboards personalizados
+- **Sistema de notas** com AV1, AV2, recuperação e cálculo automático de média
+- **Controle de frequência** com relatórios e alertas
+- **Atividades** com upload de arquivos, correção e feedback do professor
+- **Comunicados** com anexos (imagem/PDF), filtros por destinatário
+- **Agenda do professor** com supervisão da coordenação
+- **Boletim escolar** com impressão em PDF
+- **Fórum de discussão** por disciplina
+- **Aulas ao vivo** com agendamento
+- **Tema dark/light** em toda a plataforma
+- **Notificações em tempo real** via Supabase Realtime
+
+---
+
+## 🏗 Arquitetura
+
+```
+Frontend (React + Vite)
+    ↕ REST API + Realtime WebSocket
+Backend (Supabase)
+    ├── PostgreSQL (banco de dados)
+    ├── Auth (autenticação)
+    ├── Storage (arquivos/imagens)
+    └── Realtime (notificações)
+```
+
+---
+
+## 🔒 Acesso e Privacidade
+
+Este é um **projeto privado em produção** utilizado pelo Colégio Conexão EAD Maranhense com dados reais de alunos, professores e funcionários. O código-fonte e banco de dados não são disponibilizados publicamente em conformidade com a **LGPD (Lei Geral de Proteção de Dados)**.
+
+Demonstrações do sistema, arquitetura e funcionalidades podem ser apresentadas sob demanda em entrevistas ou reuniões técnicas.
+
+> 📫 **Contato para demonstração:** [jrsantosdev1@gmail.com]
+
+---
+
+## 👥 Perfis de Acesso
+
+| Perfil | Funcionalidades |
+|--------|----------------|
+| **Aluno** | Visualiza notas, frequência, média geral, entrega atividades, vê feedback, comunicados |
+| **Professor** | Lança notas, cria atividades, corrige trabalhos, gerencia agenda, lança frequência |
+| **Coordenador** | Supervisiona agendas, emite boletins, envia comunicados, relatórios pedagógicos |
+| **Conteudista** | Gerencia materiais pedagógicos (PDFs, vídeos) por disciplina e bimestre |
+| **Administrador** | Gerencia usuários, vínculos professor-disciplina-série, configurações |
+
+---
+
+## 📁 Estrutura do Projeto
+
+```
+src/
+├── components/          # ~60 componentes React
+│   ├── ui/              # Biblioteca base (shadcn/ui + Radix)
+│   ├── Dashboard*.tsx   # 5 dashboards por perfil
+│   ├── Boletim*.tsx     # Sistema de notas
+│   ├── Atividades*.tsx  # Atividades e entregas
+│   └── ...
+├── contexts/            # AuthContext, ThemeContext
+├── config/              # Configurações da escola
+├── supabase/            # Cliente e migrações
+├── types/               # Tipos TypeScript
+└── App.tsx              # Componente raiz
+```
+
+---
+
+## 🗄 Banco de Dados
+
+**15+ tabelas** no PostgreSQL via Supabase, incluindo: `users`, `notas`, `frequencia_diaria`, `atividades`, `atividades_alunos`, `comunicados`, `agenda_professor`, `disciplinas`, `series`, `turmas`, e mais.
+
+**5 Storage Buckets** para arquivos: comunicados, avatars, entregas de atividades, enunciados e materiais pedagógicos.
+
+---
+
+## 🛣 Roadmap
+
+- [x] MVP com 5 perfis de acesso
+- [x] Sistema de notas com recuperação
+- [x] Atividades com correção e feedback
+- [x] Comunicados com anexos
+- [ ] Responsividade mobile completa
+- [ ] Módulo financeiro (gestor/secretaria)
+- [ ] Portal do responsável (pais)
+- [ ] Controle de estoque
+- [ ] Suporte multi-segmento (EAD + Presencial)
+- [ ] IA para histórico escolar
+- [ ] Virada de ano letivo
+
+---
+
+## 🛠 Stack Tecnológica
+
+| Tecnologia | Uso |
+|-----------|-----|
+| React 18 + TypeScript | Frontend SPA |
+| Vite 6 (SWC) | Build tool |
+| Tailwind CSS | Estilização |
+| Radix UI + shadcn/ui | Componentes acessíveis |
+| Supabase | Backend (DB, Auth, Storage, Realtime) |
+| Recharts | Gráficos e visualizações |
+| jsPDF | Geração de relatórios em PDF |
+| Sonner | Notificações toast |
+| Lucide React | Ícones |
+
+---
+
+## 📄 Licença
+
+Projeto privado — Colégio Conexão EAD Maranhense.
+
+---
+
+*Desenvolvido com 18 anos de experiência em gestão escolar.*🏫 AVA – Colégio Conexão
 Documentação Técnica do Banco de Dados (Supabase)
 Este documento descreve a modelagem de dados do Ambiente Virtual de Aprendizagem (AVA) do Colégio Conexão.
 Contém explicações das tabelas, relacionamentos e usuários envolvidos no sistema.
