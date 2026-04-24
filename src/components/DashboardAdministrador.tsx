@@ -19,7 +19,7 @@ import GestaoEscola from "./GestaoEscola";
 import { CadastrarUsuarioNovo } from "./CadastrarUsuarioNovo";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import logoEscola from "figma:asset/e339c695d5503d560f7e53d2039456d52fd95ea5.png";
+import logoEscola from "../assets/e339c695d5503d560f7e53d2039456d52fd95ea5.png";
 import { Usuario } from "../types/auth";
 import { GerenciadorUsuarios } from "./GerenciadorUsuariosFixed";
 import { GestaoConteudoPDF } from "./GestaoConteudoPDF";

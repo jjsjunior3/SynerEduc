@@ -1,19 +1,24 @@
 // src/components/AgendaProfessores.tsx
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
   Calendar, Clock, BookOpen, Filter, ChevronLeft, ChevronRight,
-  Eye, CheckCircle, AlertTriangle, Clock3, Trash2, Edit, Send, Loader2,
+  Eye, CheckCircle, AlertTriangle, Clock3, Trash2, Edit, Send,
+  Loader2, Save, X,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface AgendaProfessoresProps { onVoltar: () => void; }
-type StatusAgenda = 'pendente' | 'editada' | 'enviado';
+type StatusAgenda = 'pendente' | 'editado' | 'enviado';
 
 interface AgendaEvento {
   id: string;
@@ -35,7 +40,17 @@ interface AgendaEvento {
 
 interface FiltroOpcao { id: string; nome: string; }
 
+interface FormEdicao {
+  titulo_unidade: string;
+  conteudo_sala: string;
+  atividade_casa: string;
+  observacao: string;
+  prazo_entrega: string;
+}
+
 export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) {
+  const { usuario } = useAuth();
+
   const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
   const [professores, setProfessores] = useState<FiltroOpcao[]>([]);
   const [disciplinas, setDisciplinas] = useState<FiltroOpcao[]>([]);
@@ -48,6 +63,13 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [eventoSelecionado, setEventoSelecionado] = useState<AgendaEvento | null>(null);
+
+  // ── Edição ──
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [formEdicao, setFormEdicao] = useState<FormEdicao>({
+    titulo_unidade: '', conteudo_sala: '', atividade_casa: '', observacao: '', prazo_entrega: '',
+  });
 
   const dataISO = useMemo(() => dataSelecionada.toISOString().split('T')[0], [dataSelecionada]);
 
@@ -107,6 +129,19 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
         const { data, error } = await query;
         if (error) throw error;
 
+        // Resolver nomes dos editores (editado_por é UUID sem FK, então buscamos separadamente)
+        const editorIds = Array.from(new Set(
+          (data || []).map((item: any) => item.editado_por).filter(Boolean)
+        ));
+        let editorMap: Record<string, string> = {};
+        if (editorIds.length > 0) {
+          const { data: editores } = await supabase
+            .from('users')
+            .select('id, nome')
+            .in('id', editorIds);
+          (editores || []).forEach((e: any) => { editorMap[e.id] = e.nome; });
+        }
+
         setEventos((data || []).map((item: any) => ({
           id: String(item.id),
           titulo_unidade: String(item.titulo_unidade ?? 'Sem título'),
@@ -121,7 +156,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           turma: item.turma ? String(item.turma) : null,
           professor_nome: String(item.professor?.nome ?? 'Professor'),
           disciplina_nome: String(item.disciplina?.nome ?? 'Disciplina'),
-          editado_por_nome: item.editado_por ? String(item.editado_por) : null,
+          editado_por_nome: item.editado_por ? (editorMap[item.editado_por] || 'Coordenação') : null,
           enviado_em: item.enviado_em ? String(item.enviado_em) : null,
         })));
       } catch { setErro('Não foi possível carregar as agendas deste dia.'); }
@@ -132,7 +167,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
 
   const totalAgendas = eventos.length;
   const totalEnviadas = eventos.filter(e => e.status === 'enviado').length;
-  const totalEditadas = eventos.filter(e => e.status === 'editada').length;
+  const totalEditadas = eventos.filter(e => e.status === 'editado').length;
   const totalPendentes = eventos.filter(e => e.status === 'pendente').length;
 
   const handleDeletar = async (id: string) => {
@@ -142,7 +177,8 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       if (error) throw error;
       setEventos(prev => prev.filter(e => e.id !== id));
       setEventoSelecionado(null);
-    } catch { alert('Não foi possível deletar a agenda.'); }
+      toast.success('Agenda deletada.');
+    } catch { toast.error('Não foi possível deletar a agenda.'); }
   };
 
   const handleEnviar = async (id: string) => {
@@ -152,14 +188,79 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       if (error) throw error;
       setEventos(prev => prev.map(e => e.id === id ? { ...e, status: 'enviado', enviado_em } : e));
       setEventoSelecionado(prev => prev?.id === id ? { ...prev, status: 'enviado', enviado_em } : prev);
-    } catch { alert('Não foi possível enviar a agenda.'); }
+      toast.success('Agenda enviada aos pais!');
+    } catch { toast.error('Não foi possível enviar a agenda.'); }
+  };
+
+  // ── Funções de edição ──
+  const abrirEdicao = (evento: AgendaEvento) => {
+    setFormEdicao({
+      titulo_unidade: evento.titulo_unidade,
+      conteudo_sala: evento.conteudo_sala || '',
+      atividade_casa: evento.atividade_casa || '',
+      observacao: evento.observacao || '',
+      prazo_entrega: evento.prazo_entrega || '',
+    });
+    setModoEdicao(true);
+  };
+
+  const cancelarEdicao = () => {
+    setModoEdicao(false);
+    setFormEdicao({ titulo_unidade: '', conteudo_sala: '', atividade_casa: '', observacao: '', prazo_entrega: '' });
+  };
+
+  const salvarEdicao = async () => {
+    if (!eventoSelecionado) return;
+    if (!formEdicao.titulo_unidade.trim()) { toast.error('O título é obrigatório.'); return; }
+
+    setSalvandoEdicao(true);
+    try {
+      const payload = {
+        titulo_unidade: formEdicao.titulo_unidade.trim(),
+        conteudo_sala: formEdicao.conteudo_sala.trim() || null,
+        atividade_casa: formEdicao.atividade_casa.trim() || null,
+        observacao: formEdicao.observacao.trim() || null,
+        prazo_entrega: formEdicao.prazo_entrega || null,
+        status: 'editado' as StatusAgenda,
+        // ✅ FIX: Enviar o UUID do usuário (id), não o nome/email
+        // A coluna editado_por no banco é do tipo UUID (foreign key para users)
+        editado_por: usuario?.id || null,
+      };
+
+      const { error } = await supabase
+        .from('agenda_professor')
+        .update(payload)
+        .eq('id', eventoSelecionado.id);
+
+      if (error) throw error;
+
+      const atualizado: AgendaEvento = {
+        ...eventoSelecionado,
+        titulo_unidade: payload.titulo_unidade,
+        conteudo_sala: payload.conteudo_sala,
+        atividade_casa: payload.atividade_casa,
+        observacao: payload.observacao,
+        prazo_entrega: payload.prazo_entrega,
+        status: payload.status,
+        // Mostrar o nome do coordenador na UI
+        editado_por_nome: usuario?.nome || 'Coordenação',
+      };
+      setEventos(prev => prev.map(e => e.id === eventoSelecionado.id ? atualizado : e));
+      setEventoSelecionado(atualizado);
+      setModoEdicao(false);
+      toast.success('Agenda atualizada com sucesso!');
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + err.message);
+    } finally {
+      setSalvandoEdicao(false);
+    }
   };
 
   const getStatusStyle = (status: StatusAgenda) => {
     switch (status) {
-      case 'enviado':  return { bg: '#dcfce7', text: '#14532d', border: '#86efac', icon: <CheckCircle className="w-3 h-3" />, label: 'Enviada' };
-      case 'editada':  return { bg: '#ffedd5', text: '#7c2d12', border: '#fdba74', icon: <AlertTriangle className="w-3 h-3" />, label: 'Editada' };
-      default:         return { bg: '#fee2e2', text: '#7f1d1d', border: '#fca5a5', icon: <Clock3 className="w-3 h-3" />, label: 'Pendente' };
+      case 'enviado': return { bg: '#dcfce7', text: '#14532d', border: '#86efac', icon: <CheckCircle className="w-3 h-3" />, label: 'Enviada' };
+      case 'editado': return { bg: '#ffedd5', text: '#7c2d12', border: '#fdba74', icon: <AlertTriangle className="w-3 h-3" />, label: 'Editada' };
+      default:        return { bg: '#fee2e2', text: '#7f1d1d', border: '#fca5a5', icon: <Clock3 className="w-3 h-3" />, label: 'Pendente' };
     }
   };
 
@@ -173,7 +274,6 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
     );
   };
 
-  // Cards de resumo com cores fixas
   const resumoCards = [
     { label: 'Total', value: totalAgendas, icon: BookOpen, bg: '#dbeafe', text: '#1e3a8a', iconColor: '#3b82f6' },
     { label: 'Enviadas', value: totalEnviadas, icon: CheckCircle, bg: '#dcfce7', text: '#14532d', iconColor: '#16a34a' },
@@ -194,8 +294,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           <Button variant="outline" size="icon" onClick={() => mudarDia(-1)}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <input
-            type="date"
+          <input type="date"
             className="border border-border rounded-md px-3 py-1.5 text-sm bg-background text-foreground"
             value={dataISO}
             onChange={e => { const d = new Date(e.target.value); if (!isNaN(d.getTime())) setDataSelecionada(d); }}
@@ -212,15 +311,13 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       {/* Filtros */}
       <Card>
         <CardHeader className="border-b border-border pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-foreground text-base">
-              <Filter className="w-4 h-4 text-blue-600" /> Filtros da Agenda
-            </CardTitle>
-          </div>
+          <CardTitle className="flex items-center gap-2 text-foreground text-base">
+            <Filter className="w-4 h-4 text-blue-600" /> Filtros da Agenda
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-3">
+        <CardContent className="pt-5">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-            <div className="space-y-2 px-3">
+            <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Professor</Label>
               <Select value={professorId} onValueChange={setProfessorId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -229,7 +326,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2 px-3">
+            <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Disciplina</Label>
               <Select value={disciplinaId} onValueChange={setDisciplinaId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -238,7 +335,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2 px-3">
+            <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Série</Label>
               <Select value={serieSelecionada} onValueChange={setSerieSelecionada}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -247,20 +344,19 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2 px-3">
+            <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Status</Label>
               <Select value={statusFiltro} onValueChange={v => setStatusFiltro(v as any)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
-                  <SelectItem value="editada">Editada</SelectItem>
+                  <SelectItem value="editado">Editada</SelectItem>
                   <SelectItem value="enviado">Enviada</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-
           {erro && (
             <div className="mt-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg px-4 py-3">
               {erro}
@@ -270,7 +366,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       </Card>
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
         {resumoCards.map(card => {
           const Icon = card.icon;
           return (
@@ -302,35 +398,28 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           </Card>
         ) : (
           eventos.map(evento => (
-            <Card key={evento.id} className="p-2 hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => setEventoSelecionado(evento)}>
+            <Card key={evento.id} className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => { setEventoSelecionado(evento); setModoEdicao(false); }}>
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-6">
                   <div className="flex-1 min-w-0 space-y-2.5">
                     <StatusBadge status={evento.status} />
-                    <h2 className="font-semibold p-2 text-foreground text-base leading-snug">
-                      {evento.titulo_unidade}
-                    </h2>
-                    <p className="text-sm p-2 text-muted-foreground">
-                      {evento.disciplina_nome} • {evento.serie}
-                      {evento.turma ? ` — Turma ${evento.turma}` : ''}
+                    <h2 className="font-semibold text-foreground text-base leading-snug">{evento.titulo_unidade}</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {evento.disciplina_nome} • {evento.serie}{evento.turma ? ` — Turma ${evento.turma}` : ''}
                     </p>
-                    <p className="text-sm p-2 text-muted-foreground">
-                      Prof. {evento.professor_nome}
-                    </p>
-
+                    <p className="text-sm text-muted-foreground">Prof. {evento.professor_nome}</p>
                     {evento.conteudo_sala && (
-                      <p className="text-sm p-2 text-muted-foreground line-clamp-1">
+                      <p className="text-sm text-muted-foreground line-clamp-1">
                         <span className="font-medium text-foreground">Em sala:</span> {evento.conteudo_sala}
                       </p>
                     )}
                     {evento.atividade_casa && (
-                      <p className="text-sm p-2 text-muted-foreground line-clamp-1">
+                      <p className="text-sm text-muted-foreground line-clamp-1">
                         <span className="font-medium text-foreground">Para casa:</span> {evento.atividade_casa}
                       </p>
                     )}
                   </div>
-
                   <div className="flex flex-col items-end gap-3 flex-shrink-0">
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Clock className="w-3.5 h-3.5" />
@@ -342,9 +431,8 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                         Entrega: {formatarDataCurta(evento.prazo_entrega)}
                       </span>
                     )}
-                    <Button variant="outline" size="sm"
-                      className="gap-1.5 text-sm"
-                      onClick={e => { e.stopPropagation(); setEventoSelecionado(evento); }}>
+                    <Button variant="outline" size="sm" className="gap-1.5 text-sm"
+                      onClick={e => { e.stopPropagation(); setEventoSelecionado(evento); setModoEdicao(false); }}>
                       <Eye className="w-4 h-4" /> Revisar
                     </Button>
                   </div>
@@ -355,124 +443,217 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
         )}
       </div>
 
-      {/* Modal de detalhes */}
-      <Dialog open={!!eventoSelecionado} onOpenChange={open => { if (!open) setEventoSelecionado(null); }}>
+      {/* ── Modal ── */}
+      <Dialog open={!!eventoSelecionado} onOpenChange={open => {
+        if (!open) { setEventoSelecionado(null); cancelarEdicao(); }
+      }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {eventoSelecionado && (
             <>
               <DialogHeader className="pb-4 border-b border-border">
-                <div className="space-y-2">
-                  <DialogTitle className="text-foreground text-lg leading-tight">
-                    {eventoSelecionado.titulo_unidade}
-                  </DialogTitle>
-                  <StatusBadge status={eventoSelecionado.status} />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-2 flex-1">
+                    <DialogTitle className="text-foreground text-lg leading-tight">
+                      {modoEdicao ? 'Editar Agenda' : eventoSelecionado.titulo_unidade}
+                    </DialogTitle>
+                    {!modoEdicao && <StatusBadge status={eventoSelecionado.status} />}
+                  </div>
+                  {!modoEdicao && (
+                    <Button variant="outline" size="sm"
+                      className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/20 flex-shrink-0"
+                      onClick={() => abrirEdicao(eventoSelecionado)}>
+                      <Edit className="w-4 h-4" /> Editar
+                    </Button>
+                  )}
                 </div>
               </DialogHeader>
 
-              <div className="space-y-5 py-4">
-                {/* Grid de metadados */}
-                <div className="grid p-2 grid-cols-2 gap-x-6 gap-y-4">
-                  {[
-                    { label: 'Professor', value: `Prof. ${eventoSelecionado.professor_nome}` },
-                    { label: 'Disciplina', value: eventoSelecionado.disciplina_nome },
-                    { label: 'Data', value: formatarDataExtenso(new Date(eventoSelecionado.data_aula)) },
-                    { label: 'Horário', value: eventoSelecionado.horario || 'Não informado' },
-                    { label: 'Série', value: eventoSelecionado.serie },
-                    { label: 'Turma', value: eventoSelecionado.turma || 'Não informada' },
-                  ].map(item => (
-                    <div key={item.label}>
-                      <span className="text-xs p-1 text-muted-foreground block mb-0.5">{item.label}</span>
-                      <p className="font-medium p-1 text-foreground text-sm">{item.value}</p>
+              {/* ── VISUALIZAÇÃO ── */}
+              {!modoEdicao && (
+                <>
+                  <div className="space-y-5 py-4">
+                    <div className="grid px-2 grid-cols-2 gap-x-6 gap-y-4">
+                      {[
+                        { label: 'Professor', value: `Prof. ${eventoSelecionado.professor_nome}` },
+                        { label: 'Disciplina', value: eventoSelecionado.disciplina_nome },
+                        { label: 'Data', value: formatarDataExtenso(new Date(eventoSelecionado.data_aula)) },
+                        { label: 'Horário', value: eventoSelecionado.horario || 'Não informado' },
+                        { label: 'Série', value: eventoSelecionado.serie },
+                        { label: 'Turma', value: eventoSelecionado.turma || 'Não informada' },
+                      ].map(item => (
+                        <div key={item.label}>
+                          <span className="text-xs pt-2 text-muted-foreground block mb-0.5">{item.label}</span>
+                          <p className="font-medium text-foreground text-sm">{item.value}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+
+                    {eventoSelecionado.conteudo_sala && (
+                      <div>
+                        <span className="text-xs py-2 text-muted-foreground block mb-1.5">Em Sala</span>
+                        <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
+                          style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                          {eventoSelecionado.conteudo_sala}
+                        </div>
+                      </div>
+                    )}
+
+                    {eventoSelecionado.atividade_casa && (
+                      <div>
+                        <span className="text-xs py-2 text-muted-foreground block mb-1.5">Para Casa</span>
+                        <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
+                          style={{ backgroundColor: '#faf5ff', border: '1px solid #e9d5ff' }}>
+                          {eventoSelecionado.atividade_casa}
+                        </div>
+                      </div>
+                    )}
+
+                    {eventoSelecionado.prazo_entrega && (
+                      <div>
+                        <span className="text-xs py-2 text-muted-foreground block mb-1.5">Prazo de Entrega</span>
+                        <div className="rounded-lg p-4 text-sm text-foreground"
+                          style={{ backgroundColor: '#fef9c3', border: '1px solid #fde047' }}>
+                          {formatarDataCurta(eventoSelecionado.prazo_entrega)}
+                        </div>
+                      </div>
+                    )}
+
+                    {eventoSelecionado.observacao && (
+                      <div>
+                        <span className="text-xs py-2 text-muted-foreground block mb-1.5">Observação</span>
+                        <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
+                          style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                          {eventoSelecionado.observacao}
+                        </div>
+                      </div>
+                    )}
+
+                    {eventoSelecionado.status === 'editado' && eventoSelecionado.editado_por_nome && (
+                      <div className="rounded-lg p-4 text-xs"
+                        style={{ backgroundColor: '#ffedd5', border: '1px solid #fdba74', color: '#7c2d12' }}>
+                        <strong>Agenda editada</strong> pela Coordenação ({eventoSelecionado.editado_por_nome})
+                      </div>
+                    )}
+                    {eventoSelecionado.status === 'enviado' && eventoSelecionado.enviado_em && (
+                      <div className="rounded-lg p-4 text-xs flex items-center gap-2"
+                        style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', color: '#14532d' }}>
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span><strong>Enviada aos pais</strong> em {formatarDataHoraCurta(eventoSelecionado.enviado_em)}</span>
+                      </div>
+                    )}
+                    {eventoSelecionado.status === 'pendente' && (
+                      <div className="rounded-lg p-4 text-xs"
+                        style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#7f1d1d' }}>
+                        <strong>Esta agenda ainda não foi enviada aos pais.</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-border">
+                    <Button variant="outline"
+                      className="flex-1 sm:flex-none gap-2 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20"
+                      onClick={() => handleDeletar(eventoSelecionado.id)}>
+                      <Trash2 className="w-4 h-4" /> Deletar
+                    </Button>
+                    <Button variant="outline" className="flex-1 sm:flex-none gap-2"
+                      onClick={() => abrirEdicao(eventoSelecionado)}>
+                      <Edit className="w-4 h-4" /> Editar
+                    </Button>
+                    {eventoSelecionado.status !== 'enviado' && (
+                      <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2"
+                        onClick={() => handleEnviar(eventoSelecionado.id)}>
+                        <Send className="w-4 h-4" /> Enviar aos Pais
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* ── EDIÇÃO ── */}
+              {modoEdicao && (
+                <div className="space-y-5 py-4">
+                  <div className="space-y-2">
+                    <Label className="text-foreground font-medium text-sm">
+                      Título da Unidade <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      value={formEdicao.titulo_unidade}
+                      onChange={e => setFormEdicao(p => ({ ...p, titulo_unidade: e.target.value }))}
+                      placeholder="Título da unidade"
+                      disabled={salvandoEdicao}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-foreground font-medium text-sm">Conteúdo em Sala</Label>
+                    <Textarea
+                      value={formEdicao.conteudo_sala}
+                      onChange={e => setFormEdicao(p => ({ ...p, conteudo_sala: e.target.value }))}
+                      placeholder="O que foi trabalhado em sala..."
+                      rows={4}
+                      disabled={salvandoEdicao}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-foreground font-medium text-sm">Atividade Para Casa</Label>
+                    <Textarea
+                      value={formEdicao.atividade_casa}
+                      onChange={e => setFormEdicao(p => ({ ...p, atividade_casa: e.target.value }))}
+                      placeholder="Atividade para os alunos fazerem em casa..."
+                      rows={4}
+                      disabled={salvandoEdicao}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <Label className="text-foreground font-medium text-sm">
+                        Prazo de Entrega <span className="text-muted-foreground text-xs font-normal">(opcional)</span>
+                      </Label>
+                      <Input
+                        type="date"
+                        value={formEdicao.prazo_entrega}
+                        onChange={e => setFormEdicao(p => ({ ...p, prazo_entrega: e.target.value }))}
+                        disabled={salvandoEdicao}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-foreground font-medium text-sm">
+                        Observação <span className="text-muted-foreground text-xs font-normal">(opcional)</span>
+                      </Label>
+                      <Input
+                        value={formEdicao.observacao}
+                        onChange={e => setFormEdicao(p => ({ ...p, observacao: e.target.value }))}
+                        placeholder="Observações adicionais..."
+                        disabled={salvandoEdicao}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2 p-3 rounded-lg text-xs"
+                    style={{ backgroundColor: '#dbeafe', color: '#1e3a8a' }}>
+                    <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span>
+                      Ao salvar, o status será alterado para <strong>Editada</strong> e o nome
+                      da coordenação será registrado automaticamente.
+                    </span>
+                  </div>
+
+                  <div className="flex gap-3 pt-2 border-t border-border">
+                    <Button variant="outline" className="flex-1" onClick={cancelarEdicao} disabled={salvandoEdicao}>
+                      <X className="w-4 h-4 mr-2" /> Cancelar
+                    </Button>
+                    <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                      onClick={salvarEdicao} disabled={salvandoEdicao}>
+                      {salvandoEdicao
+                        ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
+                        : <><Save className="w-4 h-4" />Salvar Edição</>
+                      }
+                    </Button>
+                  </div>
                 </div>
-
-                {/* Conteúdo em sala */}
-                {eventoSelecionado.conteudo_sala && (
-                  <div>
-                    <span className="text-xs p-2 text-muted-foreground block mb-1.5">Em Sala</span>
-                    <div className="rounded-lg p-4
-                     text-sm text-foreground whitespace-pre-wrap leading-relaxed"
-                      style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
-                      {eventoSelecionado.conteudo_sala}
-                    </div>
-                  </div>
-                )}
-
-                {/* Para casa */}
-                {eventoSelecionado.atividade_casa && (
-                  <div>
-                    <span className="text-xs p-2 text-muted-foreground block mb-1.5">Para Casa</span>
-                    <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
-                      style={{ backgroundColor: '#faf5ff', border: '1px solid #e9d5ff' }}>
-                      {eventoSelecionado.atividade_casa}
-                    </div>
-                  </div>
-                )}
-
-                {/* Prazo */}
-                {eventoSelecionado.prazo_entrega && (
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1.5">Prazo de Entrega</span>
-                    <div className="rounded-lg p-4 text-sm text-foreground"
-                      style={{ backgroundColor: '#fef9c3', border: '1px solid #fde047' }}>
-                      {formatarDataCurta(eventoSelecionado.prazo_entrega)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Observação */}
-                {eventoSelecionado.observacao && (
-                  <div>
-                    <span className="text-xs p-2 text-muted-foreground block mb-1.5">Observação</span>
-                    <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
-                      style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                      {eventoSelecionado.observacao}
-                    </div>
-                  </div>
-                )}
-
-                {/* Banners de status */}
-                {eventoSelecionado.status === 'editada' && eventoSelecionado.editado_por_nome && (
-                  <div className="rounded-lg p-4 text-xs"
-                    style={{ backgroundColor: '#ffedd5', border: '1px solid #fdba74', color: '#7c2d12' }}>
-                    <strong>Esta agenda foi editada</strong> por {eventoSelecionado.editado_por_nome}
-                  </div>
-                )}
-
-                {eventoSelecionado.status === 'enviado' && eventoSelecionado.enviado_em && (
-                  <div className="rounded-lg p-4 text-xs flex items-center gap-2"
-                    style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', color: '#14532d' }}>
-                    <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                    <span><strong>Agenda enviada aos pais</strong> em {formatarDataHoraCurta(eventoSelecionado.enviado_em)}</span>
-                  </div>
-                )}
-
-                {eventoSelecionado.status === 'pendente' && (
-                  <div className="rounded-lg p-4 text-xs"
-                    style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#7f1d1d' }}>
-                    <strong>Esta agenda ainda não foi enviada aos pais.</strong>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-border">
-                <Button variant="outline" className="flex-1 sm:flex-none gap-2 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20"
-                  onClick={() => handleDeletar(eventoSelecionado.id)}>
-                  <Trash2 className="w-4 h-4" /> Deletar
-                </Button>
-                <Button variant="outline" className="flex-1 sm:flex-none gap-2"
-                  onClick={() => alert(`Edição ainda não implementada.`)}>
-                  <Edit className="w-4 h-4" /> Editar
-                </Button>
-                {eventoSelecionado.status !== 'enviado' && (
-                  <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2"
-                    onClick={() => handleEnviar(eventoSelecionado.id)}>
-                    <Send className="w-4 h-4" /> Enviar aos Pais
-                  </Button>
-                )}
-              </div>
+              )}
             </>
           )}
         </DialogContent>

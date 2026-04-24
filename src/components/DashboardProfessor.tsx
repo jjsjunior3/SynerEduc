@@ -15,7 +15,7 @@ import {
   Bell, Calendar, ArrowLeft, FileEdit, BarChart3, Users,
   Loader2, BookOpen, Video, LogOut, Clock, Megaphone,
   AlertCircle, Info, ChevronRight, Inbox, Book, User,
-  Sun, Moon,
+  Sun, Moon, Paperclip, CheckCircle2,
 } from "lucide-react";
 
 import { Notificacoes } from "./Notificacoes";
@@ -27,8 +27,9 @@ import { DisciplinaProfessor } from "./DisciplinaProfessor";
 import { AgendaProfessor } from "./AgendaProfessor";
 import { AtividadesRecebidas } from "./AtividadesRecebidas";
 import { SchoolHeader } from "./SchoolHeader";
+import ComunicadosPage from "./ComunicadosPage";
 
-type ViewType = "dashboard" | "atividades" | "boletim" | "agenda" | "horarios" | "aulas-vivo" | "disciplina";
+type ViewType = "dashboard" | "atividades" | "boletim" | "agenda" | "horarios" | "aulas-vivo" | "disciplina" | "comunicados";
 
 interface SerieTurmaResumo {
   id: string;
@@ -48,6 +49,15 @@ interface Comunicado {
   criado_em: string;
   remetente?: string;
   cargo?: string;
+  imagem_url?: string | null;
+}
+
+function formatarData(dataISO: string) {
+  try {
+    return new Date(dataISO).toLocaleDateString("pt-BR");
+  } catch {
+    return dataISO;
+  }
 }
 
 export function DashboardProfessor() {
@@ -58,6 +68,8 @@ export function DashboardProfessor() {
   const [turmas, setTurmas] = useState<SerieTurmaResumo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [comunicados, setComunicados] = useState<Comunicado[]>([]);
+  const [totalAtividadesEnviadas, setTotalAtividadesEnviadas] = useState(0);
+  const [totalPendentesCorrecao, setTotalPendentesCorrecao] = useState(0);
 
   const [disciplinaSelecionada, setDisciplinaSelecionada] = useState<any>(null);
   const [turmaSelecionada, setTurmaSelecionada] = useState<any>(null);
@@ -81,6 +93,7 @@ export function DashboardProfessor() {
     if (usuario) {
       carregarTurmasProfessor();
       carregarComunicados();
+      carregarContadoresAtividades();
       fetchNotificacoesCount();
 
       const channel = supabase
@@ -109,18 +122,60 @@ export function DashboardProfessor() {
     try {
       const { data, error } = await supabase
         .from("comunicados")
-        .select(`*, autor:users(nome, tipo)`)
-        .or(`publico_alvo.eq.todos,publico_alvo.eq.todos-professores`)
+        .select(`*, autor:users!comunicados_autor_id_fkey(nome, tipo)`)
         .order("criado_em", { ascending: false })
-        .limit(10);
+        .limit(20);
       if (error) throw error;
-      setComunicados(data.map((c) => ({
+
+      // Filtrar comunicados destinados a professores
+      const filtrados = (data || []).filter((c: any) => {
+        const publico = (c.publico_alvo || "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        if (publico.length === 0) return true;
+        return publico.includes("todos") || publico.includes("todos-professores") || publico.includes("professores");
+      });
+
+      setComunicados(filtrados.map((c: any) => ({
         id: c.id, titulo: c.titulo, conteudo: c.conteudo,
         importante: c.importante, criado_em: c.criado_em,
         remetente: c.autor?.nome || "Coordenação",
         cargo: c.autor?.tipo || "Administração",
+        imagem_url: c.imagem_url || null,
       })));
     } catch { /* silencioso */ }
+  };
+
+  const carregarContadoresAtividades = async () => {
+    if (!usuario?.id) return;
+    try {
+      // Total de atividades enviadas pelo professor
+      const { count: enviadas } = await supabase
+        .from("atividades")
+        .select("*", { count: "exact", head: true })
+        .eq("professor_id", usuario.id);
+      setTotalAtividadesEnviadas(enviadas || 0);
+
+      // Atividades pendentes de correção:
+      // Buscar IDs das atividades do professor, depois contar entregas com status 'entregue'
+      const { data: atividadesProf } = await supabase
+        .from("atividades")
+        .select("id")
+        .eq("professor_id", usuario.id);
+
+      if (atividadesProf && atividadesProf.length > 0) {
+        const ids = atividadesProf.map((a: any) => a.id);
+        const { count: pendentes } = await supabase
+          .from("atividades_alunos")
+          .select("*", { count: "exact", head: true })
+          .in("atividade_id", ids)
+          .eq("status", "entregue");
+        setTotalPendentesCorrecao(pendentes || 0);
+      } else {
+        setTotalPendentesCorrecao(0);
+      }
+    } catch {
+      setTotalAtividadesEnviadas(0);
+      setTotalPendentesCorrecao(0);
+    }
   };
 
   const carregarTurmasProfessor = async () => {
@@ -180,6 +235,8 @@ export function DashboardProfessor() {
     setSerieHorario("");
   };
 
+  // Contadores derivados são calculados nas queries agora
+
   // ── Header padrão ──
   const pos = getDropdownPos();
 
@@ -190,8 +247,6 @@ export function DashboardProfessor() {
           <SchoolHeader subtitle="Painel do Professor" />
 
           <div className="flex items-center gap-3">
-
-            {/* Notificações */}
             <div className="relative">
               <Button variant="ghost" size="icon" onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}>
                 <Bell className="w-5 h-5 text-muted-foreground" />
@@ -206,7 +261,6 @@ export function DashboardProfessor() {
               )}
             </div>
 
-            {/* Avatar */}
             <button
               ref={avatarRef}
               onClick={() => setMostrarMenuUsuario(!mostrarMenuUsuario)}
@@ -223,7 +277,6 @@ export function DashboardProfessor() {
         </div>
       </div>
 
-      {/* Dropdown via portal */}
       {mostrarMenuUsuario && createPortal(
         <>
           <div className="fixed inset-0 z-[99998]" onClick={() => setMostrarMenuUsuario(false)} />
@@ -466,6 +519,19 @@ export function DashboardProfessor() {
     );
   }
 
+  if (viewAtual === "comunicados") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <BarraAzul titulo="Comunicados" subtitulo="Avisos da escola" onVoltar={handleVoltarParaDashboard} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <ComunicadosPage onVoltar={handleVoltarParaDashboard} />
+        </main>
+        <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
+      </div>
+    );
+  }
+
   // ── DASHBOARD PRINCIPAL ──
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -482,18 +548,54 @@ export function DashboardProfessor() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
         </section>
 
+        {/* Cards de resumo */}
+        {!carregando && (
+          <section className="grid grid-cols-3 gap-4">
+            <div className="rounded-xl p-4 flex items-center gap-3 border border-blue-200 dark:border-blue-800" style={{ backgroundColor: 'rgba(59,130,246,0.1)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(59,130,246,0.2)' }}>
+                <FileEdit className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Atividades Enviadas</p>
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{totalAtividadesEnviadas}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl p-4 flex items-center gap-3 border border-amber-200 dark:border-amber-800" style={{ backgroundColor: 'rgba(217,119,6,0.1)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(217,119,6,0.2)' }}>
+                <Inbox className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Pendentes de Correção</p>
+                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{totalPendentesCorrecao}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl p-4 flex items-center gap-3 border border-purple-200 dark:border-purple-800" style={{ backgroundColor: 'rgba(124,58,237,0.1)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(124,58,237,0.2)' }}>
+                <Megaphone className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Comunicados</p>
+                <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{comunicados.length}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Acesso Rápido */}
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <div className="w-1 h-6 bg-blue-600 rounded-full" />
             Acesso Rápido
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {[
               { view: "boletim" as ViewType, icon: <BarChart3 className="w-5 h-5 text-green-600 dark:text-green-400" />, label: "Lançar Notas", iconBg: "bg-green-100 dark:bg-green-900/30" },
               { view: "atividades" as ViewType, icon: <Inbox className="w-5 h-5 text-orange-600 dark:text-orange-400" />, label: "Atividades Recebidas", iconBg: "bg-orange-100 dark:bg-orange-900/30" },
               { view: "horarios" as ViewType, icon: <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />, label: "Meu Horário", iconBg: "bg-blue-100 dark:bg-blue-900/30" },
               { view: "agenda" as ViewType, icon: <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />, label: "Agenda", iconBg: "bg-purple-100 dark:bg-purple-900/30" },
+              { view: "comunicados" as ViewType, icon: <Megaphone className="w-5 h-5 text-rose-600 dark:text-rose-400" />, label: "Comunicados", iconBg: "bg-rose-100 dark:bg-rose-900/30" },
             ].map((item) => (
               <Button
                 key={item.view}
@@ -573,61 +675,77 @@ export function DashboardProfessor() {
             </Card>
           </div>
 
-          {/* Comunicados — sem altura fixa, sem scroll horizontal */}
+          {/* ── Comunicados (sidebar compacta) ── */}
           <div>
-            <Card>
-              <CardHeader className="border-b border-border">
-                <CardTitle className="flex items-center gap-2 text-foreground">
-                  <Megaphone className="w-5 h-5 text-orange-500" />
-                  Comunicados
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 max-h-[600px] overflow-y-auto">
-                {comunicados.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Info className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">Nenhum comunicado.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {comunicados.map((comunicado) => (
-                      <div
-                        key={comunicado.id}
-                        className={`p-4 rounded-xl border transition-colors ${
-                          comunicado.importante
-                            ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                            : "bg-card border-border hover:bg-accent"
-                        }`}
-                      >
-                        <div className="flex gap-3">
-                          <div className="mt-0.5 flex-shrink-0">
-                            {comunicado.importante
-                              ? <AlertCircle className="w-4 h-4 text-red-500" />
-                              : <Info className="w-4 h-4 text-blue-500" />
-                            }
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h4 className="font-semibold text-sm text-foreground mb-1 leading-snug">
-                              {comunicado.titulo}
-                            </h4>
-                            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
-                              {comunicado.conteudo}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
-                              <span className="truncate">{comunicado.remetente}</span>
-                              <span>•</span>
-                              <span className="flex-shrink-0">
-                                {new Date(comunicado.criado_em).toLocaleDateString('pt-BR')}
-                              </span>
-                            </div>
-                          </div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-muted-foreground" /> Comunicados
+              </h3>
+              {comunicados.length > 0 && (
+                <button
+                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+                  onClick={() => setViewAtual("comunicados")}
+                >
+                  Ver todos <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {comunicados.length === 0 ? (
+              <div className="bg-card rounded-xl border border-border p-6 text-center">
+                <div className="inline-flex items-center gap-1.5 text-green-600 dark:text-green-400 mb-2">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span className="text-sm font-semibold">Tudo em dia!</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Nenhum comunicado novo por enquanto.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-card rounded-xl p-2 border border-border divide-y divide-border">
+                {comunicados.slice(0, 5).map((c) => (
+                  <div
+                    key={c.id}
+                    className="px-4 py-3.5 cursor-pointer p-2 hover:bg-accent/50 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                    onClick={() => setViewAtual("comunicados")}
+                  >
+                    <div className="flex gap-2.5">
+                      <div className={`w-2 h-2 p-2 rounded-full mt-1.5 flex-shrink-0 ${
+                        c.importante ? "bg-red-500" : "bg-blue-500"
+                      }`} />
+                      <div className="flex-1 px-2 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <p className="text-sm pb-2 font-semibold text-foreground truncate">{c.titulo}</p>
+                          {c.imagem_url && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded flex-shrink-0">
+                              <Paperclip className="w-2.5 h-2.5" />
+                              Anexo
+                            </span>
+                          )}
                         </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-1">
+                          {c.conteudo}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground/70">
+                          {c.remetente} · {formatarData(c.criado_em)}
+                        </p>
                       </div>
-                    ))}
+                    </div>
+                  </div>
+                ))}
+
+                {comunicados.length > 5 && (
+                  <div className="px-4 py-3 text-center">
+                    <button
+                      className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                      onClick={() => setViewAtual("comunicados")}
+                    >
+                      Ver todos os {comunicados.length} comunicados
+                    </button>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            )}
           </div>
         </section>
       </main>

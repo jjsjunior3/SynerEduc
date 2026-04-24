@@ -23,6 +23,7 @@ const EnviarComunicado   = lazy(() => import('./EnviarComunicado'));
 const ForumCoordenador   = lazy(() => import('./ForumCoordenador'));
 const AgendaProfessores  = lazy(() => import('./AgendaProfessores'));
 const GestaoHorarios     = lazy(() => import('./GestaoHorarios'));
+const BoletimCoordenador = lazy(() => import('./BoletimCoordenador'));
 
 interface DashboardCoordenadorProps {
   onBackToSite?: () => void;
@@ -30,7 +31,7 @@ interface DashboardCoordenadorProps {
   logout?: () => void;
 }
 
-type ViewType = 'dashboard' | 'boletins' | 'relatorio' | 'frequencia' | 'comunicado' | 'agenda' | 'horarios' | 'forum';
+type ViewType = 'dashboard' | 'boletins' | 'relatorio' | 'frequencia' | 'comunicado' | 'agenda' | 'horarios' | 'forum' | 'boletim_aluno';
 
 export default function DashboardCoordenador({ onBackToSite, usuario, logout }: DashboardCoordenadorProps) {
   const { theme, toggleTheme } = useTheme();
@@ -82,24 +83,30 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
       description: 'Visualizar mensagens dos fóruns',
       icon: MessageSquare, bg: '#e0e7ff', iconColor: '#4f46e5',
     },
+    {
+      id: 'boletim_aluno', title: 'Imprimir Boletim do Aluno',
+      description: 'Consultar e imprimir boletim completo de qualquer aluno',
+      icon: FileText, bg: '#fef9c3', iconColor: '#ca8a04',
+    },
   ];
 
   const tituloPorView: Record<string, string> = {
     boletins: 'Boletins Gerais', relatorio: 'Relatório de Turma',
     frequencia: 'Frequência de Alunos', comunicado: 'Enviar Comunicado',
     agenda: 'Agenda dos Professores', horarios: 'Gestão de Horários',
-    forum: 'Fórum das Disciplinas',
+    forum: 'Fórum das Disciplinas', boletim_aluno: 'Boletim do Aluno',
   };
 
   const renderConteudo = () => {
     switch (viewAtual) {
-      case 'boletins':    return <BoletinsGerais onVoltar={() => setViewAtual('dashboard')} />;
-      case 'relatorio':   return <RelatorioTurma onVoltar={() => setViewAtual('dashboard')} />;
-      case 'frequencia':  return <FrequenciaAlunos onVoltar={() => setViewAtual('dashboard')} />;
-      case 'comunicado':  return <EnviarComunicado onVoltar={() => setViewAtual('dashboard')} />;
-      case 'agenda':      return <AgendaProfessores onVoltar={() => setViewAtual('dashboard')} />;
-      case 'horarios':    return <GestaoHorarios onVoltar={() => setViewAtual('dashboard')} />;
-      case 'forum':       return <ForumCoordenador onVoltar={() => setViewAtual('dashboard')} />;
+      case 'boletins':      return <BoletinsGerais onVoltar={() => setViewAtual('dashboard')} />;
+      case 'relatorio':     return <RelatorioTurma onVoltar={() => setViewAtual('dashboard')} />;
+      case 'frequencia':    return <FrequenciaAlunos onVoltar={() => setViewAtual('dashboard')} />;
+      case 'comunicado':    return <EnviarComunicado onVoltar={() => setViewAtual('dashboard')} />;
+      case 'agenda':        return <AgendaProfessores onVoltar={() => setViewAtual('dashboard')} />;
+      case 'horarios':      return <GestaoHorarios onVoltar={() => setViewAtual('dashboard')} />;
+      case 'forum':         return <ForumCoordenador onVoltar={() => setViewAtual('dashboard')} />;
+      case 'boletim_aluno': return <BoletimCoordenador onVoltar={() => setViewAtual('dashboard')} />;
       default: return null;
     }
   };

@@ -22,6 +22,8 @@ import {
   LogOut,
   User,
   ArrowLeft,
+  Paperclip,
+  CheckCircle2,
 } from "lucide-react";
 
 import { PerfilUsuario } from "./PerfilUsuario";
@@ -31,6 +33,7 @@ import HorarioEscolar from "./HorarioEscolar";
 import Boletim from "./Boletim";
 import { DisciplinaPage } from "./DisciplinaPage";
 import { SchoolHeader } from "./SchoolHeader";
+import ComunicadosPage from "./ComunicadosPage";
 
 type ViewType =
   | "dashboard"
@@ -38,7 +41,8 @@ type ViewType =
   | "boletim"
   | "agenda"
   | "horarios"
-  | "disciplina";
+  | "disciplina"
+  | "comunicados";
 
 interface DisciplinaData {
   id: string;
@@ -64,6 +68,7 @@ interface ComunicadoData {
   tipo: "urgente" | "informativo" | "importante";
   lido: boolean;
   publico_alvo_raw: string;
+  imagem_url: string | null;
 }
 
 function formatarData(dataISO: string) {
@@ -106,7 +111,6 @@ function HeaderPadrao({
         <SchoolHeader subtitle="Painel do Aluno" />
 
         <div className="flex items-center gap-4">
-          {/* Sino */}
           <div className="relative">
             <Button
               variant="ghost"
@@ -121,7 +125,6 @@ function HeaderPadrao({
             </Button>
           </div>
 
-          {/* Avatar + dropdown */}
           <div className="flex items-center gap-3 pl-4 border-l border-border">
             <div className="text-right hidden md:block">
               <p className="text-sm font-medium text-foreground">{usuario?.nome}</p>
@@ -144,16 +147,12 @@ function HeaderPadrao({
         </div>
       </div>
 
-      {/* Dropdown via portal — fora de qualquer stacking context */}
       {mostrarMenuUsuario && createPortal(
         <>
-          {/* Overlay invisível fecha ao clicar fora */}
           <div
             className="fixed inset-0 z-[99998]"
             onClick={() => setMostrarMenuUsuario(false)}
           />
-
-          {/* Menu alinhado ao avatar */}
           <div
             className="fixed w-48 rounded-xl border border-border shadow-2xl z-[99999] overflow-hidden"
             style={{
@@ -172,9 +171,7 @@ function HeaderPadrao({
               <User className="w-4 h-4 text-muted-foreground" />
               Meu Perfil
             </button>
-
             <div className="h-px bg-border mx-3" />
-
             <button
               onClick={() => {
                 setMostrarMenuUsuario(false);
@@ -239,6 +236,9 @@ export default function DashboardAluno() {
 
   const [turma, setTurma] = useState<TurmaData | null>(null);
   const [comunicados, setComunicados] = useState<ComunicadoData[]>([]);
+  const [mediaGeral, setMediaGeral] = useState<number | null>(null);
+  const [frequenciaPercent, setFrequenciaPercent] = useState<number | null>(null);
+  const [faltas30Dias, setFaltas30Dias] = useState<number>(0);
 
   const [loadingTurma, setLoadingTurma] = useState(true);
   const [loadingComunicados, setLoadingComunicados] = useState(true);
@@ -322,7 +322,7 @@ export default function DashboardAluno() {
     try {
       const { data, error } = await supabase
         .from("comunicados")
-        .select(`id, titulo, conteudo, criado_em, publico_alvo, importante, users!comunicados_autor_id_fkey ( nome )`)
+        .select(`id, titulo, conteudo, criado_em, publico_alvo, importante, imagem_url, users!comunicados_autor_id_fkey ( nome )`)
         .order("criado_em", { ascending: false })
         .limit(20);
       if (error) throw error;
@@ -340,6 +340,7 @@ export default function DashboardAluno() {
         dataPublicacao: c.criado_em,
         autorNome: Array.isArray(c.users) && c.users.length > 0 ? c.users[0].nome : c.users?.nome || "Coordenação",
         lido: false, publico_alvo_raw: c.publico_alvo || "",
+        imagem_url: c.imagem_url || null,
       })));
     } catch (e: any) {
       setErroComunicados(e?.message || "Erro ao carregar comunicados.");
@@ -349,8 +350,85 @@ export default function DashboardAluno() {
     }
   }, [usuario]);
 
+  // ---- Carregar indicadores do aluno (média geral + frequência) ----
+  const carregarIndicadoresAluno = useCallback(async () => {
+    if (!usuario?.id) return;
+
+    // ── Média Geral: buscar todas as notas do aluno e calcular média das médias por bimestre ──
+    try {
+      const { data: notasData } = await supabase
+        .from("notas")
+        .select("media")
+        .eq("user_id", usuario.id)
+        .not("media", "is", null);
+
+      if (notasData && notasData.length > 0) {
+        const medias = notasData.map((n: any) => Number(n.media)).filter((m: number) => !isNaN(m));
+        if (medias.length > 0) {
+          const soma = medias.reduce((a: number, b: number) => a + b, 0);
+          setMediaGeral(Math.round((soma / medias.length) * 10) / 10);
+        }
+      }
+    } catch {
+      // Falha silenciosa
+    }
+
+    // ── Frequência: buscar registros dos últimos 30 dias ──
+    try {
+      const hoje = new Date();
+      const trintaDiasAtras = new Date(hoje);
+      trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+      const dataInicio = trintaDiasAtras.toISOString().split('T')[0];
+
+      const { data: freqData } = await supabase
+        .from("frequencia_diaria")
+        .select("presente")
+        .eq("aluno_id", usuario.id)
+        .gte("data_aula", dataInicio);
+
+      if (freqData && freqData.length > 0) {
+        const totalRegistros = freqData.length;
+        const presencas = freqData.filter((f: any) => f.presente === true).length;
+        const faltasCount = totalRegistros - presencas;
+        const percent = Math.round((presencas / totalRegistros) * 100);
+
+        setFrequenciaPercent(percent);
+        setFaltas30Dias(faltasCount);
+      }
+    } catch {
+      // Falha silenciosa
+    }
+  }, [usuario?.id]);
+
   useEffect(() => { if (usuario) carregarComunicados(); }, [usuario, carregarComunicados]);
+  useEffect(() => { if (usuario?.id) carregarIndicadoresAluno(); }, [usuario?.id, carregarIndicadoresAluno]);
   useEffect(() => { setNotificacoesNaoLidas(0); }, []);
+
+  // ---- Helpers ----
+  const getCorDisciplina = (cor: string) => {
+    if (cor && cor.startsWith('bg-')) return cor;
+    return 'bg-blue-500';
+  };
+
+  const getMediaColor = (media: number | null) => {
+    if (media === null) return { text: 'text-muted-foreground', border: 'border-gray-200 dark:border-gray-700', bg: 'rgba(100,116,139,0.1)', iconBg: 'rgba(100,116,139,0.2)' };
+    if (media >= 7) return { text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800', bg: 'rgba(22,163,74,0.1)', iconBg: 'rgba(22,163,74,0.2)' };
+    if (media >= 5) return { text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800', bg: 'rgba(217,119,6,0.1)', iconBg: 'rgba(217,119,6,0.2)' };
+    return { text: 'text-red-700 dark:text-red-300', border: 'border-red-200 dark:border-red-800', bg: 'rgba(220,38,38,0.1)', iconBg: 'rgba(220,38,38,0.2)' };
+  };
+
+  const getFreqColor = (freq: number | null) => {
+    if (freq === null) return { text: 'text-muted-foreground', border: 'border-gray-200 dark:border-gray-700', bg: 'rgba(100,116,139,0.1)', iconBg: 'rgba(100,116,139,0.2)' };
+    if (freq >= 85) return { text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800', bg: 'rgba(22,163,74,0.1)', iconBg: 'rgba(22,163,74,0.2)' };
+    if (freq >= 75) return { text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800', bg: 'rgba(217,119,6,0.1)', iconBg: 'rgba(217,119,6,0.2)' };
+    return { text: 'text-red-700 dark:text-red-300', border: 'border-red-200 dark:border-red-800', bg: 'rgba(220,38,38,0.1)', iconBg: 'rgba(220,38,38,0.2)' };
+  };
+
+  const getFaltasColor = (faltas: number) => {
+    if (faltas === 0) return { text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800', bg: 'rgba(22,163,74,0.1)', iconBg: 'rgba(22,163,74,0.2)' };
+    if (faltas <= 3) return { text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800', bg: 'rgba(217,119,6,0.1)', iconBg: 'rgba(217,119,6,0.2)' };
+    return { text: 'text-red-700 dark:text-red-300', border: 'border-red-200 dark:border-red-800', bg: 'rgba(220,38,38,0.1)', iconBg: 'rgba(220,38,38,0.2)' };
+  };
 
   // ============================================================
   // VIEWS SECUNDÁRIAS
@@ -420,6 +498,20 @@ export default function DashboardAluno() {
     );
   }
 
+  if (viewAtual === "comunicados") {
+    return (
+      <div className="min-h-screen bg-background">
+        <HeaderPadrao {...headerProps} />
+        <BarraAzul titulo="Comunicados" subtitulo="Avisos da escola" onVoltar={handleVoltar} />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <ComunicadosPage onVoltar={handleVoltar} />
+        </main>
+        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
+      </div>
+    );
+  }
+
   // ============================================================
   // DASHBOARD PRINCIPAL
   // ============================================================
@@ -431,7 +523,7 @@ export default function DashboardAluno() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {/* Banner */}
+        {/* ── Banner ── */}
         <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-8 md:p-10 overflow-hidden">
           <div className="relative z-10">
             <h1 className="text-3xl font-bold mb-2">
@@ -454,17 +546,65 @@ export default function DashboardAluno() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
         </section>
 
-        {/* Acesso Rápido */}
+        {/* ── Cards de resumo ── */}
+        {!loadingTurma && turma && (() => {
+          const mediaColors = getMediaColor(mediaGeral);
+          const freqColors = getFreqColor(frequenciaPercent);
+          const faltasColors = getFaltasColor(faltas30Dias);
+          return (
+            <section className="grid grid-cols-3 gap-4">
+              {/* Média Geral */}
+              <div className={`rounded-xl p-4 flex items-center gap-3 border ${mediaColors.border}`} style={{ backgroundColor: mediaColors.bg }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: mediaColors.iconBg }}>
+                  <BarChart3 className={`w-5 h-5 ${mediaColors.text}`} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Média Geral</p>
+                  <p className={`text-2xl font-bold ${mediaColors.text}`}>
+                    {mediaGeral !== null ? mediaGeral.toFixed(1) : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Frequência */}
+              <div className={`rounded-xl p-4 flex items-center gap-3 border ${freqColors.border}`} style={{ backgroundColor: freqColors.bg }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: freqColors.iconBg }}>
+                  <CheckCircle2 className={`w-5 h-5 ${freqColors.text}`} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Frequência</p>
+                  <p className={`text-2xl font-bold ${freqColors.text}`}>
+                    {frequenciaPercent !== null ? `${frequenciaPercent}%` : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Faltas (30 dias) */}
+              <div className={`rounded-xl p-4 flex items-center gap-3 border ${faltasColors.border}`} style={{ backgroundColor: faltasColors.bg }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: faltasColors.iconBg }}>
+                  <AlertCircle className={`w-5 h-5 ${faltasColors.text}`} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Faltas (30 dias)</p>
+                  <p className={`text-2xl font-bold ${faltasColors.text}`}>{faltas30Dias}</p>
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* ── Acesso Rápido (4 botões) ── */}
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <div className="w-1 h-6 bg-blue-600 rounded-full" />
             Acesso Rápido
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { view: "boletim" as ViewType, icon: <BarChart3 className="w-5 h-5 text-green-600 dark:text-green-400" />, label: "Boletim", iconBg: "bg-green-100 dark:bg-green-900/30" },
               { view: "agenda" as ViewType, icon: <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />, label: "Agenda", iconBg: "bg-purple-100 dark:bg-purple-900/30" },
               { view: "horarios" as ViewType, icon: <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />, label: "Horários", iconBg: "bg-orange-100 dark:bg-orange-900/30" },
+              { view: "comunicados" as ViewType, icon: <Megaphone className="w-5 h-5 text-blue-600 dark:text-blue-400" />, label: "Comunicados", iconBg: "bg-blue-100 dark:bg-blue-900/30" },
             ].map((item) => (
               <Button
                 key={item.view}
@@ -481,14 +621,22 @@ export default function DashboardAluno() {
           </div>
         </section>
 
-        {/* Disciplinas + Comunicados */}
+        {/* ── Disciplinas + Comunicados ── */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
+          {/* Disciplinas */}
           <div className="lg:col-span-2 space-y-4">
-            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-muted-foreground" />
-              Minhas Disciplinas
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-muted-foreground" />
+                Minhas Disciplinas
+              </h3>
+              {turma && (
+                <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-medium">
+                  {turma.disciplinas.length} disc.
+                </span>
+              )}
+            </div>
 
             {loadingTurma ? (
               <div className="flex items-center justify-center p-8 bg-card rounded-lg border border-border">
@@ -515,15 +663,15 @@ export default function DashboardAluno() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {turma.disciplinas.map((disc) => (
                   <div
                     key={disc.id}
-                    className="group cursor-pointer bg-card border border-border rounded-lg shadow-sm hover:bg-accent hover:border-blue-500/50 transition-all p-4 flex items-center justify-between"
+                    className="group cursor-pointer bg-card border border-border rounded-xl shadow-sm hover:bg-accent hover:border-blue-500/50 transition-all p-4 flex items-center justify-between"
                     onClick={() => { setDisciplinaSelecionada(disc); setViewAtual("disciplina"); }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${disc.cor}`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${getCorDisciplina(disc.cor)}`}>
                         <BookOpen className="h-5 w-5" />
                       </div>
                       <div>
@@ -538,11 +686,21 @@ export default function DashboardAluno() {
             )}
           </div>
 
-          {/* Comunicados */}
+          {/* ── Comunicados (sidebar compacta) ── */}
           <div>
-            <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-              <Megaphone className="w-5 h-5 text-muted-foreground" /> Comunicados
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-muted-foreground" /> Comunicados
+              </h3>
+              {comunicados.length > 0 && (
+                <button
+                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+                  onClick={() => setViewAtual("comunicados")}
+                >
+                  Ver todos <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
             {loadingComunicados ? (
               <div className="flex items-center justify-center p-8 bg-card rounded-lg border border-border">
@@ -555,42 +713,60 @@ export default function DashboardAluno() {
                 <Button variant="outline" size="sm" onClick={carregarComunicados}>Tentar novamente</Button>
               </div>
             ) : comunicados.length === 0 ? (
-              <div className="p-8 text-center bg-card rounded-lg border border-border">
-                <Info className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-30" />
-                <p className="font-semibold text-foreground text-sm">Nenhum comunicado</p>
-                <p className="text-muted-foreground text-xs mt-1">Não há comunicados recentes.</p>
+              /* ── Estado vazio positivo ── */
+              <div className="bg-card rounded-xl border border-border p-6 text-center">
+                <div className="inline-flex items-center gap-1.5 text-green-600 dark:text-green-400 mb-2">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span className="text-sm font-semibold">Tudo em dia!</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Nenhum comunicado novo por enquanto.
+                </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {comunicados.map((c) => (
+              /* ── Lista compacta com dots e anexos ── */
+              <div className="bg-card rounded-xl p-3 border border-border divide-y divide-border">
+                {comunicados.slice(0, 5).map((c) => (
                   <div
                     key={c.id}
-                    className="bg-card border border-border rounded-lg p-4 cursor-pointer hover:border-blue-500/40 hover:bg-accent transition-all"
+                    className="px-4 py-3.5 p-2 cursor-pointer hover:bg-accent/50 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                    onClick={() => setViewAtual("comunicados")}
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      {c.tipo === "urgente"
-                        ? <AlertCircle className="w-4 h-4 text-red-500" />
-                        : <Info className="w-4 h-4 text-blue-500" />
-                      }
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] font-medium ${
-                          c.tipo === "urgente"
-                            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                            : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                        }`}
-                      >
-                        {c.tipo === "urgente" ? "Urgente" : "Informativo"}
-                      </Badge>
-                    </div>
-                    <h4 className="font-semibold text-sm text-foreground mb-1">{c.titulo}</h4>
-                    <p className="text-xs text-muted-foreground line-clamp-3 mb-2">{c.conteudo}</p>
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span>{c.autorNome}</span>
-                      <span>{formatarData(c.dataPublicacao)}</span>
+                    <div className="flex gap-2.5">
+                      <div className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${
+                        c.tipo === "urgente" ? "bg-red-500" : "bg-blue-500"
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex px-2 items-center gap-1.5 mb-0.5">
+                          <p className="text-smx p-2 font-semibold text-foreground truncate">{c.titulo}</p>
+                          {c.imagem_url && (
+                            <span className="inline-flex p-2 items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded flex-shrink-0">
+                              <Paperclip className="w-3 h-2.5" />
+                              Anexo
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-1">
+                          {c.conteudo}
+                        </p>
+                        <p className="text-[11px] py-1 text-muted-foreground/70">
+                          {c.autorNome} · {formatarData(c.dataPublicacao)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 ))}
+
+                {comunicados.length > 5 && (
+                  <div className="px-4 py-3 text-center">
+                    <button
+                      className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                      onClick={() => setViewAtual("comunicados")}
+                    >
+                      Ver todos os {comunicados.length} comunicados
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

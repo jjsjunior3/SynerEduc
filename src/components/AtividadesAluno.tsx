@@ -14,7 +14,6 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
 import { Separator } from "./ui/separator";
 
 import {
@@ -29,6 +28,9 @@ import {
   History,
   Target,
   Loader2,
+  MessageSquare,
+  Star,
+  ExternalLink,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -39,7 +41,7 @@ interface AtividadeSubmissao {
   arquivo_url?: string;
   arquivo_nome?: string;
   data_entrega: string;
-  status: "pendente" | "entregue" | "concluido"; // valores do banco
+  status: "pendente" | "entregue" | "concluido";
   nota?: number;
   feedback?: string;
 }
@@ -51,7 +53,7 @@ interface Atividade {
   arquivo_url?: string;
   arquivo_nome?: string;
   data_entrega: string;
-  status: "pendente" | "enviado" | "corrigido" | "atrasado"; // status visual
+  status: "pendente" | "enviado" | "corrigido" | "atrasado";
   tipo: "exercicio" | "prova" | "trabalho" | "projeto";
   pontuacao: number;
   submissao?: AtividadeSubmissao;
@@ -90,7 +92,6 @@ export function AtividadesAluno({
       setLoading(true);
       setError("");
 
-      // 1. Buscar atividades desta série e disciplina
       const { data: atividadesData, error: atividadesError } = await supabase
         .from("atividades")
         .select("*")
@@ -107,7 +108,6 @@ export function AtividadesAluno({
         return;
       }
 
-      // 2. Buscar submissões do aluno para essas atividades
       const { data: submissoesData, error: submissoesError } = await supabase
         .from("atividades_alunos")
         .select("*")
@@ -122,7 +122,6 @@ export function AtividadesAluno({
 
       const agora = new Date();
 
-      // 3. Combinar dados
       const atividadesFormatadas: Atividade[] = (atividadesData || []).map(
         (atv: any) => {
           const sub = submissoesMap.get(atv.id);
@@ -253,7 +252,7 @@ export function AtividadesAluno({
         arquivo_url: resultadoUpload.url,
         arquivo_nome: resultadoUpload.nome,
         data_entrega: new Date().toISOString(),
-        status: "entregue", // ✔ valor permitido pela constraint
+        status: "entregue",
       };
 
       if (submissaoExistente) {
@@ -292,21 +291,34 @@ export function AtividadesAluno({
     (atv) => atv.status === "pendente" || atv.status === "atrasado"
   );
   const atividadesEnviadas = atividades.filter((atv) => atv.submissao);
+  const atividadesCorrigidas = atividades.filter((atv) => atv.status === "corrigido");
 
   const getStatusBadge = (status: Atividade["status"]) => {
     switch (status) {
       case "enviado":
         return (
-          <Badge className="bg-blue-100 text-blue-800">Enviado</Badge>
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+            <Clock className="w-3 h-3" /> Enviado
+          </span>
         );
       case "corrigido":
         return (
-          <Badge className="bg-green-100 text-green-800">Corrigido</Badge>
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+            <CheckCircle className="w-3 h-3" /> Corrigido
+          </span>
         );
       case "atrasado":
-        return <Badge variant="destructive">Atrasado</Badge>;
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+            <AlertCircle className="w-3 h-3" /> Atrasado
+          </span>
+        );
       default:
-        return <Badge variant="outline">Pendente</Badge>;
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border">
+            Pendente
+          </span>
+        );
     }
   };
 
@@ -333,6 +345,13 @@ export function AtividadesAluno({
     };
   };
 
+  const getNotaColor = (nota: number, max: number) => {
+    const percent = (nota / max) * 100;
+    if (percent >= 70) return { text: 'text-green-700 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30', border: 'border-green-200 dark:border-green-800' };
+    if (percent >= 50) return { text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30', border: 'border-amber-200 dark:border-amber-800' };
+    return { text: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30', border: 'border-red-200 dark:border-red-800' };
+  };
+
   const handleEnviarAtividade = (atividade: Atividade) => {
     setAtividadeSelecionada(atividade);
     setArquivoResposta(null);
@@ -348,90 +367,186 @@ export function AtividadesAluno({
   // RENDER
   // ========================================
   return (
-    <>
-      {/* Header simples dentro da aba */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="space-y-2">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">
+          <h1 className="text-lg font-semibold text-foreground">
             Minhas Atividades - {nomeDisciplina}
           </h1>
-          <p className="text-xs text-gray-500">{serieNome}</p>
+          <p className="text-xs text-muted-foreground mt-1">{serieNome}</p>
         </div>
       </div>
 
-      <main className="space-y-8">
-        {/* Atividades Pendentes */}
-        <section className="space-y-4">
-          <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-blue-600" />
-            Atividades Pendentes{" "}
-            <span className="text-sm text-gray-500">
+      <div className="space-y-10">
+
+        {/* ── Atividades Corrigidas (destaque) ── */}
+        {atividadesCorrigidas.length > 0 && (
+          <section>
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-foreground">
+              <Star className="w-5 h-5 text-green-600 dark:text-green-400" />
+              Atividades Corrigidas
+              <span className="text-sm text-muted-foreground">
+                ({atividadesCorrigidas.length})
+              </span>
+            </h3>
+
+            <div className="space-y-5">
+              {atividadesCorrigidas.map((atividade) => {
+                const notaColors = atividade.submissao?.nota !== undefined
+                  ? getNotaColor(atividade.submissao.nota, atividade.pontuacao)
+                  : null;
+
+                return (
+                  <Card
+                    key={atividade.id}
+                    className="border-l-4 border-l-green-500 dark:border-l-green-400"
+                  >
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            {getTipoIcon(atividade.tipo)}
+                            <h4 className="font-semibold text-foreground">
+                              {atividade.titulo}
+                            </h4>
+                            {getStatusBadge(atividade.status)}
+                          </div>
+                          <p className="text-muted-foreground text-sm mb-4">
+                            {atividade.descricao}
+                          </p>
+                        </div>
+
+                        {/* Nota em destaque */}
+                        {atividade.submissao?.nota !== undefined && notaColors && (
+                          <div className={`flex-shrink-0 ${notaColors.bg} ${notaColors.border} border rounded-xl px-4 py-3 text-center min-w-[80px]`}>
+                            <p className="text-xs text-muted-foreground mb-0.5">Nota</p>
+                            <p className={`text-2xl font-bold ${notaColors.text}`}>
+                              {atividade.submissao.nota}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              de {atividade.pontuacao}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Feedback do professor */}
+                      {atividade.submissao?.feedback && (
+                        <div className="mt-3 rounded-lg p-4 border border-blue-200 dark:border-blue-800"
+                          style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                              Feedback do Professor
+                            </span>
+                          </div>
+                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                            {atividade.submissao.feedback}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Meta info + botões */}
+                      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>Entrega: {formatarDataHora(atividade.data_entrega).data}</span>
+                        </div>
+                        {atividade.submissao?.data_entrega && (
+                          <div className="flex items-center gap-1">
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Enviado: {formatarDataHora(atividade.submissao.data_entrega).data}</span>
+                          </div>
+                        )}
+                        {atividade.submissao?.arquivo_url && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleBaixarArquivo(atividade.submissao!.arquivo_url)}
+                            className="gap-1.5 text-xs h-7"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Sua Resposta
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <Separator />
+          </section>
+        )}
+
+        {/* ── Atividades Pendentes ── */}
+        <section>
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-foreground">
+            <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            Atividades Pendentes
+            <span className="text-sm text-muted-foreground">
               ({atividadesPendentes.length})
             </span>
           </h3>
 
           {loading ? (
-            <div className="flex items-center justify-center p-6 bg-white rounded-lg shadow-sm">
+            <div className="flex items-center justify-center p-6 bg-card rounded-lg border border-border">
               <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-2" />
-              <span className="text-gray-600">Carregando atividades...</span>
+              <span className="text-muted-foreground">Carregando atividades...</span>
             </div>
           ) : error ? (
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="p-4 text-center">
-                <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-600" />
-                <p className="text-sm text-red-700 mb-3">{error}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={carregarAtividades}
-                >
+            <Card className="border-red-200 dark:border-red-800">
+              <CardContent className="p-4 text-center" style={{ backgroundColor: 'rgba(220,38,38,0.05)' }}>
+                <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-600 dark:text-red-400" />
+                <p className="text-sm text-red-700 dark:text-red-300 mb-3">{error}</p>
+                <Button variant="outline" size="sm" onClick={carregarAtividades}>
                   Tentar novamente
                 </Button>
               </CardContent>
             </Card>
           ) : atividadesPendentes.length === 0 ? (
             <Card>
-              <CardContent className="p-6 text-center text-gray-500">
-                <CheckCircle className="w-10 h-10 mx-auto mb-3 text-green-400" />
-                <p>Parabéns! Você está em dia com todas as atividades.</p>
+              <CardContent className="p-6 text-center">
+                <CheckCircle className="w-10 h-10 mx-auto mb-3 text-green-500 dark:text-green-400" />
+                <p className="text-foreground font-medium text-sm">Parabéns! Você está em dia.</p>
+                <p className="text-muted-foreground text-xs mt-1">Nenhuma atividade pendente no momento.</p>
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {atividadesPendentes.map((atividade) => {
-                const { data, hora } = formatarDataHora(
-                  atividade.data_entrega
-                );
-                const isAtrasado =
-                  new Date(atividade.data_entrega) < new Date();
+                const { data, hora } = formatarDataHora(atividade.data_entrega);
+                const isAtrasado = new Date(atividade.data_entrega) < new Date();
 
                 return (
                   <Card
                     key={atividade.id}
                     className={`border-l-4 ${
-                      isAtrasado ? "border-l-red-500" : "border-l-orange-500"
+                      isAtrasado
+                        ? "border-l-red-500 dark:border-l-red-400"
+                        : "border-l-amber-500 dark:border-l-amber-400"
                     }`}
                   >
-                    <CardContent className="p-4">
+                    <CardContent className="p-6">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
                             {getTipoIcon(atividade.tipo)}
-                            <h4 className="font-semibold">
+                            <h4 className="font-semibold text-foreground">
                               {atividade.titulo}
                             </h4>
                             {getStatusBadge(atividade.status)}
                           </div>
-                          <p className="text-gray-600 text-sm mb-3">
+                          <p className="text-muted-foreground text-sm mb-4">
                             {atividade.descricao}
                           </p>
 
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-3">
+                          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-4">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-4 h-4" />
-                              <span>
-                                Entrega: {data} às {hora}
-                              </span>
+                              <span>Entrega: {data} às {hora}</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <Target className="w-4 h-4" />
@@ -444,9 +559,7 @@ export function AtividadesAluno({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() =>
-                                  handleBaixarArquivo(atividade.arquivo_url)
-                                }
+                                onClick={() => handleBaixarArquivo(atividade.arquivo_url)}
                                 className="gap-2"
                               >
                                 <Download className="w-4 h-4" />
@@ -454,18 +567,13 @@ export function AtividadesAluno({
                               </Button>
                             )}
 
-                            {/* AQUI ESTÁ A MUDANÇA: REMOVIDA A CONDIÇÃO DE TIPO */}
                             <Button
-                              onClick={() =>
-                                handleEnviarAtividade(atividade)
-                              }
+                              onClick={() => handleEnviarAtividade(atividade)}
                               className="gap-2"
                               disabled={isAtrasado}
                             >
                               <Send className="w-4 h-4" />
-                              {isAtrasado
-                                ? "Prazo Expirado"
-                                : "Enviar Resposta"}
+                              {isAtrasado ? "Prazo Expirado" : "Enviar Resposta"}
                             </Button>
                           </div>
                         </div>
@@ -480,70 +588,96 @@ export function AtividadesAluno({
 
         <Separator />
 
-        {/* Histórico de Atividades (resumo) */}
+        {/* ── Histórico (atividades enviadas aguardando correção) ── */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <History className="w-5 h-5 text-gray-700" />
+            <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
+              <History className="w-5 h-5 text-muted-foreground" />
               Histórico de Atividades
             </h3>
-            <Button
-              variant="outline"
-              onClick={() => setModalHistoricoAberto(true)}
-              className="gap-2"
-            >
-              <History className="w-4 h-4" />
-              Ver Histórico Completo
-            </Button>
+            {atividadesEnviadas.length > 3 && (
+              <Button
+                variant="outline"
+                onClick={() => setModalHistoricoAberto(true)}
+                className="gap-2"
+                size="sm"
+              >
+                <History className="w-4 h-4" />
+                Ver Histórico Completo
+              </Button>
+            )}
           </div>
 
-          <div className="grid gap-3">
-            {atividadesEnviadas.slice(0, 3).map((atividade) => {
-              const { data, hora } = formatarDataHora(
-                atividade.submissao!.data_entrega
-              );
+          {atividadesEnviadas.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center">
+                <History className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
+                <p className="text-muted-foreground text-sm">Nenhuma atividade enviada ainda.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {atividadesEnviadas
+                .filter((atv) => atv.status !== "corrigido") // Corrigidas já aparecem acima
+                .slice(0, 3)
+                .map((atividade) => {
+                  const { data, hora } = formatarDataHora(
+                    atividade.submissao!.data_entrega
+                  );
 
-              return (
-                <Card
-                  key={atividade.id}
-                  className="border-l-4 border-l-green-500"
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          {getTipoIcon(atividade.tipo)}
-                          <h4 className="font-medium text-sm">
-                            {atividade.titulo}
-                          </h4>
-                          {getStatusBadge(atividade.status)}
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
-                          <span>
-                            Enviado: {data} às {hora}
+                  return (
+                    <Card
+                      key={atividade.id}
+                      className="border-l-4 border-l-blue-500 dark:border-l-blue-400"
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              {getTipoIcon(atividade.tipo)}
+                              <h4 className="font-medium text-sm text-foreground">
+                                {atividade.titulo}
+                              </h4>
+                              {getStatusBadge(atividade.status)}
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <span>Enviado: {data} às {hora}</span>
+                              {atividade.submissao?.arquivo_nome && (
+                                <span className="flex items-center gap-1">
+                                  <FileText className="w-3 h-3" />
+                                  {atividade.submissao.arquivo_nome}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-xs text-muted-foreground italic">
+                            Aguardando correção
                           </span>
-                          {atividade.submissao?.nota !== undefined && (
-                            <span className="font-medium text-green-600">
-                              Nota: {atividade.submissao.nota}/
-                              {atividade.pontuacao}
-                            </span>
-                          )}
                         </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-      </main>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
 
-      {/* Modal de Envio de Atividade */}
+              {atividadesEnviadas.filter((atv) => atv.status !== "corrigido").length > 3 && (
+                <Button
+                  variant="outline"
+                  className="w-full text-sm"
+                  onClick={() => setModalHistoricoAberto(true)}
+                >
+                  Ver todas as atividades enviadas
+                </Button>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* ── Modal de Envio ── */}
       <Dialog open={modalEnvioAberto} onOpenChange={setModalEnvioAberto}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-foreground">
               <Send className="w-5 h-5" />
               Enviar Atividade: {atividadeSelecionada?.titulo}
             </DialogTitle>
@@ -554,31 +688,30 @@ export function AtividadesAluno({
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="arquivoResposta">Arquivo de Resposta</Label>
+              <Label htmlFor="arquivoResposta" className="text-foreground">Arquivo de Resposta</Label>
               <Input
                 id="arquivoResposta"
                 type="file"
-                accept=".pdf,.doc,.docx,.txt,.zip"
+                accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.jpeg,.png"
                 onChange={(e) =>
                   setArquivoResposta(e.target.files?.[0] || null)
                 }
                 className="mt-1"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Formatos aceitos: PDF, DOC, DOCX, TXT, ZIP (máximo 10MB)
+              <p className="text-xs text-muted-foreground mt-1">
+                Formatos aceitos: PDF, DOC, DOCX, TXT, ZIP, JPG, PNG (máximo 10MB)
               </p>
               {arquivoResposta && (
-                <p className="text-sm text-green-600 flex items-center gap-1 mt-2">
+                <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1 mt-2">
                   <FileText className="w-3 h-3" />
                   {arquivoResposta.name}
                 </p>
               )}
               {atividadeSelecionada?.submissao?.arquivo_nome &&
                 !arquivoResposta && (
-                  <p className="text-sm text-blue-600 flex items-center gap-1 mt-2">
+                  <p className="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-2">
                     <FileText className="w-3 h-3" />
-                    Arquivo já enviado:{" "}
-                    {atividadeSelecionada.submissao.arquivo_nome}
+                    Arquivo já enviado: {atividadeSelecionada.submissao.arquivo_nome}
                   </p>
                 )}
             </div>
@@ -594,10 +727,11 @@ export function AtividadesAluno({
               <Button
                 onClick={handleSubmissao}
                 disabled={!arquivoResposta || carregandoEnvio}
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
               >
                 {carregandoEnvio ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     Enviando...
                   </>
                 ) : atividadeSelecionada?.submissao ? (
@@ -611,14 +745,14 @@ export function AtividadesAluno({
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Histórico Completo */}
+      {/* ── Modal de Histórico Completo ── */}
       <Dialog
         open={modalHistoricoAberto}
         onOpenChange={setModalHistoricoAberto}
       >
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-foreground">
               <History className="w-5 h-5" />
               Histórico Completo de Atividades
             </DialogTitle>
@@ -629,66 +763,66 @@ export function AtividadesAluno({
 
           <div className="space-y-4">
             {atividadesEnviadas.length === 0 ? (
-              <div className="p-6 text-center text-gray-500">
-                <History className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>Nenhuma atividade enviada ainda.</p>
+              <div className="p-6 text-center">
+                <History className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-30" />
+                <p className="text-muted-foreground">Nenhuma atividade enviada ainda.</p>
               </div>
             ) : (
               atividadesEnviadas.map((atividade) => {
-                const dataEnvio = formatarDataHora(
-                  atividade.submissao!.data_entrega
-                );
+                const dataEnvio = formatarDataHora(atividade.submissao!.data_entrega);
                 const dataEntrega = formatarDataHora(atividade.data_entrega);
+                const notaColors = atividade.submissao?.nota !== undefined
+                  ? getNotaColor(atividade.submissao.nota, atividade.pontuacao)
+                  : null;
 
                 return (
                   <Card key={atividade.id}>
-                    <CardContent className="p-4">
+                    <CardContent className="p-6">
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2 flex-wrap flex-1">
                             {getTipoIcon(atividade.tipo)}
-                            <h4 className="font-semibold">
+                            <h4 className="font-semibold text-foreground">
                               {atividade.titulo}
                             </h4>
                             {getStatusBadge(atividade.status)}
                           </div>
-                          {atividade.submissao?.nota !== undefined && (
-                            <div className="text-lg font-semibold text-green-600">
-                              {atividade.submissao.nota}/
-                              {atividade.pontuacao}
+                          {atividade.submissao?.nota !== undefined && notaColors && (
+                            <div className={`${notaColors.bg} ${notaColors.border} border rounded-xl px-3 py-2 text-center flex-shrink-0`}>
+                              <p className={`text-xl font-bold ${notaColors.text}`}>
+                                {atividade.submissao.nota}
+                                <span className="text-xs font-normal text-muted-foreground">/{atividade.pontuacao}</span>
+                              </p>
                             </div>
                           )}
                         </div>
 
-                        <p className="text-gray-600 text-sm">
+                        <p className="text-muted-foreground text-sm">
                           {atividade.descricao}
                         </p>
 
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <span className="text-gray-500">
-                              Prazo de Entrega:
-                            </span>
-                            <p>
-                              {dataEntrega.data} às {dataEntrega.hora}
-                            </p>
+                            <span className="text-muted-foreground text-xs">Prazo de Entrega:</span>
+                            <p className="text-foreground">{dataEntrega.data} às {dataEntrega.hora}</p>
                           </div>
                           <div>
-                            <span className="text-gray-500">
-                              Data de Envio:
-                            </span>
-                            <p>
-                              {dataEnvio.data} às {dataEnvio.hora}
-                            </p>
+                            <span className="text-muted-foreground text-xs">Data de Envio:</span>
+                            <p className="text-foreground">{dataEnvio.data} às {dataEnvio.hora}</p>
                           </div>
                         </div>
 
+                        {/* Feedback do professor no histórico */}
                         {atividade.submissao?.feedback && (
-                          <div className="bg-blue-50 p-3 rounded-lg">
-                            <span className="text-blue-800 font-medium text-sm">
-                              Feedback do Professor:
-                            </span>
-                            <p className="text-blue-700 text-sm mt-1">
+                          <div className="rounded-lg p-4 border border-blue-200 dark:border-blue-800"
+                            style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                              <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                                Feedback do Professor
+                              </span>
+                            </div>
+                            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                               {atividade.submissao.feedback}
                             </p>
                           </div>
@@ -699,11 +833,9 @@ export function AtividadesAluno({
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              handleBaixarArquivo(
-                                atividade.submissao!.arquivo_url
-                              )
+                              handleBaixarArquivo(atividade.submissao!.arquivo_url)
                             }
-                            className="gap-2 mt-3"
+                            className="gap-2"
                           >
                             <Download className="w-4 h-4" />
                             Baixar Sua Resposta
@@ -718,6 +850,6 @@ export function AtividadesAluno({
           </div>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

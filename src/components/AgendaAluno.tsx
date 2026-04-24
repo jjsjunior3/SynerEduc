@@ -241,7 +241,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
         <div className="space-y-8">
           {Object.entries(eventosAgrupados).map(([disciplinaNome, eventos]) => (
             <div key={disciplinaNome}>
-              <h2 className="text-lg font-bold text-foreground border-b border-border pb-2 mb-4">{disciplinaNome}</h2>
+              <h2 className="text-lg font-boldtext-foreground border-b border-border pb-2 mb-4">{disciplinaNome}</h2>
               <div className="space-y-4">
                 {eventos.map((evento) => {
                   const corHex = resolverCorDisciplina(evento.disciplina?.cor);
@@ -252,7 +252,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
                           <Clock className="w-4 h-4" />
                           <span>{evento.professor?.nome || 'Professor'}</span>
                         </div>
-                        <span className="text-[11px] font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: corHex }}>
+                        <span className="text-[11px] p-2 font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: corHex }}>
                           {evento.disciplina?.nome || disciplinaNome}
                         </span>
                       </CardHeader>

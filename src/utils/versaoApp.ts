@@ -1,14 +1,13 @@
 // src/utils/versaoApp.ts
 //
-// ⚠️ IMPORTANTE: Incremente VERSAO_ATUAL a cada deploy para forçar
-// atualização nos navegadores dos usuários.
+// ⚠️  IMPORTANTE: Incremente VERSAO_ATUAL a cada deploy para forçar
+//     atualização nos navegadores dos usuários.
 //
 // Exemplos de incremento:
-//   '1.0.0' → '1.1.0' (nova funcionalidade)
-//   '1.1.0' → '1.1.1' (correção de bug)
-//   '1.1.1' → '2.0.0' (mudança grande)
+//   '1.0.2' → '1.0.3' (correção de bug)
+//   '1.0.3' → '1.1.0' (nova funcionalidade)
 
-const VERSAO_ATUAL = '1.0.1';
+const VERSAO_ATUAL = '1.1.0';
 const CHAVE_VERSAO = 'ava_versao';
 
 export function verificarVersao(): void {
@@ -16,25 +15,34 @@ export function verificarVersao(): void {
     const versaoSalva = localStorage.getItem(CHAVE_VERSAO);
 
     if (versaoSalva !== VERSAO_ATUAL) {
-      // Preserva apenas o usuário logado
-      const usuario = localStorage.getItem('ava_user');
+      console.info(`[versaoApp] Atualizando ${versaoSalva} → ${VERSAO_ATUAL}`);
 
-      // Limpa todo o localStorage
+      // 1) Preserva as chaves do Supabase Auth (sb-*) para não deslogar
+      const sessaoSupabase = Object.entries(localStorage)
+        .filter(([key]) => key.startsWith('sb-'))
+        .reduce((acc, [key, val]) => { acc[key] = val; return acc; }, {} as Record<string, string>);
+
+      const usuarioAva = localStorage.getItem('ava_user');
+
+      // 2) Limpa todo o localStorage
       localStorage.clear();
 
-      // Restaura o usuário para não deslogar
-      if (usuario) {
-        localStorage.setItem('ava_user', usuario);
-      }
+      // 3) Restaura a sessão
+      Object.entries(sessaoSupabase).forEach(([key, val]) => localStorage.setItem(key, val));
+      if (usuarioAva) localStorage.setItem('ava_user', usuarioAva);
 
-      // Registra a nova versão
+      // 4) Grava a versão nova
       localStorage.setItem(CHAVE_VERSAO, VERSAO_ATUAL);
 
-      // Força reload buscando arquivos novos do servidor (ignora cache)
+      // 5) Limpa cache de Service Workers se existir
+      if ('caches' in window) {
+        caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
+      }
+
+      // 6) Reload forçado — ignora cache do browser
       window.location.reload();
     }
   } catch (err) {
-    // Em modo privado ou se localStorage estiver bloqueado, ignora silenciosamente
     console.warn('[versaoApp] Não foi possível verificar a versão:', err);
   }
 }

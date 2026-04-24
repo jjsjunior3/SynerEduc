@@ -9,9 +9,11 @@ import { Textarea } from './ui/textarea';
 import { Checkbox } from './ui/checkbox';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
   Send, Clock, Loader2, AlertCircle, MessageSquare,
   CheckCircle, Image, X, Search, User, Filter,
+  Trash2, Edit, Save, Paperclip, FileText, ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,13 +24,13 @@ interface ComunicadoForm {
   titulo: string;
   conteudo: string;
   destinatarios: string[];
-  usuarioUnico: string | null; // id do usuário único selecionado
+  usuarioUnico: string | null;
   usuarioUnicoNome: string;
   prioridade: 'baixa' | 'media' | 'alta';
   agendarEnvio: boolean;
   dataEnvio?: string;
   horaEnvio?: string;
-  imagem: File | null;
+  arquivo: File | null;
 }
 
 interface GrupoDestino { id: string; label: string; tipo: string; }
@@ -48,6 +50,17 @@ function getMesAtual() {
   return { inicio: fmt(inicio), fim: fmt(fim) };
 }
 
+function isImageFile(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
+}
+
+function getFileIcon(name: string) {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return Image;
+  return FileText;
+}
+
 export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
   const { usuario } = useAuth();
   const mesAtual = getMesAtual();
@@ -59,7 +72,7 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
     titulo: '', conteudo: '', destinatarios: [],
     usuarioUnico: null, usuarioUnicoNome: '',
     prioridade: 'media', agendarEnvio: false,
-    imagem: null,
+    arquivo: null,
   });
 
   const [loadingEnvio, setLoadingEnvio] = useState(false);
@@ -78,9 +91,14 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
   const [filtroHistoricoInicio, setFiltroHistoricoInicio] = useState(mesAtual.inicio);
   const [filtroHistoricoFim, setFiltroHistoricoFim] = useState(mesAtual.fim);
 
-  // Preview da imagem
-  const [imagemPreview, setImagemPreview] = useState<string | null>(null);
-  const inputImagemRef = useRef<HTMLInputElement>(null);
+  // Preview do arquivo
+  const [arquivoPreview, setArquivoPreview] = useState<string | null>(null);
+  const inputArquivoRef = useRef<HTMLInputElement>(null);
+
+  // Edição de comunicado
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [formEdicao, setFormEdicao] = useState({ titulo: '', conteudo: '', importante: false });
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   // ── Carregar grupos ──
   useEffect(() => {
@@ -133,7 +151,7 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
     try {
       const { data, error } = await supabase
         .from('comunicados')
-        .select('*, autor:users!autor_id(nome)')
+        .select('*, autor:users!comunicados_autor_id_fkey(nome)')
         .gte('criado_em', filtroHistoricoInicio)
         .lte('criado_em', filtroHistoricoFim + 'T23:59:59')
         .order('criado_em', { ascending: false });
@@ -149,29 +167,54 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
     } finally { setLoadingHistorico(false); }
   }
 
-  // ── Upload de imagem ──
-  function handleImagemChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // ── Upload de arquivo (imagem, PDF, doc, etc.) ──
+  function handleArquivoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast.error('Imagem muito grande. Máximo 5MB.'); return; }
-    if (!file.type.startsWith('image/')) { toast.error('Apenas imagens são permitidas.'); return; }
-    setForm(p => ({ ...p, imagem: file }));
-    setImagemPreview(URL.createObjectURL(file));
+    if (file.size > 10 * 1024 * 1024) { toast.error('Arquivo muito grande. Máximo 10MB.'); return; }
+    setForm(p => ({ ...p, arquivo: file }));
+    if (file.type.startsWith('image/')) {
+      setArquivoPreview(URL.createObjectURL(file));
+    } else {
+      setArquivoPreview(null);
+    }
   }
 
-  function removerImagem() {
-    setForm(p => ({ ...p, imagem: null }));
-    setImagemPreview(null);
-    if (inputImagemRef.current) inputImagemRef.current.value = '';
+  function removerArquivo() {
+    setForm(p => ({ ...p, arquivo: null }));
+    setArquivoPreview(null);
+    if (inputArquivoRef.current) inputArquivoRef.current.value = '';
   }
 
-  async function uploadImagem(file: File): Promise<string | null> {
-    const ext = file.name.split('.').pop();
-    const path = `comunicados/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('comunicados').upload(path, file, { upsert: false });
-    if (error) { toast.error('Erro ao fazer upload da imagem.'); return null; }
-    const { data } = supabase.storage.from('comunicados').getPublicUrl(path);
-    return data.publicUrl;
+  async function uploadArquivo(file: File): Promise<string | null> {
+    try {
+      const ext = file.name.split('.').pop() || 'bin';
+      const timestamp = Date.now();
+      const nomeSeguro = file.name
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .replace(/_+/g, '_');
+      const path = `${timestamp}_${nomeSeguro}`;
+
+      const { error } = await supabase.storage
+        .from('comunicados')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Erro upload:', error);
+        toast.error(`Erro ao fazer upload do arquivo: ${error.message}`);
+        return null;
+      }
+
+      const { data } = supabase.storage.from('comunicados').getPublicUrl(path);
+      return data.publicUrl;
+    } catch (err: any) {
+      console.error('Erro upload:', err);
+      toast.error('Erro inesperado ao fazer upload do arquivo.');
+      return null;
+    }
   }
 
   // ── Enviar comunicado ──
@@ -203,8 +246,21 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
 
     setLoadingEnvio(true);
     try {
-      let imagemUrl: string | null = null;
-      if (form.imagem) imagemUrl = await uploadImagem(form.imagem);
+      // Upload do arquivo primeiro, se houver
+      let arquivoUrl: string | null = null;
+      if (form.arquivo) {
+        arquivoUrl = await uploadArquivo(form.arquivo);
+        // Se o upload falhar, perguntar se quer enviar sem o arquivo
+        if (!arquivoUrl) {
+          const enviarSemArquivo = window.confirm(
+            'Não foi possível fazer upload do arquivo. Deseja enviar o comunicado sem o anexo?'
+          );
+          if (!enviarSemArquivo) {
+            setLoadingEnvio(false);
+            return;
+          }
+        }
+      }
 
       const { error } = await supabase.from('comunicados').insert({
         titulo: form.titulo.trim(),
@@ -213,7 +269,7 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
         publico_alvo: destinatarioFinal,
         importante: form.prioridade === 'alta',
         criado_em: dataEnvioFinal.toISOString(),
-        imagem_url: imagemUrl,
+        imagem_url: arquivoUrl,
       });
 
       if (error) throw error;
@@ -222,14 +278,73 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
         ? `Comunicado agendado para ${dataEnvioFinal.toLocaleString('pt-BR')}`
         : 'Comunicado enviado com sucesso!');
 
-      setForm({ titulo: '', conteudo: '', destinatarios: [], usuarioUnico: null, usuarioUnicoNome: '', prioridade: 'media', agendarEnvio: false, imagem: null });
-      setImagemPreview(null);
+      setForm({
+        titulo: '', conteudo: '', destinatarios: [],
+        usuarioUnico: null, usuarioUnicoNome: '',
+        prioridade: 'media', agendarEnvio: false, arquivo: null,
+      });
+      setArquivoPreview(null);
       setBuscaUsuario('');
       setResultadosBusca([]);
-      if (inputImagemRef.current) inputImagemRef.current.value = '';
+      if (inputArquivoRef.current) inputArquivoRef.current.value = '';
     } catch (err: any) {
       toast.error('Erro ao enviar: ' + err.message);
     } finally { setLoadingEnvio(false); }
+  }
+
+  // ── Excluir comunicado ──
+  async function handleExcluir(id: string) {
+    if (!window.confirm('Tem certeza que deseja excluir este comunicado? Esta ação não pode ser desfeita.')) return;
+    try {
+      const { error } = await supabase.from('comunicados').delete().eq('id', id);
+      if (error) throw error;
+      setHistorico(prev => prev.filter(c => c.id !== id));
+      toast.success('Comunicado excluído com sucesso.');
+    } catch (err: any) {
+      toast.error('Erro ao excluir: ' + err.message);
+    }
+  }
+
+  // ── Editar comunicado ──
+  function abrirEdicao(item: ComunicadoHistorico) {
+    setEditandoId(item.id);
+    setFormEdicao({
+      titulo: item.titulo,
+      conteudo: item.conteudo,
+      importante: item.importante,
+    });
+  }
+
+  async function salvarEdicao() {
+    if (!editandoId) return;
+    if (!formEdicao.titulo.trim() || !formEdicao.conteudo.trim()) {
+      toast.error('Preencha o título e o conteúdo.');
+      return;
+    }
+
+    setSalvandoEdicao(true);
+    try {
+      const { error } = await supabase
+        .from('comunicados')
+        .update({
+          titulo: formEdicao.titulo.trim(),
+          conteudo: formEdicao.conteudo.trim(),
+          importante: formEdicao.importante,
+        })
+        .eq('id', editandoId);
+
+      if (error) throw error;
+
+      setHistorico(prev => prev.map(c =>
+        c.id === editandoId
+          ? { ...c, titulo: formEdicao.titulo.trim(), conteudo: formEdicao.conteudo.trim(), importante: formEdicao.importante }
+          : c
+      ));
+      setEditandoId(null);
+      toast.success('Comunicado atualizado com sucesso!');
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + err.message);
+    } finally { setSalvandoEdicao(false); }
   }
 
   const formatarData = (d: string) => new Date(d).toLocaleString('pt-BR', {
@@ -311,34 +426,56 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
                 rows={6} disabled={loadingEnvio} />
             </div>
 
-            {/* Imagem */}
+            {/* Anexo (imagem ou arquivo) */}
             <div className="space-y-2">
               <Label className="text-foreground font-medium flex items-center gap-2">
-                <Image className="w-4 h-4 text-blue-600" />
-                Imagem <span className="text-muted-foreground text-xs font-normal">(opcional — máx. 5MB)</span>
+                <Paperclip className="w-4 h-4 text-blue-600" />
+                Anexo <span className="text-muted-foreground text-xs font-normal">(opcional — máx. 10MB — imagem, PDF, documento)</span>
               </Label>
 
-              {imagemPreview ? (
-                <div className="relative inline-block">
-                  <img src={imagemPreview} alt="Preview" className="max-h-48 rounded-lg border border-border object-cover" />
+              {form.arquivo ? (
+                <div className="relative rounded-lg border border-border p-4 bg-muted/20">
                   <button
-                    onClick={removerImagem}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors"
+                    onClick={removerArquivo}
+                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors"
                   >
                     <X className="w-3 h-3" />
                   </button>
+
+                  {/* Preview se for imagem */}
+                  {arquivoPreview ? (
+                    <img src={arquivoPreview} alt="Preview" className="max-h-48 rounded-lg border border-border object-cover" />
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{form.arquivo.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(form.arquivo.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div
-                  onClick={() => inputImagemRef.current?.click()}
+                  onClick={() => inputArquivoRef.current?.click()}
                   className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:bg-muted/30 transition-colors"
                 >
-                  <Image className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-50" />
-                  <p className="text-sm text-muted-foreground">Clique para selecionar uma imagem</p>
-                  <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WEBP</p>
+                  <Paperclip className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                  <p className="text-sm text-muted-foreground">Clique para selecionar um arquivo</p>
+                  <p className="text-xs text-muted-foreground mt-1">Imagem, PDF, documento (máx. 10MB)</p>
                 </div>
               )}
-              <input ref={inputImagemRef} type="file" accept="image/*" className="hidden" onChange={handleImagemChange} />
+              <input
+                ref={inputArquivoRef}
+                type="file"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                className="hidden"
+                onChange={handleArquivoChange}
+              />
             </div>
 
             {/* Destinatários */}
@@ -361,7 +498,6 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
                 </div>
               </div>
 
-              {/* Modo grupo */}
               {modoDestinatario === 'grupo' && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {grupos.map(g => (
@@ -383,7 +519,6 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
                 </div>
               )}
 
-              {/* Modo individual */}
               {modoDestinatario === 'individual' && (
                 <div className="space-y-3">
                   {form.usuarioUnico ? (
@@ -479,7 +614,10 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
 
             {/* Botões */}
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
-              <Button variant="outline" onClick={() => setForm({ titulo: '', conteudo: '', destinatarios: [], usuarioUnico: null, usuarioUnicoNome: '', prioridade: 'media', agendarEnvio: false, imagem: null })} disabled={loadingEnvio}>
+              <Button variant="outline" onClick={() => {
+                setForm({ titulo: '', conteudo: '', destinatarios: [], usuarioUnico: null, usuarioUnicoNome: '', prioridade: 'media', agendarEnvio: false, arquivo: null });
+                setArquivoPreview(null);
+              }} disabled={loadingEnvio}>
                 Limpar
               </Button>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={handleEnviar} disabled={loadingEnvio}>
@@ -569,27 +707,59 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
                             Por {item.autorNome} • {formatarData(item.criado_em)}
                           </p>
                         </div>
-                        <span
-                          className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0"
-                          style={item.importante
-                            ? { backgroundColor: '#fee2e2', color: '#7f1d1d' }
-                            : { backgroundColor: '#dbeafe', color: '#1e3a8a' }
-                          }
-                        >
-                          {item.importante ? 'Urgente' : 'Normal'}
-                        </span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span
+                            className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                            style={item.importante
+                              ? { backgroundColor: '#fee2e2', color: '#7f1d1d' }
+                              : { backgroundColor: '#dbeafe', color: '#1e3a8a' }
+                            }
+                          >
+                            {item.importante ? 'Urgente' : 'Normal'}
+                          </span>
+                        </div>
                       </div>
 
-                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap line-clamp-3">
+                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap line-clamp-3 mb-3">
                         {item.conteudo}
                       </p>
 
+                      {/* Anexo no histórico */}
                       {item.imagem_url && (
-                        <div className="mt-3">
-                          <img src={item.imagem_url} alt="Imagem do comunicado"
-                            className="max-h-40 rounded-lg border border-border object-cover" />
+                        <div className="mb-3">
+                          {isImageFile(item.imagem_url) ? (
+                            <img src={item.imagem_url} alt="Anexo"
+                              className="max-h-40 rounded-lg border border-border object-cover" />
+                          ) : (
+                            <a href={item.imagem_url} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors text-sm text-foreground">
+                              <FileText className="w-4 h-4 text-blue-600" />
+                              Abrir anexo
+                              <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                            </a>
+                          )}
                         </div>
                       )}
+
+                      {/* Botões de ação */}
+                      <div className="flex items-center gap-2 pt-3 border-t border-border">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                          onClick={() => abrirEdicao(item)}
+                        >
+                          <Edit className="w-3.5 h-3.5" /> Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20"
+                          onClick={() => handleExcluir(item.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Excluir
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -598,6 +768,63 @@ export default function EnviarComunicado({ onVoltar }: EnviarComunicadoProps) {
           </Card>
         </div>
       )}
+
+      {/* ── Modal de edição ── */}
+      <Dialog open={!!editandoId} onOpenChange={open => { if (!open) setEditandoId(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader className="pb-4 border-b border-border">
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <Edit className="w-5 h-5 text-blue-600" /> Editar Comunicado
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 py-4">
+            <div className="space-y-2">
+              <Label className="text-foreground font-medium">Título <span className="text-red-500">*</span></Label>
+              <Input
+                value={formEdicao.titulo}
+                onChange={e => setFormEdicao(p => ({ ...p, titulo: e.target.value }))}
+                disabled={salvandoEdicao}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-foreground font-medium">Conteúdo <span className="text-red-500">*</span></Label>
+              <Textarea
+                value={formEdicao.conteudo}
+                onChange={e => setFormEdicao(p => ({ ...p, conteudo: e.target.value }))}
+                rows={6}
+                disabled={salvandoEdicao}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="editImportante"
+                checked={formEdicao.importante}
+                onCheckedChange={c => setFormEdicao(p => ({ ...p, importante: c as boolean }))}
+                disabled={salvandoEdicao}
+              />
+              <Label htmlFor="editImportante" className="text-foreground cursor-pointer">
+                Marcar como urgente/importante
+              </Label>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-border">
+            <Button variant="outline" className="flex-1" onClick={() => setEditandoId(null)} disabled={salvandoEdicao}>
+              <X className="w-4 h-4 mr-2" /> Cancelar
+            </Button>
+            <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+              onClick={salvarEdicao} disabled={salvandoEdicao}>
+              {salvandoEdicao
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
+                : <><Save className="w-4 h-4" />Salvar</>
+              }
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
