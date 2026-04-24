@@ -12,7 +12,7 @@
 
 ## 📋 Sobre o Projeto
 
-O **AVA Conexão EAD** é uma plataforma de gestão escolar completa que desenvolvi para o **Colégio Conexão EAD Maranhense**, combinando meus **18 anos de experiência em gestão escolar** com desenvolvimento frontend moderno.
+O **AVA Conexão EAD** é uma plataforma de gestão escolar completa que desenvolvi para o **Colégio Conexão Maranhense**, combinando meus **18 anos de experiência em gestão escolar** com desenvolvimento frontend moderno.
 
 O sistema está **em produção** e é utilizado diariamente por alunos, professores e coordenação da escola.
 
