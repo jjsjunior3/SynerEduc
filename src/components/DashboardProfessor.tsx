@@ -556,8 +556,7 @@ export function DashboardProfessor() {
                 <FileEdit className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Atividades Enviadas</p>
-                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{totalAtividadesEnviadas}</p>
+                <p className="text-xs font-medium text-muted-foreground hidden sm:block">Atividades Enviadas</p>                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{totalAtividadesEnviadas}</p>
               </div>
             </div>
 
@@ -566,8 +565,7 @@ export function DashboardProfessor() {
                 <Inbox className="w-5 h-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Pendentes de Correção</p>
-                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{totalPendentesCorrecao}</p>
+                <p className="text-xs font-medium text-muted-foreground hidden sm:block">Pendentes de Correção</p>                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{totalPendentesCorrecao}</p>
               </div>
             </div>
 
@@ -576,7 +574,7 @@ export function DashboardProfessor() {
                 <Megaphone className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Comunicados</p>
+                <p className="text-xs font-medium text-muted-foreground hidden sm:block">Comunicados</p>                
                 <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{comunicados.length}</p>
               </div>
             </div>

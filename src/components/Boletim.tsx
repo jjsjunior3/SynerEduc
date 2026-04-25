@@ -10,6 +10,8 @@ import {
   Loader2,
   AlertTriangle,
   Info,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 interface UsuarioProps {
@@ -62,6 +64,7 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
   const [notasBoletim, setNotasBoletim] = useState<NotaDisciplina[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [cardAberto, setCardAberto] = useState<string | null>(null);
 
   const buscarBoletim = useCallback(async () => {
     if (!usuario?.id || !turma?.serieNome || !turma?.disciplinas) {
@@ -187,6 +190,27 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
       default: return 'bg-muted text-muted-foreground border-border print:!bg-gray-100 print:!text-gray-600 print:!border-gray-300';
     }
   };
+
+  const getSituacaoBorderColor = (s: NotaDisciplina['situacao']) => {
+    switch (s) {
+      case 'Aprovado': return 'border-l-green-500';
+      case 'Recuperação': return 'border-l-yellow-500';
+      case 'Reprovado': return 'border-l-red-500';
+      default: return 'border-l-gray-300 dark:border-l-gray-600';
+    }
+  };
+
+  const fmtNota = (v: number | null) => v !== null ? v.toFixed(1) : '-';
+
+  const BimestreRow = ({ label, bimestre, color }: { label: string; bimestre: NotaBimestre; color: string }) => (
+    <div className={`grid grid-cols-5 gap-1 text-xs py-2 px-3 rounded-lg ${color}`}>
+      <span className="font-semibold text-foreground col-span-1">{label}</span>
+      <span className={`text-center ${getNotaColor(bimestre.av1)}`}>{fmtNota(bimestre.av1)}</span>
+      <span className={`text-center ${getNotaColor(bimestre.av2)}`}>{fmtNota(bimestre.av2)}</span>
+      <span className="text-center text-muted-foreground">{bimestre.rec && bimestre.rec > 0 ? fmtNota(bimestre.rec) : '-'}</span>
+      <span className={`text-center font-bold ${getNotaColor(bimestre.med)}`}>{fmtNota(bimestre.med)}</span>
+    </div>
+  );
 
   const handleImprimir = () => {
     const anoLetivo = new Date().getFullYear();
@@ -414,9 +438,57 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
         </CardContent>
       </Card>
 
+      {/* ══ MOBILE: Cards por disciplina (visível < md) ══ */}
+      <div className="md:hidden space-y-3">
+        <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-primary" /> Notas por Disciplina
+        </h3>
+
+        {notasBoletim.map(nota => {
+          const isOpen = cardAberto === nota.disciplina_id;
+          return (
+            <Card key={nota.disciplina_id} className={`border-l-4 ${getSituacaoBorderColor(nota.situacao)} overflow-hidden`}>
+              <button onClick={() => setCardAberto(isOpen ? null : nota.disciplina_id)} className="w-full flex items-center justify-between p-4 text-left">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground text-sm truncate">{nota.disciplina_nome}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    {nota.mediaFinal !== null ? (
+                      <span className={`text-lg font-bold ${getNotaColor(nota.mediaFinal)}`}>{nota.mediaFinal.toFixed(1)}</span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Sem notas</span>
+                    )}
+                    <Badge variant="outline" className={`text-[10px] ${getSituacaoColor(nota.situacao)}`}>{nota.situacao}</Badge>
+                  </div>
+                </div>
+                {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+              </button>
+
+              {isOpen && (
+                <div className="px-4 pb-4 space-y-2">
+                  <div className="grid grid-cols-5 gap-1 text-[10px] text-muted-foreground px-3">
+                    <span></span>
+                    <span className="text-center">AV1</span>
+                    <span className="text-center">AV2</span>
+                    <span className="text-center">REC</span>
+                    <span className="text-center font-semibold">MÉD</span>
+                  </div>
+                  <BimestreRow label="1º Bim" bimestre={nota.bimestre1} color="bg-blue-500/5" />
+                  <BimestreRow label="2º Bim" bimestre={nota.bimestre2} color="bg-green-500/5" />
+                  <BimestreRow label="3º Bim" bimestre={nota.bimestre3} color="bg-yellow-500/5" />
+                  <BimestreRow label="4º Bim" bimestre={nota.bimestre4} color="bg-purple-500/5" />
+                  <div className="flex items-center gap-4 pt-2 border-t border-border mt-2 text-xs">
+                    <span className="text-muted-foreground">Pts Total: <strong className="text-primary">{nota.ptsTotal !== null ? nota.ptsTotal.toFixed(1) : '-'}</strong></span>
+                    <span className="text-muted-foreground">Média: <strong className={getNotaColor(nota.mediaFinal)}>{nota.mediaFinal !== null ? nota.mediaFinal.toFixed(1) : '-'}</strong></span>
+                  </div>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+
       {/* Tabela de Notas */}
-      <Card className="print:shadow-none print:border-none print:bg-transparent">
-        <CardHeader className="pb-3 print:hidden">
+      <Card className="hidden md:block print:shadow-none print:border-none print:bg-transparent">        <CardHeader className="pb-3 print:hidden">
           <CardTitle className="text-lg flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-primary" />
             Notas por Disciplina

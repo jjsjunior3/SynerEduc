@@ -559,7 +559,7 @@ export default function DashboardAluno() {
                   <BarChart3 className={`w-5 h-5 ${mediaColors.text}`} />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">Média Geral</p>
+                  <p className="text-xs font-medium text-muted-foreground hidden sm:block">Média Geral</p>
                   <p className={`text-2xl font-bold ${mediaColors.text}`}>
                     {mediaGeral !== null ? mediaGeral.toFixed(1) : '—'}
                   </p>
@@ -572,7 +572,7 @@ export default function DashboardAluno() {
                   <CheckCircle2 className={`w-5 h-5 ${freqColors.text}`} />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">Frequência</p>
+                  <p className="text-xs font-medium text-muted-foreground hidden sm:block">Frequência</p>
                   <p className={`text-2xl font-bold ${freqColors.text}`}>
                     {frequenciaPercent !== null ? `${frequenciaPercent}%` : '—'}
                   </p>
@@ -585,7 +585,7 @@ export default function DashboardAluno() {
                   <AlertCircle className={`w-5 h-5 ${faltasColors.text}`} />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">Faltas (30 dias)</p>
+                  <p className="text-xs font-medium text-muted-foreground hidden sm:block">Faltas (30 dias)</p>
                   <p className={`text-2xl font-bold ${faltasColors.text}`}>{faltas30Dias}</p>
                 </div>
               </div>
