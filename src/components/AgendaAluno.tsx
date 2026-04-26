@@ -241,7 +241,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
         <div className="space-y-8">
           {Object.entries(eventosAgrupados).map(([disciplinaNome, eventos]) => (
             <div key={disciplinaNome}>
-              <h2 className="text-lg font-boldtext-foreground border-b border-border pb-2 mb-4">{disciplinaNome}</h2>
+              <h2 className="text-lg font-bold text-foreground border-b border-border pb-2 mb-4">{disciplinaNome}</h2>
               <div className="space-y-4">
                 {eventos.map((evento) => {
                   const corHex = resolverCorDisciplina(evento.disciplina?.cor);
@@ -260,44 +260,42 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
                         <h3 className="font-semibold text-base text-foreground">{evento.titulo_unidade}</h3>
 
                         {evento.conteudo_sala && (
-                          <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac', borderRadius: '0.5rem', padding: '1rem' }}>
+                          <div className="rounded-lg p-4 border border-green-200 dark:border-green-800" style={{ backgroundColor: 'rgba(22,163,74,0.08)' }}>
                             <div className="flex items-center gap-2 mb-2">
-                              <BookOpen style={{ width: 16, height: 16, color: '#16a34a' }} />
-                              <span style={{ fontSize: 13, fontWeight: 600, color: '#15803d' }}>Conteúdo em Sala</span>
+                              <BookOpen className="w-4 h-4 text-green-600 dark:text-green-400" />
+                              <span className="text-xs font-semibold text-green-700 dark:text-green-300">Conteúdo em Sala</span>
                             </div>
-                            <p style={{ fontSize: 13, color: '#14532d', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{evento.conteudo_sala}</p>
+                            <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">{evento.conteudo_sala}</p>
                           </div>
                         )}
 
                         {evento.atividade_casa && (
-                          <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '0.5rem', padding: '1rem' }}>
+                          <div className="rounded-lg p-4 border border-amber-200 dark:border-amber-800" style={{ backgroundColor: 'rgba(217,119,6,0.08)' }}>
                             <div className="flex items-center gap-2 mb-2">
-                              <Home style={{ width: 16, height: 16, color: '#d97706' }} />
-                              <span style={{ fontSize: 13, fontWeight: 600, color: '#b45309' }}>Atividade Para Casa</span>
+                              <Home className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                              <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Atividade Para Casa</span>
                             </div>
-                            <p style={{ fontSize: 13, color: '#78350f', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{evento.atividade_casa}</p>
+                            <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">{evento.atividade_casa}</p>
                           </div>
                         )}
 
                         {evento.data_entrega && (
-                          <div style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '0.5rem', padding: '1rem' }}>
-                            <div className="flex items-center gap-2">
-                              <CalendarIcon style={{ width: 16, height: 16, color: '#2563eb' }} />
-                              <span style={{ fontSize: 13, fontWeight: 600, color: '#1d4ed8' }}>Prazo de Entrega:</span>
-                              <span style={{ fontSize: 13, fontWeight: 500, color: '#1e3a8a' }}>{formatarDataCurta(evento.data_entrega)}</span>
-                            </div>
+                          <div className="rounded-lg p-4 border border-blue-200 dark:border-blue-800 flex items-center gap-2" style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}>
+                            <CalendarIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Prazo de Entrega:</span>
+                            <span className="text-xs font-medium text-foreground">{formatarDataCurta(evento.data_entrega)}</span>
                           </div>
                         )}
-
+                        
                         {evento.observacao && (
-                          <div style={{ backgroundColor: '#faf5ff', border: '1px solid #c4b5fd', borderRadius: '0.5rem', padding: '1rem' }}>
+                          <div className="rounded-lg p-4 border border-purple-200 dark:border-purple-800" style={{ backgroundColor: 'rgba(147,51,234,0.08)' }}>
                             <div className="flex items-center gap-2 mb-2">
-                              <AlertCircle style={{ width: 16, height: 16, color: '#9333ea' }} />
-                              <span style={{ fontSize: 13, fontWeight: 600, color: '#7e22ce' }}>Observação</span>
+                              <AlertCircle className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                              <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">Observação</span>
                             </div>
-                            <p style={{ fontSize: 13, color: '#581c87', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{evento.observacao}</p>
+                            <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">{evento.observacao}</p>
                           </div>
-                        )}
+                        )}                        
                       </CardContent>
                     </Card>
                   );
@@ -309,12 +307,12 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
       )}
 
       {/* Card informativo */}
-      <div style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '0.75rem', padding: '1rem' }}>
+      <div className="rounded-xl p-4 border border-blue-200 dark:border-blue-800" style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}>
         <div className="flex items-start gap-3">
-          <Info style={{ width: 18, height: 18, color: '#2563eb', marginTop: 2, flexShrink: 0 }} />
+          <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div>
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#1d4ed8', marginBottom: 6 }}>Sobre a Agenda:</p>
-            <ul style={{ fontSize: 12, color: '#1e40af', paddingLeft: 16, lineHeight: 1.8 }}>
+            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">Sobre a Agenda:</p>
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
               <li>A agenda é atualizada diariamente pelos professores após cada aula.</li>
               <li>Use o filtro de data para consultar atividades de dias anteriores.</li>
               <li>Fique atento aos prazos de entrega destacados em azul.</li>

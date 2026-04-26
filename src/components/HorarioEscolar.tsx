@@ -1,6 +1,6 @@
 import { useState, useEffect, Fragment } from 'react';
 import { Button } from './ui/button';
-import { Calendar, Clock, Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Calendar, Clock, Loader2, AlertTriangle, ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { Usuario } from '../types/auth';
 import { supabase } from '../supabase/supabaseClient';
 
@@ -53,6 +53,7 @@ export default function HorarioEscolar({ className, usuario, turmaSelecionada, o
   const [horarios, setHorarios] = useState<HorarioAula[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [diaAberto, setDiaAberto] = useState<string | null>(null);
 
   const diasOrdem = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
   const serieAlvo = turmaSelecionada || usuario?.serie;
@@ -94,10 +95,70 @@ export default function HorarioEscolar({ className, usuario, turmaSelecionada, o
   return (
     <div className={`space-y-6 ${className || ''}`}>
 
-      
+      {/* ══ MOBILE: Cards por dia da semana (< md) ══ */}
+      {!loading && !error && horarios.length > 0 && (
+        <div className="md:hidden space-y-3">
+          {diasOrdem.map(dia => {
+            const aulasDoDia = horariosUnicos
+              .map(h => ({ horario: h, aula: getDisciplinaDoDia(h, dia) }))
+              .filter(item => item.aula);
+            const isOpen = diaAberto === dia;
 
-      {/* Tabela */}
-      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
+            return (
+              <div key={dia} className="bg-card rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => setDiaAberto(isOpen ? null : dia)}
+                  className="w-full flex items-center justify-between p-4 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                      <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground text-sm">{dia}</p>
+                      <p className="text-xs text-muted-foreground">{aulasDoDia.length} {aulasDoDia.length === 1 ? 'aula' : 'aulas'}</p>
+                    </div>
+                  </div>
+                  {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+
+                {isOpen && (
+                  <div className="px-4 pb-4 space-y-2">
+                    {aulasDoDia.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-3">Sem aulas neste dia</p>
+                    ) : (
+                      aulasDoDia.map((item, idx) => {
+                        const cor = getCorDisciplina(item.aula?.disciplina);
+                        return (
+                          <div
+                            key={idx}
+                            className="rounded-lg p-3 border flex items-center gap-3"
+                            style={{ backgroundColor: cor.bg, borderColor: cor.border }}
+                          >
+                            <div className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[70px]">
+                              <Clock className="w-3 h-3 inline mr-1" />
+                              {item.horario.split(' - ')[0]}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold text-xs" style={{ color: cor.text }}>{item.aula?.disciplina}</p>
+                              {item.aula?.professor && (
+                                <p className="text-[10px] opacity-70" style={{ color: cor.text }}>{item.aula.professor}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ══ DESKTOP: Tabela (>= md) ══ */}
+      <div className="hidden md:block bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex justify-center p-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -136,8 +197,7 @@ export default function HorarioEscolar({ className, usuario, turmaSelecionada, o
                       <tr className="border-b border-border">
                         <td
                           colSpan={6}
-                          className="p-2 text-center text-xs font-bold"
-                          style={{ backgroundColor: '#fef9c3', color: '#713f12' }}
+                          className="p-2 text-center text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200"
                         >
                           INTERVALO — RECREIO
                         </td>
@@ -191,6 +251,26 @@ export default function HorarioEscolar({ className, usuario, turmaSelecionada, o
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {/* Loading e erro para mobile (quando tabela está hidden) */}
+      <div className="md:hidden">
+        {loading && (
+          <div className="flex justify-center p-12">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        )}
+        {error && (
+          <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-6 rounded-md">
+            <AlertTriangle className="w-5 h-5" /> {error}
+          </div>
+        )}
+        {!loading && !error && horarios.length === 0 && (
+          <div className="text-center p-12 text-muted-foreground">
+            <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p>Nenhum horário encontrado para <strong>{serieAlvo}</strong>.</p>
           </div>
         )}
       </div>
