@@ -115,8 +115,8 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
 
   // ── Header padrão ──
   const Header = () => (
-    <header className="bg-card border-b border-border py-4 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+    <header className="bg-card border-b border-border py-3 sm:py-4 sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between">
         <SchoolHeader subtitle="Painel do Coordenador" />
 
         <div className="flex items-center gap-3">
@@ -177,7 +177,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
   // ── Barra azul ──
   const BarraAzul = ({ titulo }: { titulo: string }) => (
     <div className="bg-blue-600 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex items-center gap-3 sm:gap-4">
         <Button variant="ghost" size="sm" onClick={() => setViewAtual('dashboard')} className="text-white hover:bg-white/20">
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -195,7 +195,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
       <div className="min-h-screen bg-background">
         <Header />
         <BarraAzul titulo={tituloPorView[viewAtual] || ''} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
           <Suspense fallback={
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-6 h-6 animate-spin mr-2 text-blue-600" />
@@ -218,12 +218,12 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
         {/* Banner */}
-        <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-8 overflow-hidden">
+        <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-5 sm:p-8 overflow-hidden">
           <div className="relative z-10">
-            <h1 className="text-3xl font-bold mb-2">
+            <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2">
               Olá, {usuario?.nome?.split(' ')[0]}! 👋
             </h1>
-            <p className="text-blue-100 text-lg max-w-xl">
+            <p className="text-blue-100 text-sm sm:text-lg max-w-xl">
               Bem-vindo ao painel de coordenação.
             </p>
           </div>
@@ -236,7 +236,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
             <div className="w-1 h-6 bg-blue-600 rounded-full" />
             Módulos
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
             {menuItems.map(item => {
               const Icon = item.icon;
               return (
@@ -245,18 +245,18 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
                   onClick={() => setViewAtual(item.id as ViewType)}
                   className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 border border-border bg-card"
                 >
-                  <CardContent className="p-8 text-center space-y-4">
-                    <div
-                      className="w-14 h-14 mx-auto rounded-full flex items-center justify-center shadow-sm"
-                      style={{ backgroundColor: item.bg }}
-                    >
-                      <Icon style={{ width: 26, height: 26, color: item.iconColor }} />
-                    </div>
+                  <CardContent className="p-4 sm:p-8 text-center space-y-2 sm:space-y-4">
+                  <div
+                    className="w-10 h-10 sm:w-14 sm:h-14 mx-auto rounded-full flex items-center justify-center shadow-sm"
+                    style={{ backgroundColor: item.bg }}
+                  >
+                    <Icon className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: item.iconColor }} />
+                  </div>
                     <div>
-                      <CardTitle className="font-semibold text-foreground text-sm mb-1">
+                      <CardTitle className="font-semibold text-foreground text-xs sm:text-sm mb-0.5 sm:mb-1">
                         {item.title}
                       </CardTitle>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed hidden sm:block">
                         {item.description}
                       </p>
                     </div>

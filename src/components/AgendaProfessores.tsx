@@ -258,29 +258,28 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
 
   const getStatusStyle = (status: StatusAgenda) => {
     switch (status) {
-      case 'enviado': return { bg: '#dcfce7', text: '#14532d', border: '#86efac', icon: <CheckCircle className="w-3 h-3" />, label: 'Enviada' };
-      case 'editado': return { bg: '#ffedd5', text: '#7c2d12', border: '#fdba74', icon: <AlertTriangle className="w-3 h-3" />, label: 'Editada' };
-      default:        return { bg: '#fee2e2', text: '#7f1d1d', border: '#fca5a5', icon: <Clock3 className="w-3 h-3" />, label: 'Pendente' };
+      case 'enviado': return { className: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-800', icon: <CheckCircle className="w-3 h-3" />, label: 'Enviada' };
+      case 'editado': return { className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-800', icon: <AlertTriangle className="w-3 h-3" />, label: 'Editada' };
+      default: return { className: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-800', icon: <Clock3 className="w-3 h-3" />, label: 'Pendente' };
     }
   };
 
   const StatusBadge = ({ status }: { status: StatusAgenda }) => {
     const s = getStatusStyle(status);
     return (
-      <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border"
-        style={{ backgroundColor: s.bg, color: s.text, borderColor: s.border }}>
+      <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${s.className}`}>
         {s.icon} {s.label}
       </span>
     );
   };
 
   const resumoCards = [
-    { label: 'Total', value: totalAgendas, icon: BookOpen, bg: '#dbeafe', text: '#1e3a8a', iconColor: '#3b82f6' },
-    { label: 'Enviadas', value: totalEnviadas, icon: CheckCircle, bg: '#dcfce7', text: '#14532d', iconColor: '#16a34a' },
-    { label: 'Editadas', value: totalEditadas, icon: AlertTriangle, bg: '#ffedd5', text: '#7c2d12', iconColor: '#ea580c' },
-    { label: 'Pendentes', value: totalPendentes, icon: Clock, bg: '#fee2e2', text: '#7f1d1d', iconColor: '#dc2626' },
+    { label: 'Total', value: totalAgendas, icon: BookOpen, className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200', iconClass: 'text-blue-500 dark:text-blue-400' },
+    { label: 'Enviadas', value: totalEnviadas, icon: CheckCircle, className: 'bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-200', iconClass: 'text-green-500 dark:text-green-400' },
+    { label: 'Editadas', value: totalEditadas, icon: AlertTriangle, className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-900 dark:text-orange-200', iconClass: 'text-orange-500 dark:text-orange-400' },
+    { label: 'Pendentes', value: totalPendentes, icon: Clock, className: 'bg-red-100 dark:bg-red-900/30 text-red-900 dark:text-red-200', iconClass: 'text-red-500 dark:text-red-400' },
   ];
-
+  
   return (
     <div className="space-y-6">
 
@@ -366,17 +365,16 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       </Card>
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5">
         {resumoCards.map(card => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className="rounded-xl flex items-center justify-between"
-              style={{ backgroundColor: card.bg, padding: '1.25rem 1.5rem' }}>
+            <div key={card.label} className={`rounded-xl flex items-center justify-between p-4 sm:p-5 ${card.className}`}>
               <div>
-                <p className="text-xs font-semibold mb-1.5" style={{ color: card.text }}>{card.label}</p>
-                <p className="text-3xl font-bold" style={{ color: card.text }}>{card.value}</p>
+                <p className="text-[10px] sm:text-xs font-semibold mb-1">{card.label}</p>
+                <p className="text-2xl sm:text-3xl font-bold">{card.value}</p>
               </div>
-              <Icon style={{ width: 32, height: 32, color: card.iconColor, opacity: 0.7 }} />
+              <Icon className={`w-6 h-6 sm:w-8 sm:h-8 opacity-70 ${card.iconClass}`} />
             </div>
           );
         })}
@@ -400,8 +398,8 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           eventos.map(evento => (
             <Card key={evento.id} className="hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => { setEventoSelecionado(evento); setModoEdicao(false); }}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-6">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-6">
                   <div className="flex-1 min-w-0 space-y-2.5">
                     <StatusBadge status={evento.status} />
                     <h2 className="font-semibold text-foreground text-base leading-snug">{evento.titulo_unidade}</h2>
@@ -420,18 +418,17 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-col items-end gap-3 flex-shrink-0">
+                  <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-3 flex-shrink-0">
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Clock className="w-3.5 h-3.5" />
                       <span>{evento.horario || 'Horário não informado'}</span>
                     </div>
                     {evento.prazo_entrega && (
-                      <span className="text-xs font-medium px-2.5 py-1 rounded-full"
-                        style={{ backgroundColor: '#fef9c3', color: '#713f12' }}>
+                      <span className="text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                         Entrega: {formatarDataCurta(evento.prazo_entrega)}
                       </span>
                     )}
-                    <Button variant="outline" size="sm" className="gap-1.5 text-sm"
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs sm:text-sm hidden sm:flex"
                       onClick={e => { e.stopPropagation(); setEventoSelecionado(evento); setModoEdicao(false); }}>
                       <Eye className="w-4 h-4" /> Revisar
                     </Button>

@@ -87,16 +87,16 @@ export default function SiteInstitucional({ onAccessPortal }: SiteInstitucionalP
       {/* ── HEADER ── */}
       <header className="bg-card/95 backdrop-blur-sm shadow-md border-b border-border sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
+          <div className="flex justify-between items-center h-14 sm:h-20">
 
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <img src="/logo-colegio-conexao.png" alt="Colégio Conexão" className="w-12 h-12" />
+              <img src="/logo-colegio-conexao.png" alt="Colégio Conexão" className="w-8 h-8 sm:w-12 sm:h-12" />
               <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text text-transparent">
+                <h1 className="text-sm sm:text-xl font-bold bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text text-transparent leading-tight">
                   Colégio Conexão
                 </h1>
-                <p className="text-xs text-muted-foreground">Colégio Conexão Maranhense</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">Colégio Conexão Maranhense</p>
               </div>
             </div>
 
@@ -127,7 +127,7 @@ export default function SiteInstitucional({ onAccessPortal }: SiteInstitucionalP
               {/* Acessar Portal — único botão no header */}
               <Button
                 onClick={onAccessPortal}
-                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all text-xs sm:text-sm px-3 sm:px-4"
               >
                 Acessar Portal
               </Button>
@@ -137,108 +137,74 @@ export default function SiteInstitucional({ onAccessPortal }: SiteInstitucionalP
       </header>
 
       {/* ── HERO com vídeo ── */}
-      <section className="relative h-screen overflow-hidden">
-        <div className="absolute inset-0 w-full h-full z-0">
-          <video autoPlay loop muted playsInline className="w-full h-full object-cover">
-            <source src="/video1.mp4" type="video/mp4" />
-          </video>
-        </div>
+      {/* ── HERO com vídeo ── */}
+      <section className="bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="relative h-[60vh] sm:h-[50vh] md:h-[55vh] lg:h-[60vh] rounded-2xl overflow-hidden shadow-2xl">
+            {/* Vídeo */}
+            <div className="absolute inset-0 w-full h-full z-0">
+              <video autoPlay loop muted playsInline className="w-full h-full object-cover">
+                <source src="/video1.mp4" type="video/mp4" />
+              </video>
+            </div>
 
-        {/* Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-orange-600/70 via-green-600/60 to-orange-600/70 z-10" />
+            {/* Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-600/50 via-green-600/40 to-orange-600/50 z-10 rounded-2xl" />
 
-        {/* Conteúdo */}
-        <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center py-20">
-          <div className="text-white max-w-3xl">
-            <h2
-              className="text-6xl md:text-8xl lg:text-9xl font-extrabold mb-6 leading-tight drop-shadow-lg"
-              style={{
-                textShadow: '1.5px 1.5px 0px #FF8C00, -1.5px -1.5px 0px #FF8C00, 1.5px -1.5px 0px #FF8C00, -1.5px 1.5px 0px #FF8C00'
-              }}
-            >
-              Educação de
-              <span className="block text-orange-400">Qualidade</span>
-              para o Futuro
-            </h2>
-            <p className="text-2xl md:text-3xl lg:text-4xl mb-8 text-gray-100 font-medium drop-shadow-md">
-              Ensino do 1º ao 9º ano com infraestrutura completa e metodologia moderna
-            </p>
+            {/* Conteúdo */}
+            <div className="relative z-20 h-full flex items-end sm:items-center p-6 sm:p-10 lg:p-14 pb-10 sm:pb-10">
+              <div className="text-white max-w-3xl">
+                <h2
+                  className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold mb-3 sm:mb-4 leading-tight drop-shadow-lg"
+                  style={{
+                    textShadow: '1px 1px 0px rgba(255,140,0,0.6), -1px -1px 0px rgba(255,140,0,0.6), 1px -1px 0px rgba(255,140,0,0.6), -1px 1px 0px rgba(255,140,0,0.6)'
+                  }}
+                >
+                  Educação de
+                  <span className="block text-orange-400">Qualidade</span>
+                  para o Futuro
+                </h2>
+                <p className="text-base sm:text-lg md:text-xl lg:text-2xl mb-5 sm:mb-6 text-gray-100 font-medium drop-shadow-md">
+                  Ensino do 1º ao 9º ano com infraestrutura completa e metodologia moderna
+                </p>
 
-            {/* Apenas um botão no banner */}
-            <Button
-              onClick={() => setShowMatriculaDialog(true)}
-              size="lg"
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-lg px-8 py-6 shadow-2xl hover:shadow-orange-500/50 transition-all"
-            >
-              Matricule-se Agora
-              <ChevronRight className="ml-2" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce z-20">
-          <div className="w-8 h-12 border-2 border-white rounded-full flex items-start justify-center p-2">
-            <div className="w-2 h-3 bg-white rounded-full" />
-          </div>
-        </div>
-      </section>
-
-      {/* ── SOBRE ── */}
-      <section id="sobre" className="py-20 bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-4">
-              Sobre o <span className="text-orange-600">Colégio Conexão</span>
-            </h2>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Oferecemos educação de excelência do 1º ao 9º ano do Ensino Fundamental,
-              combinando infraestrutura moderna com metodologia inovadora.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { icon: <GraduationCap className="w-8 h-8 text-white" />, grad: 'from-orange-500 to-orange-600', border: 'border-orange-200 dark:border-orange-900 hover:border-orange-400', titulo: 'Ensino Fundamental', desc: 'Do 1º ao 9º ano com currículo completo e atualizado' },
-              { icon: <Monitor className="w-8 h-8 text-white" />, grad: 'from-green-500 to-green-600', border: 'border-green-200 dark:border-green-900 hover:border-green-400', titulo: 'EAD de Qualidade', desc: 'Plataforma moderna e intuitiva para aprendizado online' },
-              { icon: <Award className="w-8 h-8 text-white" />, grad: 'from-orange-500 to-green-600', border: 'border-orange-200 dark:border-orange-900 hover:border-orange-400', titulo: 'Reconhecimento MEC', desc: 'Certificação oficial com validade nacional' },
-            ].map((item, i) => (
-              <Card key={i} className={`border-2 ${item.border} transition-all hover:shadow-xl`}>
-                <CardContent className="p-8 text-center">
-                  <div className={`w-16 h-16 bg-gradient-to-br ${item.grad} rounded-full flex items-center justify-center mx-auto mb-4`}>
-                    {item.icon}
-                  </div>
-                  <h3 className="text-xl font-bold text-foreground mb-3">{item.titulo}</h3>
-                  <p className="text-muted-foreground">{item.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
+                <Button
+                  onClick={() => setShowMatriculaDialog(true)}
+                  size="lg"
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm sm:text-base px-6 sm:px-8 py-4 sm:py-5 shadow-2xl hover:shadow-orange-500/50 transition-all"
+                >
+                  Matricule-se Agora
+                  <ChevronRight className="ml-2" />
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ── INFRAESTRUTURA ── */}
-      <section id="infraestrutura" className="py-20 bg-muted/40">
+      <section id="infraestrutura" className="py-12 sm:py-20 bg-muted/40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-2xl sm:text-4xl font-bold text-foreground mb-4">
               Nossa <span className="text-orange-600">Infraestrutura</span>
             </h2>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            <p className="text-base sm:text-xl text-muted-foreground max-w-3xl mx-auto">
               Espaços modernos e completos para o desenvolvimento integral dos nossos alunos
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {infraestrutura.map((item, index) => (
               <Card
                 key={index}
                 className="border-2 border-transparent hover:border-orange-400 dark:hover:border-orange-600 transition-all hover:shadow-2xl group bg-card"
               >
-                <CardContent className="p-6">
-                  <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-green-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-white">
-                    {item.icone}
+                <CardContent className="p-4 sm:p-6">
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-orange-500 to-green-600 rounded-lg flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform text-white">
+                    <span className="[&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-8 sm:[&>svg]:h-8">{item.icone}</span>
                   </div>
-                  <h3 className="text-lg font-bold text-foreground mb-2">{item.titulo}</h3>
-                  <p className="text-muted-foreground text-sm">{item.descricao}</p>
+                  <h3 className="text-sm sm:text-lg font-bold text-foreground mb-1 sm:mb-2">{item.titulo}</h3>
+                  <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">{item.descricao}</p>
                 </CardContent>
               </Card>
             ))}
@@ -247,13 +213,13 @@ export default function SiteInstitucional({ onAccessPortal }: SiteInstitucionalP
       </section>
 
       {/* ── DIFERENCIAIS ── */}
-      <section id="diferenciais" className="py-20 bg-background">
+      <section id="diferenciais" className="py-12 sm:py-20 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-2xl sm:text-4xl font-bold text-foreground mb-4">
               Nossos <span className="text-green-600">Diferenciais</span>
             </h2>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            <p className="text-base sm:text-xl text-muted-foreground max-w-3xl mx-auto">
               O que torna o Colégio Conexão único na educação maranhense
             </p>
           </div>
@@ -272,41 +238,42 @@ export default function SiteInstitucional({ onAccessPortal }: SiteInstitucionalP
       </section>
 
       {/* ── CTA ── */}
-      <section className="py-20 bg-gradient-to-r from-orange-600 via-green-600 to-orange-600">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
-          <h2 className="text-4xl font-bold mb-6">Faça Parte da Nossa História</h2>
-          <p className="text-xl mb-8 opacity-90">
-            Matrículas abertas para o ano letivo de 2026. Garanta sua vaga!
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Button
-              onClick={() => setShowMatriculaDialog(true)}
-              size="lg"
-              className="bg-white text-orange-600 hover:bg-gray-100 font-bold text-lg px-8 py-6 shadow-2xl"
-            >
-              Matricule-se Agora
-              <ChevronRight className="ml-2" />
-            </Button>
-            <Button
-              onClick={() => scrollToSection('contato')}
-              size="lg"
-              variant="outline"
-              className="border-2 border-white text-white hover:bg-white/20 font-bold text-lg px-8 py-6 shadow-2xl"
-            >
-              Fale Conosco
-            </Button>
+      <section className="bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="bg-gradient-to-r from-orange-600 via-green-600 to-orange-600 rounded-2xl shadow-2xl py-12 sm:py-16 px-6 sm:px-10 text-center text-white">          <h2 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6">Faça Parte da Nossa História</h2>
+            <p className="text-base sm:text-xl mb-6 sm:mb-8 opacity-90">
+              Matrículas abertas para o ano letivo de 2026. Garanta sua vaga!
+            </p>
+            <div className="flex flex-wrap justify-center gap-4">
+              <Button
+                onClick={() => setShowMatriculaDialog(true)}
+                size="lg"
+                className="bg-white text-orange-600 hover:bg-gray-100 font-bold text-sm sm:text-lg px-5 sm:px-8 py-3 sm:py-6 shadow-2xl"
+              >
+                Matricule-se Agora
+                <ChevronRight className="ml-2" />
+              </Button>
+              <Button
+                onClick={() => scrollToSection('contato')}
+                size="lg"
+                variant="outline"
+                className="border-2 border-white text-white hover:bg-white/20 font-bold text-sm sm:text-lg px-5 sm:px-8 py-3 sm:py-6 shadow-2xl"
+              >
+                Fale Conosco
+              </Button>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ── CONTATO ── */}
-      <section id="contato" className="py-20 bg-background">
+      <section id="contato" className="py-12 sm:py-20 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-2xl sm:text-4xl font-bold text-foreground mb-4">
               Entre em <span className="text-orange-600">Contato</span>
             </h2>
-            <p className="text-xl text-muted-foreground">Estamos prontos para atender você</p>
+            <p className="text-base sm:text-xl text-muted-foreground">Estamos prontos para atender você</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {[

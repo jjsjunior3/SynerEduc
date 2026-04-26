@@ -168,17 +168,16 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
 
   // ── Card colorido reutilizável ──
   const CardColorido = ({
-    bg, border, iconColor, icon: Icon, titulo, conteudo,
+    className, icon: Icon, titulo, conteudo,
   }: {
-    bg: string; border: string; iconColor: string;
-    icon: React.ElementType; titulo: string; conteudo: string;
+    className: string; icon: React.ElementType; titulo: string; conteudo: string;
   }) => (
-    <div style={{ backgroundColor: bg, border: `1px solid ${border}`, borderRadius: 8, padding: '1rem' }}>
+    <div className={`rounded-lg p-4 border ${className}`}>
       <div className="flex items-center gap-2 mb-2">
-        <Icon style={{ width: 16, height: 16, color: iconColor }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: iconColor }}>{titulo}</span>
+        <Icon className="w-4 h-4" />
+        <span className="text-xs font-semibold">{titulo}</span>
       </div>
-      <p style={{ fontSize: 13, color: '#374151', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{conteudo}</p>
+      <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">{conteudo}</p>
     </div>
   );
 
@@ -239,30 +238,28 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
 
                 {agendaHoje.conteudo_sala && (
                   <CardColorido
-                    bg="#f0fdf4" border="#86efac" iconColor="#16a34a"
+                    className="border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20"
                     icon={BookOpen} titulo="Conteúdo em Sala"
                     conteudo={agendaHoje.conteudo_sala}
                   />
                 )}
                 {agendaHoje.atividade_casa && (
-                  <CardColorido
-                    bg="#fffbeb" border="#fcd34d" iconColor="#d97706"
+                 <CardColorido
+                    className="border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20"
                     icon={Home} titulo="Atividade Para Casa"
                     conteudo={agendaHoje.atividade_casa}
                   />
                 )}
                 {agendaHoje.data_entrega && (
-                  <div style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '1rem' }}>
-                    <div className="flex items-center gap-2">
-                      <Calendar style={{ width: 16, height: 16, color: '#2563eb' }} />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1d4ed8' }}>Prazo de Entrega:</span>
-                      <span style={{ fontSize: 13, color: '#1e3a8a' }}>{formatarDataBR(agendaHoje.data_entrega)}</span>
-                    </div>
+                  <div className="rounded-lg p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Prazo de Entrega:</span>
+                    <span className="text-xs text-foreground">{formatarDataBR(agendaHoje.data_entrega)}</span>
                   </div>
                 )}
                 {agendaHoje.observacao && (
                   <CardColorido
-                    bg="#faf5ff" border="#c4b5fd" iconColor="#9333ea"
+                    className="border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20"
                     icon={AlertCircle} titulo="Observação"
                     conteudo={agendaHoje.observacao}
                   />
@@ -442,25 +439,24 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
 
                     {evento.conteudo_sala && (
                       <CardColorido
-                        bg="#f0fdf4" border="#86efac" iconColor="#16a34a"
+                        className="border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20"
                         icon={BookOpen} titulo="Conteúdo em Sala"
                         conteudo={evento.conteudo_sala}
                       />
                     )}
                     {evento.atividade_casa && (
-                      <CardColorido
-                        bg="#fffbeb" border="#fcd34d" iconColor="#d97706"
-                        icon={Home} titulo="Atividade Para Casa"
-                        conteudo={evento.atividade_casa}
-                      />
+                    <CardColorido
+                      className="border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
+                      style={{ backgroundColor: 'rgba(22,163,74,0.08)' }}
+                      icon={Home} titulo="Atividade Para Casa"
+                      conteudo={evento.atividade_casa}
+                    />
                     )}
                     {evento.data_entrega && (
-                      <div style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '0.75rem' }}>
-                        <div className="flex items-center gap-2">
-                          <Clock style={{ width: 14, height: 14, color: '#2563eb' }} />
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#1d4ed8' }}>Prazo:</span>
-                          <span style={{ fontSize: 12, color: '#1e3a8a' }}>{formatarDataBR(evento.data_entrega)}</span>
-                        </div>
+                      <div className="rounded-lg p-3 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Prazo:</span>
+                        <span className="text-xs text-foreground">{formatarDataBR(evento.data_entrega)}</span>
                       </div>
                     )}
                     {evento.observacao && (
@@ -479,12 +475,12 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
       )}
 
       {/* ── Informações ── */}
-      <div style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 12, padding: '1rem' }}>
+      <div className="rounded-xl p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
         <div className="flex items-start gap-3">
-          <Info style={{ width: 16, height: 16, color: '#2563eb', marginTop: 2, flexShrink: 0 }} />
+          <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div>
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#1d4ed8', marginBottom: 6 }}>Sobre a Agenda Diária:</p>
-            <ul style={{ fontSize: 12, color: '#1e40af', paddingLeft: 16, lineHeight: 1.8 }}>
+            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">Sobre a Agenda Diária:</p>
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
               <li>Envie a agenda ao final de cada aula.</li>
               <li>Os alunos receberão a agenda ao acessar a disciplina.</li>
               <li>Edição e exclusão só são permitidas no dia atual.</li>

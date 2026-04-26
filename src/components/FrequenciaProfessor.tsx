@@ -233,8 +233,9 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
 
                         <button
                           onClick={() => handleTogglePresenca(aluno.aluno_id)}
-                          className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white w-fit transition-colors"
-                          style={{ backgroundColor: aluno.presente ? '#16a34a' : '#dc2626' }}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white w-fit transition-colors ${
+                            aluno.presente ? 'bg-green-600 dark:bg-green-700' : 'bg-red-600 dark:bg-red-700'
+                          }`}
                         >
                           {aluno.presente
                             ? <><CheckCircle className="w-3.5 h-3.5" /> Presente</>

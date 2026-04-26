@@ -54,13 +54,12 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
   }
 
   const menuItens = [
-    { id: "conteudo" as Aba, label: "Conteúdo", icon: BookOpen },
-    { id: "atividades" as Aba, label: "Atividades", icon: FileText },
-    { id: "frequencia" as Aba, label: "Frequência", icon: CalendarIcon },
-    { id: "aulaVivo" as Aba, label: "Aulas ao Vivo", icon: Video },
-    { id: "forum" as Aba, label: "Fórum", icon: MessageSquare },
+    { id: "conteudo" as Aba, label: "Conteúdo", shortLabel: "Conteúdo", icon: BookOpen },
+    { id: "atividades" as Aba, label: "Atividades", shortLabel: "Atividades", icon: FileText },
+    { id: "frequencia" as Aba, label: "Frequência", shortLabel: "Frequência", icon: CalendarIcon },
+    { id: "aulaVivo" as Aba, label: "Aulas ao Vivo", shortLabel: "Aulas", icon: Video },
+    { id: "forum" as Aba, label: "Fórum", shortLabel: "Fórum", icon: MessageSquare },
   ];
-
   const buscarConteudos = useCallback(async () => {
     if (!serie?.nome || !disciplina?.nome) return;
     setLoadingConteudo(true);
@@ -108,7 +107,7 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
     <div className="flex flex-col min-h-full">
 
       {/* Abas */}
-      <div className="border-b border-border mb-6">
+      <div className="border-b border-border mb-4 sm:mb-6">
         <nav className="flex items-center gap-1 overflow-x-auto">
           {menuItens.map((item) => {
             const Icon = item.icon;
@@ -117,14 +116,15 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
               <button
                 key={item.id}
                 onClick={() => setAbaAtiva(item.id)}
-                className={`flex items-center gap-2 px-4 py-3 border-b-2 text-sm font-medium transition-all whitespace-nowrap ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 sm:py-3 border-b-2 text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                   isAtivo
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                {item.label}
+                <Icon className="w-4 h-4 hidden sm:block" />
+                <span className="hidden sm:inline">{item.label}</span>
+                <span className="sm:hidden">{item.shortLabel}</span>
               </button>
             );
           })}
@@ -136,7 +136,7 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
 
         {/* Aba Conteúdo */}
         {abaAtiva === "conteudo" && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
 
             {/* Bimestres */}
             <div className="lg:col-span-1">

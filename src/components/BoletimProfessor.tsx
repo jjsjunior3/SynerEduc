@@ -285,14 +285,14 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
     return 'text-gray-400';
   };
 
-  const getSituacaoColor = (situacao: string) => {
-    switch (situacao) {
-      case 'aprovado': return 'bg-green-100 text-green-700';
-      case 'recuperacao': return 'bg-yellow-100 text-yellow-700';
-      case 'reprovado': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
-  };
+const getSituacaoColor = (situacao: string) => {
+  switch (situacao) {
+    case 'aprovado': return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+    case 'recuperacao': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+    case 'reprovado': return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+    default: return 'bg-muted text-muted-foreground';
+  }
+};
 
   // ========================================
   // ✅ EXPORTAR PDF PADRONIZADO (IGUAL COORDENAÇÃO)
@@ -412,22 +412,23 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 sm:space-y-6 p-3 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Boletim Avançado</h2>
-          <p className="text-sm text-gray-600">
+          <h2 className="text-lg font-semibold text-foreground">Boletim Avançado</h2>
+          <p className="text-sm text-muted-foreground">
             {disciplina.nome} - {serie.nome}
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <Button onClick={exportarPDF} variant="outline" className="gap-2 bg-red-50 text-red-600 border-red-200 hover:bg-red-100">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <Button onClick={exportarPDF} variant="outline" size="sm" className="gap-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30">
             <FileText className="w-4 h-4" />
-            Exportar PDF
+            <span className="hidden sm:inline">Exportar PDF</span>
+            <span className="sm:hidden">PDF</span>
           </Button>
 
           <Select value={bimestreSelecionado} onValueChange={setBimestreSelecionado}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-36 sm:w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -441,23 +442,22 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
       </div>
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">        <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-green-600">{aprovados}</div>
-            <div className="text-sm text-gray-600">Aprovados</div>
+            <div className="text-sm text-muted-foreground">Aprovados</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-yellow-600">{recuperacao}</div>
-            <div className="text-sm text-gray-600">Recuperação</div>
+            <div className="text-sm text-muted-foreground">Recuperação</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-red-600">{reprovados}</div>
-            <div className="text-sm text-gray-600">Reprovados</div>
+            <div className="text-sm text-muted-foreground">Reprovados</div>
           </CardContent>
         </Card>
         <Card>
@@ -465,7 +465,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
             <div className={`text-2xl font-bold ${getNotaColor(mediaGeralTurma)}`}>
               {mediaGeralTurma.toFixed(1)}
             </div>
-            <div className="text-sm text-gray-600">Média Geral</div>
+            <div className="text-sm text-muted-foreground">Média Geral</div>
           </CardContent>
         </Card>
       </div>
@@ -492,7 +492,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b">
+                  <tr className="border-b border-border">
                     <th className="text-left py-3 min-w-[200px]">Aluno</th>
                     <th className="text-center py-3 min-w-[80px]">AV1</th>
                     <th className="text-center py-3 min-w-[80px]">AV2</th>
@@ -506,8 +506,8 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
                     const bimestreData = aluno[`bimestre${bimestreSelecionado}` as keyof NotaAlunoAvancada] as any;
 
                     return (
-                      <tr key={aluno.id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 font-medium">{aluno.nome}</td>
+                      <tr key={aluno.id} className="border-b border-border hover:bg-muted/30">
+                        <td className="py-3 font-medium text-foreground">{aluno.nome}</td>
 
                         {/* AV1 */}
                         <td className="text-center py-3">
@@ -528,7 +528,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
                           ) : (
                             <button
                               onClick={() => handleEditarNota(aluno.id, bimestreSelecionado, 'av1')}
-                              className={`hover:bg-gray-100 px-3 py-2 rounded ${getNotaColor(bimestreData.av1)}`}
+                              className={`hover:bg-muted px-3 py-2 rounded ${getNotaColor(bimestreData.av1)}`}
                             >
                               {bimestreData.av1 > 0 ? bimestreData.av1.toFixed(1) : '-'}
                             </button>
@@ -554,7 +554,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
                           ) : (
                             <button
                               onClick={() => handleEditarNota(aluno.id, bimestreSelecionado, 'av2')}
-                              className={`hover:bg-gray-100 px-3 py-2 rounded ${getNotaColor(bimestreData.av2)}`}
+                              className={`hover:bg-muted px-3 py-2 rounded ${getNotaColor(bimestreData.av2)}`}
                             >
                               {bimestreData.av2 > 0 ? bimestreData.av2.toFixed(1) : '-'}
                             </button>
@@ -580,7 +580,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
                           ) : (
                             <button
                               onClick={() => handleEditarNota(aluno.id, bimestreSelecionado, 'rec')}
-                              className={`hover:bg-gray-100 px-3 py-2 rounded ${getNotaColor(bimestreData.rec)}`}
+                              className={`hover:bg-muted px-3 py-2 rounded ${getNotaColor(bimestreData.rec)}`}
                             >
                               {bimestreData.rec > 0 ? bimestreData.rec.toFixed(1) : '-'}
                             </button>
