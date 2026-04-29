@@ -5,38 +5,12 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Badge } from "./ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "./ui/dialog";
-import {
-  ArrowLeft,
-  Eye,
-  EyeOff,
-  User,
-  Mail,
-  Lock,
-  Save,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  UserPlus,
-  Plus,
-  X,
-  BookOpen,
-  GraduationCap,
-  UserCheck,
+  ArrowLeft, Eye, EyeOff, User, Mail, Lock, Save, Loader2,
+  CheckCircle, AlertCircle, UserPlus, Plus, X, BookOpen,
+  GraduationCap, UserCheck, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../supabase/supabaseClient";
@@ -47,111 +21,86 @@ interface CadastrarUsuarioNovoProps {
 }
 
 type SegmentoDisciplina = "Fundamental 1" | "Fundamental 2" | "Ensino Médio";
+type SegmentoAVA = "ead" | "presencial";
+type Turno = "matutino" | "vespertino" | "noturno";
+type Nivel = "fundamental1" | "fundamental2" | "medio";
 
 interface NovoUsuario {
-  nome: string;
-  nomeUsuario: string;
-  email: string;
-  senha: string;
-  confirmarSenha: string;
-  tipo: string;
-  serie?: string;
+  nome: string; nomeUsuario: string; email: string;
+  senha: string; confirmarSenha: string; tipo: string;
+  serie?: string; segmento: SegmentoAVA; turno: Turno | ""; nivel: Nivel | "";
   vinculacoesProfessor: VinculacaoProfessor[];
 }
 
 interface VinculacaoProfessor {
-  id: string;
-  segmento: SegmentoDisciplina;
-  disciplinaId: string;
-  disciplinaNome: string;
-  seriesSelecionadas: string[];
+  id: string; segmento: SegmentoDisciplina;
+  disciplinaId: string; disciplinaNome: string; seriesSelecionadas: string[];
 }
 
 interface DisciplinaDisponivel {
-  id: string;
-  nome: string;
-  segmento: SegmentoDisciplina | null;
+  id: string; nome: string; segmento: SegmentoDisciplina | null;
 }
 
-/* -------------------------------------------------
-   Séries por segmento – usadas apenas para o modal
-   de vinculação de disciplinas (professor). Elas
-   continuam estáticas porque representam o “esqueleto”
-   de séries que cada segmento possui.
---------------------------------------------------- */
 const seriesPorSegmento: Record<SegmentoDisciplina, string[]> = {
   "Fundamental 1": ["1º ano", "2º ano", "3º ano", "4º ano", "5º ano"],
   "Fundamental 2": ["6º ano", "7º ano", "8º ano", "9º ano"],
   "Ensino Médio": ["1ª série", "2ª série", "3ª série"],
 };
 
-/* -------------------------------------------------
-   Hook para carregar as séries do Supabase
-   (usado no SELECT de ALUNO)
---------------------------------------------------- */
+const tiposUsuario = [
+  { value: "aluno", label: "Aluno" },
+  { value: "professor", label: "Professor" },
+  { value: "coordenador", label: "Coordenador" },
+  { value: "administrador", label: "Administrador" },
+  { value: "professor_conteudista", label: "Prof. Conteudista" },
+];
+
 const useSeriesFromSupabase = () => {
   const [series, setSeries] = useState<string[]>([]);
-  const [carregando, setCarregando] = useState<boolean>(true);
-
+  const [carregando, setCarregando] = useState(true);
   useEffect(() => {
-    const carregarSeries = async () => {
-      try {
-        setCarregando(true);
-        const { data, error } = await supabase
-          .from("series")
-          .select("nome, ativa")
-          .order("nome", { ascending: true });
-
-        if (error) throw error;
-
-        const nomes: string[] = (data ?? [])
-          .filter((s: any) => s.ativa !== false)
-          .map((s: any) => s.nome)
-          .filter(Boolean);
-
-        setSeries(nomes);
-      } catch (err: any) {
-        console.error("[CADASTRO_NOVO] Erro ao carregar séries:", err.message);
-        toast.error("Erro ao carregar séries do banco.");
-        setSeries([]);
-      } finally {
-        setCarregando(false);
-      }
-    };
-
-    carregarSeries();
+    supabase.from("series").select("nome, ativa").order("nome").then(({ data, error }) => {
+      if (!error) setSeries((data ?? []).filter((s: any) => s.ativa !== false).map((s: any) => s.nome).filter(Boolean));
+      setCarregando(false);
+    });
   }, []);
-
   return { series, carregando };
 };
 
-/* -------------------------------------------------
-   Função utilitária para limpar sufixos da série
-   (mantida para compatibilidade com a Edge Function)
---------------------------------------------------- */
-const serieLimpa = (serie?: string): string | null => {
-  if (!serie) return null;
-  return serie
-    .replace(/\s*|$Fundamental$|/gi, "")
-    .replace(/\s*|$Ensino\s+Médio$|/gi, "")
-    .replace(/\s*-\s*Fundamental/gi, "")
-    .replace(/\s*-\s*Ensino\s+Médio/gi, "")
-    .trim();
-};
+const serieLimpa = (serie?: string) =>
+  serie ? serie.replace(/\s*-\s*Fundamental/gi, "").replace(/\s*-\s*Ensino\s+Médio/gi, "").trim() : null;
 
-export function CadastrarUsuarioNovo({
-  onVoltar,
-  onUsuarioCriado,
-}: CadastrarUsuarioNovoProps) {
+function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{titulo}</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Campo({ label, obrigatorio, children, dica }: {
+  label: string; obrigatorio?: boolean; children: React.ReactNode; dica?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium text-foreground">
+        {label}{obrigatorio && <span className="text-destructive ml-1">*</span>}
+      </Label>
+      {children}
+      {dica && <p className="text-xs text-muted-foreground">{dica}</p>}
+    </div>
+  );
+}
+
+export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsuarioNovoProps) {
   const [dados, setDados] = useState<NovoUsuario>({
-    nome: "",
-    nomeUsuario: "",
-    email: "",
-    senha: "",
-    confirmarSenha: "",
-    tipo: "",
-    serie: "",
-    vinculacoesProfessor: [],
+    nome: "", nomeUsuario: "", email: "", senha: "", confirmarSenha: "",
+    tipo: "", serie: "", segmento: "ead", turno: "", nivel: "", vinculacoesProfessor: [],
   });
 
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -159,831 +108,450 @@ export function CadastrarUsuarioNovo({
   const [salvando, setSalvando] = useState(false);
   const [modalConfirmacao, setModalConfirmacao] = useState(false);
   const [usuarioCriado, setUsuarioCriado] = useState<any>(null);
-
-  const [disciplinasDisponiveis, setDisciplinasDisponiveis] = useState<
-    DisciplinaDisponivel[]
-  >([]);
+  const [disciplinasDisponiveis, setDisciplinasDisponiveis] = useState<DisciplinaDisponivel[]>([]);
   const [carregandoDisciplinas, setCarregandoDisciplinas] = useState(true);
-
   const [modalDisciplina, setModalDisciplina] = useState(false);
   const [novaVinculacao, setNovaVinculacao] = useState<{
-    segmento: SegmentoDisciplina | "";
-    disciplinaId: string;
-    seriesSelecionadas: string[];
-  }>({
-    segmento: "",
-    disciplinaId: "",
-    seriesSelecionadas: [],
-  });
+    segmento: SegmentoDisciplina | ""; disciplinaId: string; seriesSelecionadas: string[];
+  }>({ segmento: "", disciplinaId: "", seriesSelecionadas: [] });
 
-  const tiposUsuario = [
-    { value: "aluno", label: "Aluno" },
-    { value: "professor", label: "Professor" },
-    { value: "coordenador", label: "Coordenador" },
-    { value: "administrador", label: "Administrador" },
-    { value: "professor_conteudista", label: "Professor Conteudista" },
-  ];
-
-  /* -------------------------------------------------
-     Carrega disciplinas (com segmento vindo do banco)
-  --------------------------------------------------- */
-  const carregarDisciplinas = async () => {
-    try {
-      setCarregandoDisciplinas(true);
-      const { data, error } = await supabase
-        .from("disciplinas")
-        .select("id, nome, segmento")
-        .order("nome", { ascending: true });
-
-      if (error) throw error;
-
-      const disciplinasFormatadas: DisciplinaDisponivel[] = (data || []).map(
-        (d: any) => ({
-          id: d.id,
-          nome: d.nome,
-          segmento:
-            d.segmento === "Fundamental 1" ||
-            d.segmento === "Fundamental 2" ||
-            d.segmento === "Ensino Médio"
-              ? (d.segmento as SegmentoDisciplina)
-              : null,
-        })
-      );
-
-      setDisciplinasDisponiveis(disciplinasFormatadas);
-    } catch (err: any) {
-      console.error(
-        "[CADASTRO_NOVO] Erro ao carregar disciplinas:",
-        err.message
-      );
-      toast.error("Erro ao carregar disciplinas do banco.");
-      setDisciplinasDisponiveis([]);
-    } finally {
-      setCarregandoDisciplinas(false);
-    }
-  };
+  const { series: seriesDisponiveis, carregando: carregandoSeries } = useSeriesFromSupabase();
+  const mostrarTurno = dados.segmento === "presencial";
+  const mostrarNivel = dados.segmento === "presencial" && dados.tipo === "coordenador";
 
   useEffect(() => {
-    carregarDisciplinas();
+    supabase.from("disciplinas").select("id, nome, segmento").order("nome").then(({ data, error }) => {
+      if (!error) setDisciplinasDisponiveis((data || []).map((d: any) => ({
+        id: d.id, nome: d.nome,
+        segmento: ["Fundamental 1", "Fundamental 2", "Ensino Médio"].includes(d.segmento) ? d.segmento : null,
+      })));
+      setCarregandoDisciplinas(false);
+    });
   }, []);
 
-  /* -------------------------------------------------
-     Carrega séries para o SELECT de ALUNO (Supabase)
-  --------------------------------------------------- */
-  const { series: seriesDisponiveis, carregando: carregandoSeries } =
-    useSeriesFromSupabase();
+  const disciplinasFiltradas = useMemo(
+    () => novaVinculacao.segmento ? disciplinasDisponiveis.filter(d => d.segmento === novaVinculacao.segmento) : [],
+    [disciplinasDisponiveis, novaVinculacao.segmento]
+  );
 
-  /* -------------------------------------------------
-     Validação do formulário
-  --------------------------------------------------- */
   const validarFormulario = () => {
     const erros: string[] = [];
-
     if (!dados.nome.trim()) erros.push("Nome completo é obrigatório");
-
-    if (!dados.nomeUsuario.trim()) {
-      erros.push("Nome de usuário é obrigatório");
-    } else {
-      const nomeUsuarioRegex = /^[a-zA-Z0-9.]+$/;
-      if (!nomeUsuarioRegex.test(dados.nomeUsuario)) {
-        erros.push(
-          "Nome de usuário pode conter apenas letras, números e pontos"
-        );
-      }
-      if (dados.nomeUsuario.length < 3) {
-        erros.push("Nome de usuário deve ter pelo menos 3 caracteres");
-      }
+    if (!dados.nomeUsuario.trim()) erros.push("Nome de usuário é obrigatório");
+    else {
+      if (!/^[a-zA-Z0-9.]+$/.test(dados.nomeUsuario)) erros.push("Nome de usuário: apenas letras, números e pontos");
+      if (dados.nomeUsuario.length < 3) erros.push("Nome de usuário: mínimo 3 caracteres");
     }
-
-    if (!dados.senha) {
-      erros.push("Senha é obrigatória");
-    } else if (dados.senha.length < 6) {
-      erros.push("Senha deve ter pelo menos 6 caracteres");
-    }
-
-    if (!dados.confirmarSenha) {
-      erros.push("Confirmação de senha é obrigatória");
-    } else if (dados.senha !== dados.confirmarSenha) {
-      erros.push("Senhas não coincidem");
-    }
-
-    if (!dados.tipo) {
-      erros.push("Tipo de usuário é obrigatório");
-    }
-
-    if (dados.tipo === "aluno" && !dados.serie) {
-      erros.push("Série é obrigatória para alunos");
-    }
-
-    // Validação de disciplinas apenas para professor comum
-    if (
-      dados.tipo === "professor" &&
-      dados.vinculacoesProfessor.length === 0
-    ) {
-      erros.push("Pelo menos uma disciplina deve ser vinculada ao professor");
-    }
-
+    if (!dados.senha) erros.push("Senha é obrigatória");
+    else if (dados.senha.length < 6) erros.push("Senha: mínimo 6 caracteres");
+    if (dados.senha !== dados.confirmarSenha) erros.push("Senhas não coincidem");
+    if (!dados.tipo) erros.push("Tipo de usuário é obrigatório");
+    if (dados.tipo === "aluno" && !dados.serie) erros.push("Série é obrigatória para alunos");
+    if (dados.tipo === "professor" && dados.vinculacoesProfessor.length === 0)
+      erros.push("Vincule pelo menos uma disciplina ao professor");
+    if (dados.segmento === "presencial" && !dados.turno) erros.push("Turno é obrigatório para usuários presenciais");
     return erros;
   };
 
   const errosValidacao = validarFormulario();
   const formularioValido = errosValidacao.length === 0;
 
-  /* -------------------------------------------------
-     Helpers de UI
-  --------------------------------------------------- */
   const gerarNomeUsuario = () => {
     if (dados.nome.trim()) {
-      const nomeUsuarioSugerido = dados.nome
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9\s]/g, "")
-        .split(" ")
-        .filter((part) => part.length > 0)
-        .slice(0, 2)
-        .join(".");
-
-      setDados((prev) => ({ ...prev, nomeUsuario: nomeUsuarioSugerido }));
+      const s = dados.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9\s]/g, "").split(" ").filter(p => p.length > 0).slice(0, 2).join(".");
+      setDados(prev => ({ ...prev, nomeUsuario: s }));
     }
   };
-
-  const abrirModalDisciplina = () => {
-    setNovaVinculacao({
-      segmento: "",
-      disciplinaId: "",
-      seriesSelecionadas: [],
-    });
-    setModalDisciplina(true);
-  };
-
-  const disciplinasFiltradas = useMemo(
-    () =>
-      novaVinculacao.segmento
-        ? disciplinasDisponiveis.filter(
-            (d) => d.segmento === novaVinculacao.segmento
-          )
-        : [],
-    [disciplinasDisponiveis, novaVinculacao.segmento]
-  );
-
-  const seriesDoSegmento = (segmento: SegmentoDisciplina | "") =>
-    segmento ? seriesPorSegmento[segmento] || [] : [];
 
   const adicionarVinculacao = () => {
-    if (!novaVinculacao.segmento || !novaVinculacao.disciplinaId) {
-      toast.error("Segmento e disciplina são obrigatórios");
-      return;
-    }
-
-    if (novaVinculacao.seriesSelecionadas.length === 0) {
-      toast.error("Pelo menos uma série deve ser selecionada");
-      return;
-    }
-
-    const jaExiste = dados.vinculacoesProfessor.some(
-      (v) => v.disciplinaId === novaVinculacao.disciplinaId
-    );
-    if (jaExiste) {
-      toast.error("Esta disciplina já foi adicionada");
-      return;
-    }
-
-    const disciplina = disciplinasDisponiveis.find(
-      (d) => d.id === novaVinculacao.disciplinaId
-    );
-    if (!disciplina) {
-      toast.error("Disciplina não encontrada");
-      return;
-    }
-
-    const novaVinculacaoCompleta: VinculacaoProfessor = {
-      id: Date.now().toString(),
-      segmento: novaVinculacao.segmento,
-      disciplinaId: novaVinculacao.disciplinaId,
-      disciplinaNome: disciplina.nome,
-      seriesSelecionadas: [...novaVinculacao.seriesSelecionadas],
-    };
-
-    setDados((prev) => ({
+    if (!novaVinculacao.segmento || !novaVinculacao.disciplinaId) { toast.error("Segmento e disciplina são obrigatórios"); return; }
+    if (!novaVinculacao.seriesSelecionadas.length) { toast.error("Selecione pelo menos uma série"); return; }
+    if (dados.vinculacoesProfessor.some(v => v.disciplinaId === novaVinculacao.disciplinaId)) { toast.error("Disciplina já adicionada"); return; }
+    const disc = disciplinasDisponiveis.find(d => d.id === novaVinculacao.disciplinaId);
+    if (!disc) return;
+    setDados(prev => ({
       ...prev,
-      vinculacoesProfessor: [
-        ...prev.vinculacoesProfessor,
-        novaVinculacaoCompleta,
-      ],
+      vinculacoesProfessor: [...prev.vinculacoesProfessor, {
+        id: Date.now().toString(), segmento: novaVinculacao.segmento as SegmentoDisciplina,
+        disciplinaId: novaVinculacao.disciplinaId, disciplinaNome: disc.nome,
+        seriesSelecionadas: [...novaVinculacao.seriesSelecionadas],
+      }],
     }));
-
     setModalDisciplina(false);
-    toast.success("Disciplina adicionada com sucesso!");
+    toast.success("Disciplina adicionada!");
   };
 
-  const removerVinculacao = (id: string) => {
-    setDados((prev) => ({
-      ...prev,
-      vinculacoesProfessor: prev.vinculacoesProfessor.filter(
-        (v) => v.id !== id
-      ),
-    }));
-    toast.success("Disciplina removida");
-  };
-
-  const handleSerieChange = (serie: string, checked: boolean) => {
-    setNovaVinculacao((prev) => ({
-      ...prev,
-      seriesSelecionadas: checked
-        ? [...prev.seriesSelecionadas, serie]
-        : prev.seriesSelecionadas.filter((s) => s !== serie),
-    }));
-  };
-
-  /* -------------------------------------------------
-     Criação do usuário via Edge Function
-  --------------------------------------------------- */
   const criarUsuario = async () => {
-    if (!formularioValido) {
-      toast.error("Por favor, corrija os erros no formulário");
-      return;
-    }
-
+    if (!formularioValido) { toast.error("Corrija os erros no formulário"); return; }
     setSalvando(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error("Sessão inválida. Faça login novamente.");
-      }
-
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão inválida.");
       const nome = dados.nome.trim();
       const nomeUsuario = dados.nomeUsuario.trim().toLowerCase();
-      const emailFinal =
-        dados.email.trim() || `${nomeUsuario || "usuario"}@escola.local`;
-
+      const emailFinal = dados.email.trim() || `${nomeUsuario}@escola.local`;
       const payload = {
-        action: "create",
-        nome,
-        email: emailFinal,
-        senha: dados.senha,
-        tipo: dados.tipo,
+        action: "create", nome, email: emailFinal, senha: dados.senha, tipo: dados.tipo,
         serie: dados.tipo === "aluno" ? serieLimpa(dados.serie) : null,
-        vinculacoesProfessor:
-          dados.tipo === "professor" ||
-          dados.tipo === "professor_conteudista"
-            ? dados.vinculacoesProfessor
-            : [],
+        segmento: dados.segmento,
+        turno: mostrarTurno ? dados.turno || null : null,
+        nivel: mostrarNivel ? dados.nivel || null : null,
+        vinculacoesProfessor: ["professor", "professor_conteudista"].includes(dados.tipo) ? dados.vinculacoesProfessor : [],
       };
-
-      console.log("[CADASTRO_NOVO] Enviando payload:", payload);
-
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-manage-users`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify(payload),
-        }
+        { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(payload) }
       );
-
       const result = await response.json();
-
-      if (!response.ok) {
-        console.error("[CADASTRO_NOVO] Erro da Edge Function:", result);
-        throw new Error(result.error || "Erro ao criar usuário");
-      }
-
-      console.log("[CADASTRO_NOVO] Usuário criado:", result);
-
-      setUsuarioCriado({
-        nome,
-        nomeUsuario,
-        senhaTemporaria: dados.senha,
-      });
-
+      if (!response.ok) throw new Error(result.error || "Erro ao criar usuário");
+      setUsuarioCriado({ nome, nomeUsuario, email: emailFinal, senhaTemporaria: dados.senha });
       setModalConfirmacao(true);
       toast.success("Usuário criado com sucesso!");
       onUsuarioCriado?.();
     } catch (error: any) {
-      console.error("[CADASTRO_NOVO] Erro ao criar usuário:", error);
       toast.error(error.message || "Erro ao criar usuário");
-    } finally {
-      setSalvando(false);
-    }
+    } finally { setSalvando(false); }
   };
 
-  const finalizarCadastro = () => {
-    setModalConfirmacao(false);
-    onVoltar();
-  };
-
-  /* -------------------------------------------------
-     Render
-  --------------------------------------------------- */
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onVoltar}>
-            <ArrowLeft className="w-4 h-4" />
+    <div className="min-h-screen bg-background">
+      {/* Header sticky */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-6 py-4">
+        <div className="flex items-center gap-4 max-w-4xl mx-auto">
+          <Button variant="ghost" size="sm" onClick={onVoltar} className="gap-2 text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="w-4 h-4" /> Voltar
           </Button>
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">
-              ✨ Novo Fluxo de Cadastro
-            </h1>
-            <p className="text-sm text-gray-600">
-              Sistema de cadastro unificado por tipo de usuário
-            </p>
+            <h1 className="text-lg font-semibold text-foreground">Cadastrar Novo Usuário</h1>
+            <p className="text-xs text-muted-foreground">Sistema de cadastro unificado por tipo de usuário</p>
           </div>
         </div>
       </div>
 
-      <div className="p-6 max-w-4xl mx-auto">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserPlus className="w-5 h-5" />
-              Dados do Novo Usuário
+      <div className="p-6 max-w-4xl mx-auto space-y-6 pb-16">
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <UserPlus className="w-5 h-5 text-primary" /> Dados do Novo Usuário
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Dados pessoais */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="nome">Nome Completo *</Label>
-                <Input
-                  id="nome"
-                  value={dados.nome}
-                  onChange={(e) =>
-                    setDados((prev) => ({ ...prev, nome: e.target.value }))
-                  }
-                  placeholder="Digite o nome completo"
-                  onBlur={gerarNomeUsuario}
-                />
-              </div>
+          <CardContent className="space-y-8 pt-4">
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="nomeUsuario">Nome de Usuário *</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={gerarNomeUsuario}
-                    className="text-xs"
-                  >
-                    Gerar automaticamente
-                  </Button>
-                </div>
-                <Input
-                  id="nomeUsuario"
-                  value={dados.nomeUsuario}
-                  onChange={(e) =>
-                    setDados((prev) => ({
-                      ...prev,
-                      nomeUsuario: e.target.value.toLowerCase(),
-                    }))
-                  }
-                  placeholder="usuario.login"
-                />
-                <p className="text-xs text-gray-500">
-                  Usado para login. Apenas letras, números e pontos.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email (opcional)</Label>
-              <Input
-                id="email"
-                type="email"
-                value={dados.email}
-                onChange={(e) =>
-                  setDados((prev) => ({ ...prev, email: e.target.value }))
-                }
-                placeholder="email@exemplo.com (deixe vazio para gerar automaticamente)"
-              />
-              <p className="text-xs text-gray-500">
-                Se não informado, será gerado automaticamente como:{" "}
-                {dados.nomeUsuario || "usuario"}@escola.local
-              </p>
-            </div>
-
-            {/* Senha */}
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-medium mb-4">
-                Credenciais de Acesso
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="senha">Senha *</Label>
-                  <div className="relative">
-                    <Input
-                      id="senha"
-                      type={mostrarSenha ? "text" : "password"}
-                      value={dados.senha}
-                      onChange={(e) =>
-                        setDados((prev) => ({
-                          ...prev,
-                          senha: e.target.value,
-                        }))
-                      }
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setMostrarSenha(!mostrarSenha)}
-                    >
-                      {mostrarSenha ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+            {/* Identificação */}
+            <Secao titulo="Identificação">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Campo label="Nome Completo" obrigatorio>
+                  <Input value={dados.nome} placeholder="Nome completo"
+                    onChange={e => setDados(p => ({ ...p, nome: e.target.value }))} onBlur={gerarNomeUsuario}
+                    className="bg-background border-border text-foreground placeholder:text-muted-foreground" />
+                </Campo>
+                <Campo label="Nome de Usuário" obrigatorio dica="Apenas letras, números e pontos. Usado para login.">
+                  <div className="flex gap-2">
+                    <Input value={dados.nomeUsuario} placeholder="usuario.login"
+                      onChange={e => setDados(p => ({ ...p, nomeUsuario: e.target.value.toLowerCase() }))}
+                      className="bg-background border-border text-foreground placeholder:text-muted-foreground" />
+                    <Button type="button" variant="outline" size="sm" onClick={gerarNomeUsuario} title="Gerar automaticamente">
+                      <Wand2 className="w-4 h-4" />
                     </Button>
                   </div>
-                </div>
+                </Campo>
+              </div>
+              <Campo label="Email" dica={`Se não informado: ${dados.nomeUsuario || "usuario"}@escola.local`}>
+                <Input type="email" value={dados.email} placeholder="email@exemplo.com (opcional)"
+                  onChange={e => setDados(p => ({ ...p, email: e.target.value }))}
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground" />
+              </Campo>
+            </Secao>
 
-                <div className="space-y-2">
-                  <Label htmlFor="confirmarSenha">Confirmar Senha *</Label>
+            {/* Credenciais */}
+            <Secao titulo="Credenciais de Acesso">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Campo label="Senha" obrigatorio>
                   <div className="relative">
-                    <Input
-                      id="confirmarSenha"
-                      type={mostrarConfirmacao ? "text" : "password"}
-                      value={dados.confirmarSenha}
-                      onChange={(e) =>
-                        setDados((prev) => ({
-                          ...prev,
-                          confirmarSenha: e.target.value,
-                        }))
-                      }
+                    <Input type={mostrarSenha ? "text" : "password"} value={dados.senha} placeholder="Mínimo 6 caracteres"
+                      onChange={e => setDados(p => ({ ...p, senha: e.target.value }))}
+                      className="bg-background border-border text-foreground placeholder:text-muted-foreground pr-10" />
+                    <Button type="button" variant="ghost" size="sm"
+                      className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                      onClick={() => setMostrarSenha(!mostrarSenha)}>
+                      {mostrarSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </Campo>
+                <Campo label="Confirmar Senha" obrigatorio>
+                  <div className="relative">
+                    <Input type={mostrarConfirmacao ? "text" : "password"} value={dados.confirmarSenha}
                       placeholder="Digite a senha novamente"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() =>
-                        setMostrarConfirmacao(!mostrarConfirmacao)
-                      }
-                    >
-                      {mostrarConfirmacao ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      onChange={e => setDados(p => ({ ...p, confirmarSenha: e.target.value }))}
+                      className="bg-background border-border text-foreground placeholder:text-muted-foreground pr-10" />
+                    <Button type="button" variant="ghost" size="sm"
+                      className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                      onClick={() => setMostrarConfirmacao(!mostrarConfirmacao)}>
+                      {mostrarConfirmacao ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                   {dados.confirmarSenha && dados.senha !== dados.confirmarSenha && (
-                    <p className="text-xs text-red-500 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      As senhas não coincidem
+                    <p className="text-xs text-destructive flex items-center gap-1 mt-1">
+                      <AlertCircle className="w-3 h-3" /> Senhas não coincidem
                     </p>
                   )}
-                  {dados.confirmarSenha &&
-                    dados.senha === dados.confirmarSenha &&
-                    dados.senha.length >= 6 && (
-                      <p className="text-xs text-green-500 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Senhas coincidem
-                      </p>
-                    )}
-                </div>
+                  {dados.confirmarSenha && dados.senha === dados.confirmarSenha && dados.senha.length >= 6 && (
+                    <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 mt-1">
+                      <CheckCircle className="w-3 h-3" /> Senhas coincidem
+                    </p>
+                  )}
+                </Campo>
               </div>
-            </div>
+            </Secao>
 
-            {/* Tipo / Série / Vinculações */}
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-medium mb-4">Perfil do Usuário</h3>
-              <div className="space-y-2 mb-4">
-                <Label>Tipo de Usuário *</Label>
-                <Select
-                  key={`tipo-${dados.tipo}`}
-                  value={dados.tipo}
-                  onValueChange={(value) =>
-                    setDados((prev) => ({
-                      ...prev,
-                      tipo: value,
-                      vinculacoesProfessor: [],
-                      serie: "",
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo de usuário" />
+            {/* Perfil */}
+            <Secao titulo="Perfil do Usuário">
+              <Campo label="Tipo de Usuário" obrigatorio>
+                <Select value={dados.tipo}
+                  onValueChange={v => setDados(p => ({ ...p, tipo: v, vinculacoesProfessor: [], serie: "", nivel: "" }))}>
+                  <SelectTrigger className="bg-background border-border text-foreground">
+                    <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {tiposUsuario.map((tipo) => (
-                      <SelectItem key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </SelectItem>
-                    ))}
+                    {tiposUsuario.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
+              </Campo>
 
-              {/* Série para ALUNO – agora vem do Supabase */}
-              {dados.tipo === "aluno" && (
-                <div className="space-y-2">
-                  <Label>Série *</Label>
-                  <Select
-                    key={`serie-${dados.serie || "empty"}`}
-                    value={dados.serie}
-                    onValueChange={(value) =>
-                      setDados((prev) => ({ ...prev, serie: value }))
-                    }
-                    disabled={carregandoSeries}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a série" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {seriesDisponiveis.map((serie) => (
-                        <SelectItem key={serie} value={serie}>
-                          {serie}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {dados.tipo && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Campo label="Segmento" obrigatorio>
+                    <Select value={dados.segmento}
+                      onValueChange={(v: SegmentoAVA) => setDados(p => ({ ...p, segmento: v, turno: "", nivel: "" }))}>
+                      <SelectTrigger className="bg-background border-border text-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ead">EAD</SelectItem>
+                        <SelectItem value="presencial">Presencial</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Campo>
 
-              {/* Vinculação de disciplinas – exibida apenas para professor comum */}
-              {dados.tipo === "professor" && (
-                <div className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <UserCheck className="w-5 h-5 text-blue-600" />
-                      <h4 className="font-medium text-blue-900">
-                        Vinculação de Disciplinas
-                      </h4>
-                    </div>
-                    <p className="text-sm text-blue-700 mb-4">
-                      Adicione disciplinas e selecione as séries específicas
-                      que este professor leciona.
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-blue-600">
-                        <strong>{dados.vinculacoesProfessor.length}</strong>{" "}
-                        disciplina(s) vinculada(s)
-                      </div>
-                      <Button
-                        onClick={abrirModalDisciplina}
-                        disabled={carregandoDisciplinas}
-                        size="sm"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Adicionar Disciplina
-                      </Button>
-                    </div>
-                  </div>
+                  {mostrarTurno && (
+                    <Campo label="Turno" obrigatorio>
+                      <Select value={dados.turno} onValueChange={(v: Turno) => setDados(p => ({ ...p, turno: v }))}>
+                        <SelectTrigger className="bg-background border-border text-foreground">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="matutino">Matutino</SelectItem>
+                          <SelectItem value="vespertino">Vespertino</SelectItem>
+                          <SelectItem value="noturno">Noturno</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Campo>
+                  )}
 
-                  {dados.vinculacoesProfessor.length > 0 && (
-                    <div className="space-y-3">
-                      <Label>Disciplinas Vinculadas</Label>
-                      {dados.vinculacoesProfessor.map((v) => (
-                        <div
-                          key={v.id}
-                          className="border rounded-lg p-4 bg-white"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <BookOpen className="w-4 h-4 text-gray-600" />
-                                <span className="font-medium">
-                                  {v.disciplinaNome}
-                                </span>
-                                <Badge variant="outline" className="text-xs">
-                                  {v.segmento}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <GraduationCap className="w-4 h-4" />
-                                <span>
-                                  Séries: {v.seriesSelecionadas.join(", ")}
-                                </span>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removerVinculacao(v.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  {mostrarNivel && (
+                    <Campo label="Nível de Ensino">
+                      <Select value={dados.nivel} onValueChange={(v: Nivel) => setDados(p => ({ ...p, nivel: v }))}>
+                        <SelectTrigger className="bg-background border-border text-foreground">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fundamental1">Fundamental 1</SelectItem>
+                          <SelectItem value="fundamental2">Fundamental 2</SelectItem>
+                          <SelectItem value="medio">Ensino Médio</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Campo>
                   )}
                 </div>
               )}
-            </div>
 
-            {/* Erros de validação */}
-            {errosValidacao.length > 0 && (
-              <div className="border-t pt-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-red-800 mb-2">
-                    Corrija os seguintes erros:
-                  </h4>
-                  <ul className="text-sm text-red-600 space-y-1">
-                    {errosValidacao.map((erro, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        <AlertCircle className="w-3 h-3" />
-                        {erro}
-                      </li>
-                    ))}
-                  </ul>
+              {/* Série — aluno */}
+              {dados.tipo === "aluno" && (
+                <Campo label="Série" obrigatorio>
+                  <Select value={dados.serie} disabled={carregandoSeries}
+                    onValueChange={v => setDados(p => ({ ...p, serie: v }))}>
+                    <SelectTrigger className="bg-background border-border text-foreground">
+                      <SelectValue placeholder={carregandoSeries ? "Carregando..." : "Selecione a série"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {seriesDisponiveis.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Campo>
+              )}
+
+              {/* Vinculação — professor */}
+              {dados.tipo === "professor" && (
+                <div className="rounded-xl border border-border bg-muted/30 p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <UserCheck className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Vinculação de Disciplinas</p>
+                        <p className="text-xs text-muted-foreground">
+                          {dados.vinculacoesProfessor.length} disciplina(s) vinculada(s)
+                        </p>
+                      </div>
+                    </div>
+                    <Button onClick={() => { setNovaVinculacao({ segmento: "", disciplinaId: "", seriesSelecionadas: [] }); setModalDisciplina(true); }}
+                      disabled={carregandoDisciplinas} size="sm" variant="outline" className="gap-2">
+                      <Plus className="w-4 h-4" /> Adicionar
+                    </Button>
+                  </div>
+
+                  {dados.vinculacoesProfessor.map(v => (
+                    <div key={v.id} className="flex items-start justify-between bg-background rounded-lg border border-border p-4">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-medium text-foreground">{v.disciplinaNome}</span>
+                          <Badge variant="secondary" className="text-xs">{v.segmento}</Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <GraduationCap className="w-3.5 h-3.5" />
+                          {v.seriesSelecionadas.join(", ")}
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm"
+                        onClick={() => setDados(p => ({ ...p, vinculacoesProfessor: p.vinculacoesProfessor.filter(x => x.id !== v.id) }))}
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
+              )}
+            </Secao>
+
+            {/* Erros */}
+            {errosValidacao.length > 0 && dados.tipo && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+                <p className="text-sm font-semibold text-destructive flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" /> Corrija antes de continuar:
+                </p>
+                <ul className="space-y-1">
+                  {errosValidacao.map((erro, i) => (
+                    <li key={i} className="text-xs text-destructive/80 flex items-center gap-2">
+                      <span className="w-1 h-1 rounded-full bg-destructive/60 flex-shrink-0" />
+                      {erro}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
-            {/* Botões de ação */}
-            <div className="border-t pt-6 flex justify-between">
-              <Button variant="outline" onClick={onVoltar}>
-                Cancelar
-              </Button>
-              <Button
-                onClick={criarUsuario}
-                disabled={!formularioValido || salvando}
-                className="min-w-32"
-              >
-                {salvando ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Criando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Criar Usuário
-                  </>
-                )}
+            {/* Botões */}
+            <div className="flex justify-between pt-2 border-t border-border">
+              <Button variant="outline" onClick={onVoltar}>Cancelar</Button>
+              <Button onClick={criarUsuario} disabled={!formularioValido || salvando} className="min-w-36 gap-2">
+                {salvando ? <><Loader2 className="w-4 h-4 animate-spin" />Criando...</> : <><Save className="w-4 h-4" />Criar Usuário</>}
               </Button>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Modal de adição de disciplina (professor) */}
+      {/* Modal disciplina */}
       <Dialog open={modalDisciplina} onOpenChange={setModalDisciplina}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-lg bg-background border-border">
           <DialogHeader>
-            <DialogTitle>Adicionar Disciplina ao Professor</DialogTitle>
-            <DialogDescription>
-              Segmento → Disciplina → Séries que este professor leciona
-            </DialogDescription>
+            <DialogTitle className="text-foreground">Adicionar Disciplina</DialogTitle>
+            <DialogDescription className="text-muted-foreground">Segmento → Disciplina → Séries</DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <Label>1. Segmento *</Label>
-              <Select
-                value={novaVinculacao.segmento}
-                onValueChange={(value: SegmentoDisciplina) =>
-                  setNovaVinculacao((prev) => ({
-                    ...prev,
-                    segmento: value,
-                    disciplinaId: "",
-                    seriesSelecionadas: [],
-                  }))
-                }
-              >
-                <SelectTrigger>
+          <div className="space-y-5">
+            <Campo label="1. Segmento" obrigatorio>
+              <Select value={novaVinculacao.segmento}
+                onValueChange={(v: SegmentoDisciplina) => setNovaVinculacao({ segmento: v, disciplinaId: "", seriesSelecionadas: [] })}>
+                <SelectTrigger className="bg-background border-border text-foreground">
                   <SelectValue placeholder="Selecione o segmento" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Fundamental 1">
-                    Ensino Fundamental 1
-                  </SelectItem>
-                  <SelectItem value="Fundamental 2">
-                    Ensino Fundamental 2
-                  </SelectItem>
+                  <SelectItem value="Fundamental 1">Ensino Fundamental 1</SelectItem>
+                  <SelectItem value="Fundamental 2">Ensino Fundamental 2</SelectItem>
                   <SelectItem value="Ensino Médio">Ensino Médio</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </Campo>
 
             {novaVinculacao.segmento && (
-              <div className="space-y-2">
-                <Label>2. Disciplina *</Label>
-                <Select
-                  value={novaVinculacao.disciplinaId}
-                  onValueChange={(value) =>
-                    setNovaVinculacao((prev) => ({
-                      ...prev,
-                      disciplinaId: value,
-                      seriesSelecionadas: [],
-                    }))
-                  }
-                >
-                  <SelectTrigger>
+              <Campo label="2. Disciplina" obrigatorio>
+                <Select value={novaVinculacao.disciplinaId}
+                  onValueChange={v => setNovaVinculacao(p => ({ ...p, disciplinaId: v, seriesSelecionadas: [] }))}>
+                  <SelectTrigger className="bg-background border-border text-foreground">
                     <SelectValue placeholder="Selecione a disciplina" />
                   </SelectTrigger>
                   <SelectContent>
-                    {disciplinasFiltradas.map((disciplina) => (
-                      <SelectItem key={disciplina.id} value={disciplina.id}>
-                        {disciplina.nome}
-                      </SelectItem>
-                    ))}
+                    {disciplinasFiltradas.map(d => <SelectItem key={d.id} value={d.id}>{d.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
+              </Campo>
             )}
 
             {novaVinculacao.segmento && novaVinculacao.disciplinaId && (
               <div className="space-y-2">
-                <Label>3. Séries *</Label>
-                <div className="max-h-40 overflow-y-auto border rounded-lg p-3">
-                  {seriesDoSegmento(novaVinculacao.segmento).map((serie) => (
-                    <div key={serie} className="flex items-center gap-2 mb-2">
-                      <input
-                        type="checkbox"
-                        checked={novaVinculacao.seriesSelecionadas.includes(
-                          serie
-                        )}
-                        onChange={(e) => handleSerieChange(serie, e.target.checked)}
-                        className="rounded"
-                      />
-                      <Label className="text-sm">{serie}</Label>
-                    </div>
+                <Label className="text-sm font-medium text-foreground">
+                  3. Séries <span className="text-destructive">*</span>
+                </Label>
+                <div className="max-h-44 overflow-y-auto border border-border rounded-lg p-3 bg-muted/20 space-y-2">
+                  {(seriesPorSegmento[novaVinculacao.segmento] || []).map(serie => (
+                    <label key={serie} className="flex items-center gap-3 cursor-pointer group">
+                      <input type="checkbox"
+                        checked={novaVinculacao.seriesSelecionadas.includes(serie)}
+                        onChange={e => setNovaVinculacao(p => ({
+                          ...p, seriesSelecionadas: e.target.checked
+                            ? [...p.seriesSelecionadas, serie]
+                            : p.seriesSelecionadas.filter(s => s !== serie)
+                        }))}
+                        className="rounded accent-primary" />
+                      <span className="text-sm text-foreground">{serie}</span>
+                    </label>
                   ))}
                 </div>
               </div>
             )}
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalDisciplina(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={adicionarVinculacao}
-              disabled={
-                !novaVinculacao.segmento ||
-                !novaVinculacao.disciplinaId ||
-                novaVinculacao.seriesSelecionadas.length === 0
-              }
-            >
-              Adicionar Disciplina
+            <Button variant="outline" onClick={() => setModalDisciplina(false)}>Cancelar</Button>
+            <Button onClick={adicionarVinculacao}
+              disabled={!novaVinculacao.segmento || !novaVinculacao.disciplinaId || !novaVinculacao.seriesSelecionadas.length}>
+              Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Modal de confirmação de criação */}
+      {/* Modal confirmação */}
       <Dialog open={modalConfirmacao} onOpenChange={setModalConfirmacao}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md bg-background border-border">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-green-600">
-              <CheckCircle className="w-5 h-5" />
-              Usuário Criado com Sucesso!
+            <DialogTitle className="flex items-center gap-2 text-green-600 dark:text-green-400">
+              <CheckCircle className="w-5 h-5" /> Usuário Criado com Sucesso!
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-muted-foreground">
               O usuário foi cadastrado e já pode fazer login.
             </DialogDescription>
           </DialogHeader>
-
           {usuarioCriado && (
-            <div className="space-y-4">
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-gray-500" />
-                  <span className="font-medium">Nome:</span>
-                  <span>{usuarioCriado.nome}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-gray-500" />
-                  <span className="font-medium">Login:</span>
-                  <span className="font-mono bg-white px-2 py-1 rounded border">
-                    {usuarioCriado.nomeUsuario}
+            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+              {[
+                { icon: User, label: "Nome", value: usuarioCriado.nome },
+                { icon: Mail, label: "Email/Login", value: usuarioCriado.email },
+                { icon: Lock, label: "Senha", value: usuarioCriado.senhaTemporaria },
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="flex items-center gap-3">
+                  <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <span className="text-sm text-muted-foreground">{label}:</span>
+                  <span className="text-sm font-mono font-medium text-foreground bg-background px-2 py-0.5 rounded border border-border">
+                    {value}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-gray-500" />
-                  <span className="font-medium">Senha:</span>
-                  <span className="font-mono bg-white px-2 py-1 rounded border">
-                    {usuarioCriado.senhaTemporaria}
-                  </span>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600">
-                Anote essas credenciais e repasse ao usuário. Ele poderá
-                alterar a senha após o primeiro login.
-              </p>
+              ))}
             </div>
           )}
-
+          <p className="text-xs text-muted-foreground">Anote e repasse essas credenciais ao usuário.</p>
           <DialogFooter>
-            <Button onClick={finalizarCadastro} className="w-full">
+            <Button onClick={() => { setModalConfirmacao(false); onVoltar(); }} className="w-full">
               Entendi, fechar
             </Button>
           </DialogFooter>

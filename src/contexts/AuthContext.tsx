@@ -9,9 +9,12 @@ interface UsuarioPerfil {
   id: string;
   email: string;
   nome: string;
-  tipo: "administrador" | "professor" | "aluno" | "responsavel" | "coordenador";
+  tipo: "administrador" | "professor" | "aluno" | "responsavel" | "coordenador" | "professor_conteudista";
   avatar?: string;
   serie?: string;
+  segmento?: "ead" | "presencial";
+  turno?: "matutino" | "vespertino" | "noturno";
+  nivel?: "fundamental1" | "fundamental2" | "medio";
   status?: string;
   criado_em?: string;
   updated_at?: string;
@@ -57,13 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data) {
         console.log("✅ Perfil carregado:", data);
-        setUsuario({
+       setUsuario({
           id: user.id,
           email: user.email || data.email || "",
           nome: data.nome || "",
           tipo: data.tipo || "aluno",
-          avatar: data.avatar || undefined, // ✅ Corrigido: usando 'avatar' em vez de 'avatar_url'
+          avatar: data.avatar || undefined,
           serie: data.serie || undefined,
+          segmento: data.segmento || "ead",
+          turno: data.turno || undefined,
+          nivel: data.nivel || undefined,
           status: data.status || undefined,
           criado_em: data.criado_em || undefined,
           updated_at: data.updated_at || undefined,

@@ -1,14 +1,15 @@
 // src/components/BoletinsGerais.tsx
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase/supabaseClient';
+import { useSegmento } from '../hooks/useSegmento';
+import { calcularNota } from '../utils/calculoNotas';
 
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Badge } from './ui/badge';
+import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { Label } from './ui/label';
 
 import {
   Search, Filter, ChevronDown, ChevronUp, Edit, Save,
@@ -23,14 +24,14 @@ interface Aluno { id: string; nome: string; email: string; serie: string; }
 interface Disciplina { id: string; nome: string; }
 interface Nota {
   id: string; user_id: string; disciplina_id: string; bimestre: number;
-  av1: number | null; av2: number | null; recuperacao: number | null;
+  av1: number | null; av2: number | null; av3: number | null; recuperacao: number | null;
   media: number | null; media_final: number | null;
   frequencia: number | null; faltas: number | null; status_final: string | null;
   disciplina: Disciplina | null;
 }
 interface NotaDisciplinaView {
   disciplinaId: string; disciplinaNome: string;
-  av1: number | null; av2: number | null; rec: number | null;
+  av1: number | null; av2: number | null; av3: number | null; rec: number | null;
 }
 interface BoletimAlunoView {
   id: string; alunoId: string; nomeAluno: string; email: string; serie: string;
@@ -39,11 +40,13 @@ interface BoletimAlunoView {
 interface NotaEmEdicao {
   alunoId: string; disciplinaId: string; disciplinaNome: string;
   bimestre: number; nomeAluno: string;
-  av1: number | null; av2: number | null; rec: number | null;
+  av1: number | null; av2: number | null; av3: number | null; rec: number | null;
   notaRegistroId: string | null;
 }
 
 export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
+  const { segmento, isPresencial } = useSegmento();
+
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [series, setSeries] = useState<string[]>([]);
@@ -58,21 +61,34 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
   const [notaEmEdicao, setNotaEmEdicao] = useState<NotaEmEdicao | null>(null);
   const [salvandoNota, setSalvandoNota] = useState(false);
 
+  // Carregar séries filtradas pelo segmento do coordenador
   useEffect(() => {
     async function carregarSeries() {
       try {
-        const { data, error } = await supabase.from('users').select('serie').eq('tipo', 'aluno').not('serie', 'is', null);
+        const { data, error } = await supabase
+          .from('users')
+          .select('serie')
+          .eq('tipo', 'aluno')
+          .eq('segmento', segmento)
+          .not('serie', 'is', null);
         if (error) throw error;
         setSeries(Array.from(new Set((data || []).map((d: any) => d.serie as string))).sort());
       } catch { toast.error('Erro ao carregar séries'); }
     }
     carregarSeries();
-  }, []);
+  }, [segmento]);
 
   async function aplicarFiltros() {
     setCarregando(true); setErro(null); setFiltrosAplicados(true); setAlunosExpandidos(new Set());
     try {
-      let queryAlunos = supabase.from('users').select('id, nome, email, serie').eq('tipo', 'aluno').order('nome');
+      // Filtra alunos pelo segmento do coordenador
+      let queryAlunos = supabase
+        .from('users')
+        .select('id, nome, email, serie')
+        .eq('tipo', 'aluno')
+        .eq('segmento', segmento)
+        .order('nome');
+
       if (filtroSerie !== 'todas') queryAlunos = queryAlunos.eq('serie', filtroSerie);
       const { data: alunosData, error: alunosError } = await queryAlunos;
       if (alunosError) throw alunosError;
@@ -118,7 +134,7 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
 
       const ids = alunosFiltrados.map((a: any) => a.id);
       let queryNotas = supabase.from('notas').select(`
-        id, user_id, disciplina_id, bimestre, av1, av2, recuperacao,
+        id, user_id, disciplina_id, bimestre, av1, av2, av3, recuperacao,
         media, media_final, frequencia, faltas, status_final,
         disciplinas:disciplinas!disciplina_id(id, nome)
       `).in('user_id', ids);
@@ -127,7 +143,9 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       if (notasError) throw notasError;
 
       setNotas((notasData || []).map((n: any) => ({
-        ...n, disciplina: n.disciplinas ? { id: n.disciplinas.id, nome: n.disciplinas.nome } : null,
+        ...n,
+        av3: n.av3 ?? null,
+        disciplina: n.disciplinas ? { id: n.disciplinas.id, nome: n.disciplinas.nome } : null,
       })));
     } catch (err: any) {
       setErro(err.message || 'Erro ao carregar boletins');
@@ -164,17 +182,18 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       const disciplinasDaSerie = disciplinasPorSerie[aluno.serie] || [];
       if (disciplinasDaSerie.length > 0) {
         for (const disciplina of disciplinasDaSerie) {
-          const notaExistente = notasAlunoMap.get(disciplina.id);
+          const n = notasAlunoMap.get(disciplina.id);
           boletim.notas.push({
             disciplinaId: disciplina.id, disciplinaNome: disciplina.nome,
-            av1: notaExistente?.av1 ?? null, av2: notaExistente?.av2 ?? null, rec: notaExistente?.recuperacao ?? null,
+            av1: n?.av1 ?? null, av2: n?.av2 ?? null,
+            av3: n?.av3 ?? null, rec: n?.recuperacao ?? null,
           });
         }
       } else {
         for (const n of notasAlunoMap.values()) {
           if (n.disciplina) boletim.notas.push({
             disciplinaId: n.disciplina.id, disciplinaNome: n.disciplina.nome,
-            av1: n.av1, av2: n.av2, rec: n.recuperacao,
+            av1: n.av1, av2: n.av2, av3: n.av3, rec: n.recuperacao,
           });
         }
       }
@@ -183,20 +202,21 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     return Array.from(map.values()).sort((a, b) => a.nomeAluno.localeCompare(b.nomeAluno, 'pt-BR', { sensitivity: 'base' }));
   }, [alunos, notas, filtroBimestre, disciplinasPorSerie]);
 
-  const calcularMedia = (nota: { av1: number | null; av2: number | null; rec: number | null }) => {
-    const av1 = Number(nota.av1 || 0), av2 = Number(nota.av2 || 0);
-    if (nota.av1 === null && nota.av2 === null && nota.rec === null) return 0;
-    const menor = Math.min(av1, av2), maior = Math.max(av1, av2);
-    if (nota.rec !== null) { const rec = Number(nota.rec); if (rec > menor) return (maior + rec) / 2; }
-    return (av1 + av2) / 2;
+  // Cálculo via utilitário centralizado
+  const calcularMedia = (nota: { av1: number | null; av2: number | null; av3: number | null; rec: number | null }) => {
+    const resultado = calcularNota(
+      { av1: nota.av1, av2: nota.av2, av3: nota.av3, recuperacao: nota.rec },
+      segmento
+    );
+    return resultado.mediaFinal ?? 0;
   };
 
   const calcularSituacao = (nota: NotaDisciplinaView): 'Aprovado' | 'Recuperação' | 'Pendente' => {
     if (nota.av1 === null && nota.av2 === null && nota.rec === null) return 'Pendente';
+    if (isPresencial && nota.av3 === null) return 'Pendente';
     return calcularMedia(nota) >= 7 ? 'Aprovado' : 'Recuperação';
   };
 
-  // Badges com style inline — legíveis em qualquer tema
   const getSituacaoStyle = (situacao: string) => {
     if (situacao === 'Aprovado')    return { bg: '#dcfce7', text: '#14532d', border: '#86efac' };
     if (situacao === 'Recuperação') return { bg: '#fef9c3', text: '#713f12', border: '#fde047' };
@@ -217,15 +237,21 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
   });
 
   function abrirEdicaoNota(boletim: BoletimAlunoView, nota: NotaDisciplinaView) {
-    const registro = notas.find(n => n.user_id === boletim.alunoId && n.disciplina_id === nota.disciplinaId && n.bimestre === boletim.bimestreNumero);
+    const registro = notas.find(n =>
+      n.user_id === boletim.alunoId &&
+      n.disciplina_id === nota.disciplinaId &&
+      n.bimestre === boletim.bimestreNumero
+    );
     setNotaEmEdicao({
-      alunoId: boletim.alunoId, disciplinaId: nota.disciplinaId, disciplinaNome: nota.disciplinaNome,
-      bimestre: boletim.bimestreNumero, nomeAluno: boletim.nomeAluno,
-      av1: nota.av1, av2: nota.av2, rec: nota.rec, notaRegistroId: registro?.id ?? null,
+      alunoId: boletim.alunoId, disciplinaId: nota.disciplinaId,
+      disciplinaNome: nota.disciplinaNome, bimestre: boletim.bimestreNumero,
+      nomeAluno: boletim.nomeAluno,
+      av1: nota.av1, av2: nota.av2, av3: nota.av3, rec: nota.rec,
+      notaRegistroId: registro?.id ?? null,
     });
   }
 
-  function handleChangeNota(campo: 'av1' | 'av2' | 'rec', valor: string) {
+  function handleChangeNota(campo: 'av1' | 'av2' | 'av3' | 'rec', valor: string) {
     if (!notaEmEdicao) return;
     const num = valor === '' ? null : Number(valor);
     if (num !== null && (isNaN(num) || num < 0 || num > 10)) return;
@@ -236,9 +262,17 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     if (!notaEmEdicao) return;
     setSalvandoNota(true);
     try {
-      const { alunoId, disciplinaId, bimestre, av1, av2, rec, notaRegistroId } = notaEmEdicao;
-      const mediaCalculada = calcularMedia({ av1, av2, rec });
-      const payload: any = { user_id: alunoId, disciplina_id: disciplinaId, bimestre, av1, av2, recuperacao: rec, media: mediaCalculada, media_final: mediaCalculada };
+      const { alunoId, disciplinaId, bimestre, av1, av2, av3, rec, notaRegistroId } = notaEmEdicao;
+      const mediaCalculada = calcularMedia({ av1, av2, av3, rec });
+      const payload: any = {
+        user_id: alunoId, disciplina_id: disciplinaId, bimestre,
+        av1, av2,
+        av3: isPresencial ? av3 : null,
+        recuperacao: rec,
+        media: mediaCalculada,
+        media_final: mediaCalculada,
+        segmento,
+      };
 
       const resp = notaRegistroId
         ? await supabase.from('notas').update(payload).eq('id', notaRegistroId).select()
@@ -248,13 +282,24 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       const nova = resp.data?.[0] as any;
       setNotas(prev => [
         ...prev.filter(n => !(n.user_id === alunoId && n.disciplina_id === disciplinaId && n.bimestre === bimestre)),
-        { id: nova.id, user_id: nova.user_id, disciplina_id: nova.disciplina_id, bimestre: nova.bimestre, av1: nova.av1, av2: nova.av2, recuperacao: nova.recuperacao, media: nova.media, media_final: nova.media_final, frequencia: nova.frequencia, faltas: nova.faltas, status_final: nova.status_final, disciplina: null },
+        {
+          id: nova.id, user_id: nova.user_id, disciplina_id: nova.disciplina_id,
+          bimestre: nova.bimestre, av1: nova.av1, av2: nova.av2, av3: nova.av3,
+          recuperacao: nova.recuperacao, media: nova.media, media_final: nova.media_final,
+          frequencia: nova.frequencia, faltas: nova.faltas, status_final: nova.status_final,
+          disciplina: null,
+        },
       ]);
       toast.success('Nota salva com sucesso!');
       setNotaEmEdicao(null);
     } catch { toast.error('Erro ao salvar nota'); }
     finally { setSalvandoNota(false); }
   }
+
+  // Linha de nota para uso na tabela — condicional por segmento
+  const notaEmEdicaoPreview = notaEmEdicao
+    ? { av1: notaEmEdicao.av1, av2: notaEmEdicao.av2, av3: notaEmEdicao.av3, rec: notaEmEdicao.rec }
+    : null;
 
   return (
     <div className="space-y-6">
@@ -263,7 +308,13 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       <Card>
         <CardHeader className="pb-3 border-b border-border">
           <CardTitle className="flex items-center gap-2 text-foreground">
-            <Filter className="w-5 h-5 text-blue-600" /> Filtros de Busca
+            <Filter className="w-5 h-5 text-blue-600" />
+            Filtros de Busca
+            {isPresencial && (
+              <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full ml-1">
+                Presencial
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-5">
@@ -301,13 +352,14 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
           </div>
           <div className="mt-5 flex pt-4 justify-end">
             <Button onClick={aplicarFiltros} disabled={carregando} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 px-8">
-              {carregando ? <><Loader2 className="w-4 h-4 animate-spin" />Processando...</> : <><Search className="w-4 h-4" />Aplicar Filtros</>}
+              {carregando
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Processando...</>
+                : <><Search className="w-4 h-4" />Aplicar Filtros</>}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Erro */}
       {erro && (
         <div className="flex items-center gap-3 p-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900">
           <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
@@ -315,7 +367,6 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
         </div>
       )}
 
-      {/* Loading */}
       {carregando && (
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
@@ -323,7 +374,6 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
         </div>
       )}
 
-      {/* Nenhum resultado */}
       {!carregando && filtrosAplicados && alunos.length === 0 && (
         <Card className="border-dashed border-2 border-border">
           <CardContent className="p-16 text-center">
@@ -357,7 +407,9 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                       <div>
                         <CardTitle className="text-base text-foreground">{boletim.nomeAluno}</CardTitle>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">{boletim.serie || 'Série não informada'}</span>
+                          <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                            {boletim.serie || 'Série não informada'}
+                          </span>
                           <span className="text-xs text-muted-foreground hidden sm:inline">{boletim.email}</span>
                           {boletim.bimestreNumero > 0 && (
                             <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-2 py-0.5 rounded">
@@ -367,7 +419,6 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                         </div>
                       </div>
                     </div>
-
                     <div className="flex items-center gap-3">
                       {filtroBimestre !== 'todos' && (
                         <div className="hidden sm:flex items-center gap-1.5 bg-muted px-3 py-1.5 rounded-full text-xs text-muted-foreground">
@@ -399,6 +450,9 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                                   <th className="py-3 px-4 text-left font-semibold text-foreground">Disciplina</th>
                                   <th className="py-3 px-4 text-center font-semibold text-foreground">AV1</th>
                                   <th className="py-3 px-4 text-center font-semibold text-foreground">AV2</th>
+                                  {isPresencial && (
+                                    <th className="py-3 px-4 text-center font-semibold text-foreground">AV3</th>
+                                  )}
                                   <th className="py-3 px-4 text-center font-semibold text-foreground">REC</th>
                                   <th className="py-3 px-4 text-center font-semibold text-foreground">Média</th>
                                   <th className="py-3 px-4 text-center font-semibold text-foreground">Situação</th>
@@ -419,14 +473,20 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                                       <td className="py-3 px-4 text-center text-muted-foreground">
                                         {nota.av2 !== null ? nota.av2.toFixed(1) : <span className="opacity-40">—</span>}
                                       </td>
+                                      {isPresencial && (
+                                        <td className="py-3 px-4 text-center text-muted-foreground">
+                                          {nota.av3 !== null ? nota.av3.toFixed(1) : <span className="opacity-40">—</span>}
+                                        </td>
+                                      )}
                                       <td className="py-3 px-4 text-center">
                                         {nota.rec !== null
                                           ? <span className="text-blue-600 dark:text-blue-400 font-semibold">{nota.rec.toFixed(1)}</span>
-                                          : <span className="opacity-40">—</span>
-                                        }
+                                          : <span className="opacity-40">—</span>}
                                       </td>
                                       <td className="py-3 px-4 text-center">
-                                        <span className={`font-bold text-base ${getMediaColor(media, situacao)}`}>{media.toFixed(1)}</span>
+                                        <span className={`font-bold text-base ${getMediaColor(media, situacao)}`}>
+                                          {media.toFixed(1)}
+                                        </span>
                                       </td>
                                       <td className="py-3 px-4 text-center">
                                         <span
@@ -451,11 +511,15 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                             </table>
                           </div>
 
-                          {/* Regra de cálculo */}
                           <div className="flex items-start gap-2 p-3 rounded-lg text-xs"
                             style={{ backgroundColor: '#dbeafe', color: '#1e3a8a' }}>
                             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                            <span><strong>Regra:</strong> Média = (AV1 + AV2) / 2. Se houver REC maior que a menor nota, ela a substitui. Aprovação ≥ 7,0.</span>
+                            <span>
+                              <strong>Regra:</strong>{' '}
+                              {isPresencial
+                                ? 'Média = (AV1 + AV2 + AV3) / 3. Se houver REC maior que a média, ela substitui. Aprovação ≥ 7,0.'
+                                : 'Média = (AV1 + AV2) / 2. Se houver REC maior que a menor nota, ela a substitui. Aprovação ≥ 7,0.'}
+                            </span>
                           </div>
                         </div>
                       ) : (
@@ -486,7 +550,6 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
 
           {notaEmEdicao && (
             <div className="space-y-5">
-              {/* Info aluno */}
               <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-lg border border-border">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                   {notaEmEdicao.nomeAluno.substring(0, 2).toUpperCase()}
@@ -497,17 +560,17 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                 </div>
               </div>
 
-              {/* Campos */}
-              <div className="grid grid-cols-3 gap-4">
-                {(['av1', 'av2', 'rec'] as const).map(campo => (
+              {/* Campos condicionais por segmento */}
+              <div className={`grid gap-4 ${isPresencial ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                {(['av1', 'av2', ...(isPresencial ? ['av3'] : []), 'rec'] as const).map(campo => (
                   <div key={campo} className="space-y-2">
                     <Label htmlFor={campo} className={`font-semibold text-sm ${campo === 'rec' ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'}`}>
-                      {campo.toUpperCase()}
+                      {campo === 'rec' ? 'REC' : campo.toUpperCase()}
                     </Label>
                     <Input
                       id={campo} type="number" min={0} max={10} step={0.1}
-                      value={notaEmEdicao[campo] !== null ? notaEmEdicao[campo]! : ''}
-                      onChange={e => handleChangeNota(campo, e.target.value)}
+                      value={notaEmEdicao[campo as keyof NotaEmEdicao] !== null ? String(notaEmEdicao[campo as keyof NotaEmEdicao]) : ''}
+                      onChange={e => handleChangeNota(campo as 'av1' | 'av2' | 'av3' | 'rec', e.target.value)}
                       placeholder="—"
                       className="text-center text-lg font-semibold"
                     />
@@ -516,41 +579,44 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
               </div>
 
               {/* Preview */}
-              <div className="p-4 bg-muted/40 rounded-lg border border-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Projeção</p>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Média Final</p>
-                    <span className={`text-3xl font-bold ${getMediaColor(
-                      calcularMedia({ av1: notaEmEdicao.av1, av2: notaEmEdicao.av2, rec: notaEmEdicao.rec }),
-                      calcularSituacao({ disciplinaId: notaEmEdicao.disciplinaId, disciplinaNome: notaEmEdicao.disciplinaNome, av1: notaEmEdicao.av1, av2: notaEmEdicao.av2, rec: notaEmEdicao.rec })
-                    )}`}>
-                      {calcularMedia({ av1: notaEmEdicao.av1, av2: notaEmEdicao.av2, rec: notaEmEdicao.rec }).toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground mb-2">Situação</p>
-                    {(() => {
-                      const sit = calcularSituacao({ disciplinaId: notaEmEdicao.disciplinaId, disciplinaNome: notaEmEdicao.disciplinaNome, av1: notaEmEdicao.av1, av2: notaEmEdicao.av2, rec: notaEmEdicao.rec });
-                      const estilo = getSituacaoStyle(sit);
-                      return (
-                        <span className="text-sm font-semibold px-3 py-1 rounded-full border"
-                          style={{ backgroundColor: estilo.bg, color: estilo.text, borderColor: estilo.border }}>
-                          {sit}
-                        </span>
-                      );
-                    })()}
+              {notaEmEdicaoPreview && (
+                <div className="p-4 bg-muted/40 rounded-lg border border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Projeção</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Média Final</p>
+                      <span className={`text-3xl font-bold ${getMediaColor(
+                        calcularMedia(notaEmEdicaoPreview),
+                        calcularSituacao({ disciplinaId: notaEmEdicao.disciplinaId, disciplinaNome: notaEmEdicao.disciplinaNome, ...notaEmEdicaoPreview })
+                      )}`}>
+                        {calcularMedia(notaEmEdicaoPreview).toFixed(1)}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground mb-2">Situação</p>
+                      {(() => {
+                        const sit = calcularSituacao({ disciplinaId: notaEmEdicao.disciplinaId, disciplinaNome: notaEmEdicao.disciplinaNome, ...notaEmEdicaoPreview });
+                        const estilo = getSituacaoStyle(sit);
+                        return (
+                          <span className="text-sm font-semibold px-3 py-1 rounded-full border"
+                            style={{ backgroundColor: estilo.bg, color: estilo.text, borderColor: estilo.border }}>
+                            {sit}
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Botões */}
               <div className="flex gap-3 pt-1 border-t border-border">
                 <Button variant="outline" className="flex-1" onClick={() => setNotaEmEdicao(null)} disabled={salvandoNota}>
                   Cancelar
                 </Button>
                 <Button onClick={salvarNota} disabled={salvandoNota} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2">
-                  {salvandoNota ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</> : <><Save className="w-4 h-4" />Salvar Notas</>}
+                  {salvandoNota
+                    ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
+                    : <><Save className="w-4 h-4" />Salvar Notas</>}
                 </Button>
               </div>
             </div>

@@ -1,4 +1,10 @@
-export type TipoUsuario = 'aluno' | 'professor' | 'coordenador' | 'administrador' |'professor_conteudista';
+export type TipoUsuario = 'aluno' | 'professor' | 'coordenador' | 'administrador' | 'professor_conteudista';
+
+export type Segmento = 'ead' | 'presencial';
+
+export type Turno = 'matutino' | 'vespertino' | 'noturno';
+
+export type Nivel = 'fundamental1' | 'fundamental2' | 'medio';
 
 export type SerieEscolar = 
   | '5º ano - Ensino Fundamental'
@@ -13,10 +19,14 @@ export type SerieEscolar =
 export interface Usuario {
   id: string;
   nome: string;
-  nomeUsuario?: string; // Nome de usuário para login
+  nomeUsuario?: string;
   email: string;
   tipo: TipoUsuario;
   avatar?: string;
+  // Segmento
+  segmento?: Segmento;
+  turno?: Turno;
+  nivel?: Nivel;
   // Específico para alunos
   serie?: SerieEscolar;
   turma?: string;
@@ -31,7 +41,7 @@ export interface AuthState {
 }
 
 export interface LoginCredentials {
-  email?: string; // Email para login
-  username?: string; // Nome de usuário para login (será convertido para nomeUsuario)
-  password: string; // Senha (será convertido para senha)
+  email?: string;
+  username?: string;
+  password: string;
 }

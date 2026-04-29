@@ -1,6 +1,8 @@
 // src/components/Boletim.tsx
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase/supabaseClient';
+import { useSegmento } from '../hooks/useSegmento';
+import { calcularNota } from '../utils/calculoNotas';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -43,6 +45,7 @@ interface BoletimProps {
 interface NotaBimestre {
   av1: number | null;
   av2: number | null;
+  av3: number | null; // presencial — null para EAD
   rec: number | null;
   med: number | null;
 }
@@ -61,6 +64,8 @@ interface NotaDisciplina {
 }
 
 export default function Boletim({ usuario, turma }: BoletimProps) {
+  const { segmento, isPresencial } = useSegmento();
+
   const [notasBoletim, setNotasBoletim] = useState<NotaDisciplina[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -82,7 +87,7 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
         .select(`
           disciplina_id,
           bimestre,
-          av1, av2, recuperacao, media, media_final, status_final,
+          av1, av2, av3, recuperacao, media, media_final, status_final,
           disciplinas(nome)
         `)
         .eq('user_id', usuario.id)
@@ -96,10 +101,10 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
         notasPorDisciplina[disc.id] = {
           disciplina_id: disc.id,
           disciplina_nome: disc.nome,
-          bimestre1: { av1: null, av2: null, rec: null, med: null },
-          bimestre2: { av1: null, av2: null, rec: null, med: null },
-          bimestre3: { av1: null, av2: null, rec: null, med: null },
-          bimestre4: { av1: null, av2: null, rec: null, med: null },
+          bimestre1: { av1: null, av2: null, av3: null, rec: null, med: null },
+          bimestre2: { av1: null, av2: null, av3: null, rec: null, med: null },
+          bimestre3: { av1: null, av2: null, av3: null, rec: null, med: null },
+          bimestre4: { av1: null, av2: null, av3: null, rec: null, med: null },
           ptsTotal: null,
           mediaFinal: null,
           recupFinal: null,
@@ -115,16 +120,26 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
           notasPorDisciplina[disciplinaId] = {
             disciplina_id: disciplinaId,
             disciplina_nome: nota.disciplinas?.nome || 'Disciplina Desconhecida',
-            bimestre1: { av1: null, av2: null, rec: null, med: null },
-            bimestre2: { av1: null, av2: null, rec: null, med: null },
-            bimestre3: { av1: null, av2: null, rec: null, med: null },
-            bimestre4: { av1: null, av2: null, rec: null, med: null },
+            bimestre1: { av1: null, av2: null, av3: null, rec: null, med: null },
+            bimestre2: { av1: null, av2: null, av3: null, rec: null, med: null },
+            bimestre3: { av1: null, av2: null, av3: null, rec: null, med: null },
+            bimestre4: { av1: null, av2: null, av3: null, rec: null, med: null },
             ptsTotal: null, mediaFinal: null, recupFinal: null, situacao: 'N/A',
           };
         }
 
+        // Recalcula a média usando o utilitário centralizado
+        const resultado = calcularNota(
+          { av1: nota.av1, av2: nota.av2, av3: nota.av3, recuperacao: nota.recuperacao },
+          segmento
+        );
+
         const notaBimestre: NotaBimestre = {
-          av1: nota.av1, av2: nota.av2, rec: nota.recuperacao, med: nota.media,
+          av1: nota.av1,
+          av2: nota.av2,
+          av3: nota.av3 ?? null,
+          rec: nota.recuperacao,
+          med: resultado.mediaFinal,
         };
 
         switch (bimestreNum) {
@@ -170,7 +185,7 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
     } finally {
       setLoading(false);
     }
-  }, [usuario?.id, turma?.serieNome, turma?.disciplinas]);
+  }, [usuario?.id, turma?.serieNome, turma?.disciplinas, segmento]);
 
   useEffect(() => { buscarBoletim(); }, [buscarBoletim]);
 
@@ -202,52 +217,84 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
 
   const fmtNota = (v: number | null) => v !== null ? v.toFixed(1) : '-';
 
-  const BimestreRow = ({ label, bimestre, color }: { label: string; bimestre: NotaBimestre; color: string }) => (
-    <div className={`grid grid-cols-5 gap-1 text-xs py-2 px-3 rounded-lg ${color}`}>
-      <span className="font-semibold text-foreground col-span-1">{label}</span>
-      <span className={`text-center ${getNotaColor(bimestre.av1)}`}>{fmtNota(bimestre.av1)}</span>
-      <span className={`text-center ${getNotaColor(bimestre.av2)}`}>{fmtNota(bimestre.av2)}</span>
-      <span className="text-center text-muted-foreground">{bimestre.rec && bimestre.rec > 0 ? fmtNota(bimestre.rec) : '-'}</span>
-      <span className={`text-center font-bold ${getNotaColor(bimestre.med)}`}>{fmtNota(bimestre.med)}</span>
-    </div>
-  );
+  // Cabeçalho das colunas do bimestre — condicional por segmento
+  const colunasBimestre = isPresencial
+    ? ['AV1', 'AV2', 'AV3', 'REC', 'MÉD']
+    : ['AV1', 'AV2', 'REC', 'MÉD'];
+
+  // Card mobile — linha de bimestre
+  const BimestreRow = ({
+    label,
+    bimestre,
+    color,
+  }: {
+    label: string;
+    bimestre: NotaBimestre;
+    color: string;
+  }) => {
+    const cols = isPresencial ? 6 : 5; // label + colunas de nota
+    return (
+      <div className={`grid gap-1 text-xs py-2 px-3 rounded-lg ${color}`}
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        <span className="font-semibold text-foreground">{label}</span>
+        <span className={`text-center ${getNotaColor(bimestre.av1)}`}>{fmtNota(bimestre.av1)}</span>
+        <span className={`text-center ${getNotaColor(bimestre.av2)}`}>{fmtNota(bimestre.av2)}</span>
+        {isPresencial && (
+          <span className={`text-center ${getNotaColor(bimestre.av3)}`}>{fmtNota(bimestre.av3)}</span>
+        )}
+        <span className="text-center text-muted-foreground">
+          {bimestre.rec && bimestre.rec > 0 ? fmtNota(bimestre.rec) : '-'}
+        </span>
+        <span className={`text-center font-bold ${getNotaColor(bimestre.med)}`}>{fmtNota(bimestre.med)}</span>
+      </div>
+    );
+  };
 
   const handleImprimir = () => {
     const anoLetivo = new Date().getFullYear();
     const dataEmissao = new Date().toLocaleDateString('pt-BR');
 
-    // Monta as linhas da tabela
-    const linhasTabela = notasBoletim.map(nota => {
-      const cel = (v: number | null, bold = false) =>
-        v !== null
-          ? `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;${bold ? 'font-weight:700;' : ''}">${v.toFixed(1)}</td>`
-          : `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>`;
+    // Colunas do header por bimestre — condicional
+    const colsBim = isPresencial
+      ? '<th>AV1</th><th>AV2</th><th>AV3</th><th>REC</th><th>MÉD</th>'
+      : '<th>AV1</th><th>AV2</th><th>REC</th><th>MÉD</th>';
+    const colSpanBim = isPresencial ? 5 : 4;
 
+    const celNota = (v: number | null, bold = false) =>
+      v !== null
+        ? `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;${bold ? 'font-weight:700;' : ''}">${v.toFixed(1)}</td>`
+        : `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>`;
+
+    const celRec = (v: number | null) =>
+      v !== null && v > 0
+        ? `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">${v.toFixed(1)}</td>`
+        : `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>`;
+
+    const linhasBimestre = (nota: NotaDisciplina, b: NotaBimestre) => isPresencial
+      ? `${celNota(b.av1)}${celNota(b.av2)}${celNota(b.av3)}${celRec(b.rec)}${celNota(b.med, true)}`
+      : `${celNota(b.av1)}${celNota(b.av2)}${celRec(b.rec)}${celNota(b.med, true)}`;
+
+    const linhasTabela = notasBoletim.map(nota => {
       const corSituacao = nota.situacao === 'Aprovado'
         ? '#15803d' : nota.situacao === 'Reprovado'
         ? '#dc2626' : '#ca8a04';
-
       return `
         <tr>
           <td style="border:1px solid #ccc;padding:4px 8px;font-weight:600">${nota.disciplina_nome}</td>
-          ${cel(nota.bimestre1.av1)}${cel(nota.bimestre1.av2)}
-          ${nota.bimestre1.rec ? cel(nota.bimestre1.rec) : '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>'}
-          ${cel(nota.bimestre1.med, true)}
-          ${cel(nota.bimestre2.av1)}${cel(nota.bimestre2.av2)}
-          ${nota.bimestre2.rec ? cel(nota.bimestre2.rec) : '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>'}
-          ${cel(nota.bimestre2.med, true)}
-          ${cel(nota.bimestre3.av1)}${cel(nota.bimestre3.av2)}
-          ${nota.bimestre3.rec ? cel(nota.bimestre3.rec) : '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>'}
-          ${cel(nota.bimestre3.med, true)}
-          ${cel(nota.bimestre4.av1)}${cel(nota.bimestre4.av2)}
-          ${nota.bimestre4.rec ? cel(nota.bimestre4.rec) : '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>'}
-          ${cel(nota.bimestre4.med, true)}
+          ${linhasBimestre(nota, nota.bimestre1)}
+          ${linhasBimestre(nota, nota.bimestre2)}
+          ${linhasBimestre(nota, nota.bimestre3)}
+          ${linhasBimestre(nota, nota.bimestre4)}
           <td style="border:1px solid #ccc;padding:4px 6px;text-align:center;font-weight:700;color:#1d4ed8">${nota.ptsTotal !== null ? nota.ptsTotal.toFixed(1) : '-'}</td>
           <td style="border:1px solid #ccc;padding:4px 6px;text-align:center;font-weight:700;font-size:14px;color:${nota.mediaFinal !== null && nota.mediaFinal >= 7 ? '#15803d' : nota.mediaFinal !== null && nota.mediaFinal >= 5 ? '#ca8a04' : '#dc2626'}">${nota.mediaFinal !== null ? nota.mediaFinal.toFixed(1) : '-'}</td>
           <td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>
           <td style="border:1px solid #ccc;padding:4px 6px;text-align:center;font-weight:600;color:${corSituacao}">${nota.situacao}</td>
         </tr>`;
     }).join('');
+
+    const legendaMed = isPresencial
+      ? '<li>MÉD: Média do Bimestre (AV1 + AV2 + AV3) ÷ 3</li>'
+      : '<li>MÉD: Média do Bimestre (AV1 + AV2) ÷ 2</li>';
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -258,21 +305,13 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, sans-serif; font-size: 11px; color: #000; background: #fff; padding: 20px; }
     @page { size: landscape; margin: 12mm; }
-
-    /* Cabeçalho */
     .header { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 14px; }
     .header-logo { width: 56px; height: 56px; border-radius: 50%; background: #1d4ed8; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 18px; flex-shrink: 0; }
     .header-text h1 { font-size: 18px; font-weight: 800; color: #1d4ed8; }
     .header-text p { font-size: 11px; color: #555; margin-top: 2px; }
-
-    /* Título do boletim */
     .titulo { text-align: center; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
-
-    /* Info do aluno */
     .info-aluno { display: flex; justify-content: space-between; background: #f0f4ff; border: 1px solid #c7d7fd; border-radius: 6px; padding: 8px 14px; margin-bottom: 14px; font-size: 11px; }
     .info-aluno span { font-weight: 700; }
-
-    /* Tabela */
     table { width: 100%; border-collapse: collapse; font-size: 10px; }
     th { background: #e8edf8; border: 1px solid #ccc; padding: 4px 6px; text-align: center; font-weight: 700; }
     th.disciplina-header { text-align: left; padding-left: 8px; }
@@ -281,71 +320,55 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
     .bim-3 { background: #fef9c3; }
     .bim-4 { background: #ede9fe; }
     tr:nth-child(even) td { background: #f9fafb; }
-
-    /* Legenda */
     .legenda { margin-top: 12px; display: flex; gap: 40px; font-size: 10px; color: #444; border-top: 1px solid #ddd; padding-top: 10px; }
     .legenda ul { list-style: none; }
     .legenda li { margin-bottom: 3px; }
-
-    /* Assinatura */
     .assinaturas { display: flex; justify-content: space-around; margin-top: 28px; }
     .assinatura { text-align: center; width: 200px; }
     .assinatura .linha { border-top: 1px solid #000; padding-top: 4px; font-size: 10px; font-weight: 600; }
   </style>
 </head>
 <body>
-
-  <!-- Cabeçalho -->
   <div class="header">
     <div class="header-logo">CE</div>
     <div class="header-text">
       <h1>Colégio Conexão EAD</h1>
-      <p>Sistema de Gestão Escolar — Boletim Oficial</p>
+      <p>Sistema de Gestão Escolar — Boletim Oficial${isPresencial ? ' · Segmento Presencial' : ''}</p>
     </div>
   </div>
-
   <div class="titulo">Boletim Escolar — ${anoLetivo}</div>
-
-  <!-- Info do aluno -->
   <div class="info-aluno">
     <div>Nome: <span>${usuario?.nome}</span></div>
     <div>Série: <span>${turma?.serieNome}</span></div>
     <div>Ano Letivo: <span>${anoLetivo}</span></div>
     <div>Data de Emissão: <span>${dataEmissao}</span></div>
   </div>
-
-  <!-- Tabela de notas -->
   <table>
     <thead>
       <tr>
         <th rowspan="2" class="disciplina-header" style="width:13%">Disciplina</th>
-        <th colspan="4" class="bim-1">1º Bimestre</th>
-        <th colspan="4" class="bim-2">2º Bimestre</th>
-        <th colspan="4" class="bim-3">3º Bimestre</th>
-        <th colspan="4" class="bim-4">4º Bimestre</th>
+        <th colspan="${colSpanBim}" class="bim-1">1º Bimestre</th>
+        <th colspan="${colSpanBim}" class="bim-2">2º Bimestre</th>
+        <th colspan="${colSpanBim}" class="bim-3">3º Bimestre</th>
+        <th colspan="${colSpanBim}" class="bim-4">4º Bimestre</th>
         <th rowspan="2">Pts Total</th>
         <th rowspan="2">Média Final</th>
         <th rowspan="2">Recup Final</th>
         <th rowspan="2">Situação</th>
       </tr>
       <tr>
-        <th>AV1</th><th>AV2</th><th>REC</th><th>MÉD</th>
-        <th>AV1</th><th>AV2</th><th>REC</th><th>MÉD</th>
-        <th>AV1</th><th>AV2</th><th>REC</th><th>MÉD</th>
-        <th>AV1</th><th>AV2</th><th>REC</th><th>MÉD</th>
+        ${colsBim}${colsBim}${colsBim}${colsBim}
       </tr>
     </thead>
     <tbody>${linhasTabela}</tbody>
   </table>
-
-  <!-- Legenda -->
   <div class="legenda">
     <div>
       <strong>Legenda:</strong>
       <ul>
-        <li>AV1/AV2: Avaliações 1 e 2</li>
+        <li>AV1/AV2${isPresencial ? '/AV3' : ''}: Avaliações</li>
         <li>REC: Recuperação do Bimestre</li>
-        <li>MÉD: Média do Bimestre (AV1 + AV2) ÷ 2</li>
+        ${legendaMed}
         <li>Pts Total: Soma das médias dos 4 bimestres</li>
         <li>Média Final: Pts Total ÷ 4</li>
       </ul>
@@ -359,18 +382,15 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
       </ul>
     </div>
   </div>
-
-  <!-- Assinaturas -->
   <div class="assinaturas">
     <div class="assinatura"><div class="linha">Coordenação Pedagógica</div></div>
     <div class="assinatura"><div class="linha">Direção Escolar</div></div>
   </div>
-
 </body>
 </html>`;
 
     const janela = window.open('', '_blank', 'width=1200,height=700');
-    if (!janela) { toast.error('Popup bloqueado. Permita popups para este site.'); return; }
+    if (!janela) return;
     janela.document.write(html);
     janela.document.close();
     janela.focus();
@@ -401,10 +421,14 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
     );
   }
 
+  // Colunas do header da tabela desktop — geradas dinamicamente
+  const colsHeader = colunasBimestre.map((col, i) => (
+    <th key={i} className="border border-border print:!border-gray-400 px-2 py-1 text-center">{col}</th>
+  ));
+
   return (
     <div className="space-y-6 print:p-0 print:m-0 print:space-y-0">
 
-      {/* Botão imprimir — alinhado à direita, oculto na impressão */}
       <div className="flex justify-end print:hidden">
         <Button onClick={handleImprimir} className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Printer className="w-4 h-4 mr-2" />
@@ -412,12 +436,17 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
         </Button>
       </div>
 
-      {/* Informações do Aluno — tela */}
+      {/* Informações do Aluno */}
       <Card className="print:hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <Info className="w-5 h-5 text-primary" />
             Informações do Aluno
+            {isPresencial && (
+              <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full ml-1">
+                Presencial
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -438,7 +467,7 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
         </CardContent>
       </Card>
 
-      {/* ══ MOBILE: Cards por disciplina (visível < md) ══ */}
+      {/* ══ MOBILE: Cards accordion ══ */}
       <div className="md:hidden space-y-3">
         <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-primary" /> Notas por Disciplina
@@ -446,9 +475,16 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
 
         {notasBoletim.map(nota => {
           const isOpen = cardAberto === nota.disciplina_id;
+          const colsMobileLabel = isPresencial
+            ? ['', 'AV1', 'AV2', 'AV3', 'REC', 'MÉD']
+            : ['', 'AV1', 'AV2', 'REC', 'MÉD'];
+
           return (
             <Card key={nota.disciplina_id} className={`border-l-4 ${getSituacaoBorderColor(nota.situacao)} overflow-hidden`}>
-              <button onClick={() => setCardAberto(isOpen ? null : nota.disciplina_id)} className="w-full flex items-center justify-between p-4 text-left">
+              <button
+                onClick={() => setCardAberto(isOpen ? null : nota.disciplina_id)}
+                className="w-full flex items-center justify-between p-4 text-left"
+              >
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-foreground text-sm truncate">{nota.disciplina_nome}</p>
                   <div className="flex items-center gap-3 mt-1">
@@ -465,12 +501,14 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
 
               {isOpen && (
                 <div className="px-4 pb-4 space-y-2">
-                  <div className="grid grid-cols-5 gap-1 text-[10px] text-muted-foreground px-3">
-                    <span></span>
-                    <span className="text-center">AV1</span>
-                    <span className="text-center">AV2</span>
-                    <span className="text-center">REC</span>
-                    <span className="text-center font-semibold">MÉD</span>
+                  {/* Cabeçalho mobile dinâmico */}
+                  <div
+                    className="grid gap-1 text-[10px] text-muted-foreground px-3"
+                    style={{ gridTemplateColumns: `repeat(${colsMobileLabel.length}, minmax(0, 1fr))` }}
+                  >
+                    {colsMobileLabel.map((c, i) => (
+                      <span key={i} className={i === 0 ? '' : 'text-center font-semibold'}>{c}</span>
+                    ))}
                   </div>
                   <BimestreRow label="1º Bim" bimestre={nota.bimestre1} color="bg-blue-500/5" />
                   <BimestreRow label="2º Bim" bimestre={nota.bimestre2} color="bg-green-500/5" />
@@ -487,8 +525,9 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
         })}
       </div>
 
-      {/* Tabela de Notas */}
-      <Card className="hidden md:block print:shadow-none print:border-none print:bg-transparent">        <CardHeader className="pb-3 print:hidden">
+      {/* ══ DESKTOP: Tabela ══ */}
+      <Card className="hidden md:block print:shadow-none print:border-none print:bg-transparent">
+        <CardHeader className="pb-3 print:hidden">
           <CardTitle className="text-lg flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-primary" />
             Notas por Disciplina
@@ -499,57 +538,65 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-muted/50 print:!bg-gray-200">
-                  <th rowSpan={2} className="border border-border print:!border-gray-400 px-3 py-2 text-left font-semibold text-foreground print:!text-black w-[20%]">Disciplina</th>
-                  <th colSpan={4} className="border border-border print:!border-gray-400 px-2 py-1 text-center font-semibold text-foreground print:!text-black bg-blue-500/10 print:!bg-blue-100">1º Bimestre</th>
-                  <th colSpan={4} className="border border-border print:!border-gray-400 px-2 py-1 text-center font-semibold text-foreground print:!text-black bg-green-500/10 print:!bg-green-100">2º Bimestre</th>
-                  <th colSpan={4} className="border border-border print:!border-gray-400 px-2 py-1 text-center font-semibold text-foreground print:!text-black bg-yellow-500/10 print:!bg-yellow-100">3º Bimestre</th>
-                  <th colSpan={4} className="border border-border print:!border-gray-400 px-2 py-1 text-center font-semibold text-foreground print:!text-black bg-purple-500/10 print:!bg-purple-100">4º Bimestre</th>
+                  <th rowSpan={2} className="border border-border print:!border-gray-400 px-3 py-2 text-left font-semibold text-foreground print:!text-black w-[18%]">
+                    Disciplina
+                  </th>
+                  <th colSpan={colunasBimestre.length} className="border border-border print:!border-gray-400 px-2 py-1 text-center font-semibold text-foreground print:!text-black bg-blue-500/10 print:!bg-blue-100">1º Bimestre</th>
+                  <th colSpan={colunasBimestre.length} className="border border-border print:!border-gray-400 px-2 py-1 text-center font-semibold text-foreground print:!text-black bg-green-500/10 print:!bg-green-100">2º Bimestre</th>
+                  <th colSpan={colunasBimestre.length} className="border border-border print:!border-gray-400 px-2 py-1 text-center font-semibold text-foreground print:!text-black bg-yellow-500/10 print:!bg-yellow-100">3º Bimestre</th>
+                  <th colSpan={colunasBimestre.length} className="border border-border print:!border-gray-400 px-2 py-1 text-center font-semibold text-foreground print:!text-black bg-purple-500/10 print:!bg-purple-100">4º Bimestre</th>
                   <th rowSpan={2} className="border border-border print:!border-gray-400 px-2 py-2 text-center font-semibold text-foreground print:!text-black">Pts Total</th>
                   <th rowSpan={2} className="border border-border print:!border-gray-400 px-2 py-2 text-center font-semibold text-foreground print:!text-black">Média Final</th>
                   <th rowSpan={2} className="border border-border print:!border-gray-400 px-2 py-2 text-center font-semibold text-foreground print:!text-black">Recup Final</th>
                   <th rowSpan={2} className="border border-border print:!border-gray-400 px-2 py-2 text-center font-semibold text-foreground print:!text-black">Situação</th>
                 </tr>
                 <tr className="bg-muted/30 print:!bg-gray-100 text-xs text-muted-foreground print:!text-gray-700">
-                  {['AV1','AV2','REC','MÉD','AV1','AV2','REC','MÉD','AV1','AV2','REC','MÉD','AV1','AV2','REC','MÉD'].map((col, i) => (
-                    <th key={i} className="border border-border print:!border-gray-400 px-2 py-1 text-center">{col}</th>
+                  {/* 4 bimestres × colunasBimestre */}
+                  {[0, 1, 2, 3].flatMap(b => colsHeader.map((col, i) =>
+                    <th key={`b${b}-${i}`} className="border border-border print:!border-gray-400 px-2 py-1 text-center">{colunasBimestre[i]}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {notasBoletim.map((nota, idx) => (
-                  <tr key={nota.disciplina_id || idx} className="hover:bg-muted/30 transition-colors print:hover:!bg-transparent group">
-                    <td className="border border-border print:!border-gray-400 px-3 py-2 font-semibold sticky left-0 bg-card print:!bg-transparent group-hover:bg-muted/30 text-foreground print:!text-black z-10">
-                      {nota.disciplina_nome}
-                    </td>
-                    {/* 1º Bimestre */}
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(nota.bimestre1.av1)}`}>{nota.bimestre1.av1 !== null ? nota.bimestre1.av1.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(nota.bimestre1.av2)}`}>{nota.bimestre1.av2 !== null ? nota.bimestre1.av2.toFixed(1) : '-'}</td>
-                    <td className="border border-border print:!border-gray-400 px-2 py-2 text-center text-muted-foreground print:!text-gray-500">{nota.bimestre1.rec !== null && nota.bimestre1.rec > 0 ? nota.bimestre1.rec.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center font-bold ${getNotaColor(nota.bimestre1.med)}`}>{nota.bimestre1.med !== null ? nota.bimestre1.med.toFixed(1) : '-'}</td>
-                    {/* 2º Bimestre */}
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(nota.bimestre2.av1)}`}>{nota.bimestre2.av1 !== null ? nota.bimestre2.av1.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(nota.bimestre2.av2)}`}>{nota.bimestre2.av2 !== null ? nota.bimestre2.av2.toFixed(1) : '-'}</td>
-                    <td className="border border-border print:!border-gray-400 px-2 py-2 text-center text-muted-foreground print:!text-gray-500">{nota.bimestre2.rec !== null && nota.bimestre2.rec > 0 ? nota.bimestre2.rec.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center font-bold ${getNotaColor(nota.bimestre2.med)}`}>{nota.bimestre2.med !== null ? nota.bimestre2.med.toFixed(1) : '-'}</td>
-                    {/* 3º Bimestre */}
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(nota.bimestre3.av1)}`}>{nota.bimestre3.av1 !== null ? nota.bimestre3.av1.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(nota.bimestre3.av2)}`}>{nota.bimestre3.av2 !== null ? nota.bimestre3.av2.toFixed(1) : '-'}</td>
-                    <td className="border border-border print:!border-gray-400 px-2 py-2 text-center text-muted-foreground print:!text-gray-500">{nota.bimestre3.rec !== null && nota.bimestre3.rec > 0 ? nota.bimestre3.rec.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center font-bold ${getNotaColor(nota.bimestre3.med)}`}>{nota.bimestre3.med !== null ? nota.bimestre3.med.toFixed(1) : '-'}</td>
-                    {/* 4º Bimestre */}
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(nota.bimestre4.av1)}`}>{nota.bimestre4.av1 !== null ? nota.bimestre4.av1.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(nota.bimestre4.av2)}`}>{nota.bimestre4.av2 !== null ? nota.bimestre4.av2.toFixed(1) : '-'}</td>
-                    <td className="border border-border print:!border-gray-400 px-2 py-2 text-center text-muted-foreground print:!text-gray-500">{nota.bimestre4.rec !== null && nota.bimestre4.rec > 0 ? nota.bimestre4.rec.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center font-bold ${getNotaColor(nota.bimestre4.med)}`}>{nota.bimestre4.med !== null ? nota.bimestre4.med.toFixed(1) : '-'}</td>
-                    {/* Totais */}
-                    <td className="border border-border print:!border-gray-400 px-2 py-2 text-center font-bold text-primary print:!text-blue-800">{nota.ptsTotal !== null ? nota.ptsTotal.toFixed(1) : '-'}</td>
-                    <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center font-bold text-lg ${getNotaColor(nota.mediaFinal)}`}>{nota.mediaFinal !== null ? nota.mediaFinal.toFixed(1) : '-'}</td>
-                    <td className="border border-border print:!border-gray-400 px-2 py-2 text-center text-muted-foreground print:!text-gray-500">{nota.recupFinal !== null && nota.recupFinal > 0 ? nota.recupFinal.toFixed(1) : '-'}</td>
-                    <td className="border border-border print:!border-gray-400 px-2 py-2 text-center">
-                      <Badge variant="outline" className={getSituacaoColor(nota.situacao)}>{nota.situacao}</Badge>
-                    </td>
-                  </tr>
-                ))}
+                {notasBoletim.map((nota, idx) => {
+                  const renderCelulaBim = (b: NotaBimestre) => (
+                    <>
+                      <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(b.av1)}`}>{fmtNota(b.av1)}</td>
+                      <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(b.av2)}`}>{fmtNota(b.av2)}</td>
+                      {isPresencial && (
+                        <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center ${getNotaColor(b.av3)}`}>{fmtNota(b.av3)}</td>
+                      )}
+                      <td className="border border-border print:!border-gray-400 px-2 py-2 text-center text-muted-foreground print:!text-gray-500">
+                        {b.rec !== null && b.rec > 0 ? b.rec.toFixed(1) : '-'}
+                      </td>
+                      <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center font-bold ${getNotaColor(b.med)}`}>{fmtNota(b.med)}</td>
+                    </>
+                  );
+
+                  return (
+                    <tr key={nota.disciplina_id || idx} className="hover:bg-muted/30 transition-colors print:hover:!bg-transparent group">
+                      <td className="border border-border print:!border-gray-400 px-3 py-2 font-semibold sticky left-0 bg-card print:!bg-transparent group-hover:bg-muted/30 text-foreground print:!text-black z-10">
+                        {nota.disciplina_nome}
+                      </td>
+                      {renderCelulaBim(nota.bimestre1)}
+                      {renderCelulaBim(nota.bimestre2)}
+                      {renderCelulaBim(nota.bimestre3)}
+                      {renderCelulaBim(nota.bimestre4)}
+                      <td className="border border-border print:!border-gray-400 px-2 py-2 text-center font-bold text-primary print:!text-blue-800">
+                        {nota.ptsTotal !== null ? nota.ptsTotal.toFixed(1) : '-'}
+                      </td>
+                      <td className={`border border-border print:!border-gray-400 px-2 py-2 text-center font-bold text-lg ${getNotaColor(nota.mediaFinal)}`}>
+                        {nota.mediaFinal !== null ? nota.mediaFinal.toFixed(1) : '-'}
+                      </td>
+                      <td className="border border-border print:!border-gray-400 px-2 py-2 text-center text-muted-foreground print:!text-gray-500">
+                        {nota.recupFinal !== null && nota.recupFinal > 0 ? nota.recupFinal.toFixed(1) : '-'}
+                      </td>
+                      <td className="border border-border print:!border-gray-400 px-2 py-2 text-center">
+                        <Badge variant="outline" className={getSituacaoColor(nota.situacao)}>{nota.situacao}</Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -563,9 +610,12 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
             <div>
               <h4 className="font-semibold text-foreground print:!text-black mb-3">Legenda:</h4>
               <ul className="space-y-2 text-muted-foreground print:!text-gray-800">
-                <li><strong className="text-foreground print:!text-black">AV1/AV2:</strong> Avaliações 1 e 2</li>
+                <li><strong className="text-foreground print:!text-black">AV1/AV2{isPresencial ? '/AV3' : ''}:</strong> Avaliações</li>
                 <li><strong className="text-foreground print:!text-black">REC:</strong> Recuperação do Bimestre</li>
-                <li><strong className="text-foreground print:!text-black">MÉD:</strong> Média do Bimestre (AV1 + AV2) ÷ 2</li>
+                <li>
+                  <strong className="text-foreground print:!text-black">MÉD:</strong>{' '}
+                  {isPresencial ? 'Média do Bimestre (AV1 + AV2 + AV3) ÷ 3' : 'Média do Bimestre (AV1 + AV2) ÷ 2'}
+                </li>
                 <li><strong className="text-foreground print:!text-black">Pts Total:</strong> Soma das médias dos 4 bimestres</li>
                 <li><strong className="text-foreground print:!text-black">Média Final:</strong> Pts Total ÷ 4</li>
               </ul>
@@ -586,8 +636,6 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
           </div>
         </CardContent>
       </Card>
-
-      {/* Assinaturas e legenda — removidos da tela, vão no PDF gerado */}
 
     </div>
   );

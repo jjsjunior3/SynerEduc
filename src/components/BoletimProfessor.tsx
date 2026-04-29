@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { useSegmento } from '../hooks/useSegmento';
+import { calcularNota } from '../utils/calculoNotas';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -12,7 +14,6 @@ import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { Textarea } from './ui/textarea';
 
-// Importações para o PDF
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -24,6 +25,7 @@ interface BoletimProfessorProps {
 interface NotasBimestre {
   av1: number;
   av2: number;
+  av3: number; // presencial — sempre 0 para EAD
   rec: number;
   media: number;
 }
@@ -42,11 +44,13 @@ interface NotaAlunoAvancada {
 interface EstadoEdicao {
   alunoId: string;
   bimestre: string;
-  tipoNota: 'av1' | 'av2' | 'rec';
+  tipoNota: 'av1' | 'av2' | 'av3' | 'rec'; // av3 adicionado
 }
 
 export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
   const { usuario } = useAuth();
+  const { segmento, isPresencial } = useSegmento();
+
   const [bimestreSelecionado, setBimestreSelecionado] = useState('1');
   const [alunos, setAlunos] = useState<NotaAlunoAvancada[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,25 +64,13 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
 
   const serieNome = serie.nome;
 
-  // ✅ CÁLCULO DE RECUPERAÇÃO (Substitui a menor nota)
-  const calcularMediaBimestre = (av1: number, av2: number, rec: number): number => {
-    let nota1 = av1;
-    let nota2 = av2;
-
-    if (rec > 0) {
-      if (nota1 <= nota2 && rec > nota1) {
-        nota1 = rec;
-      } else if (nota2 < nota1 && rec > nota2) {
-        nota2 = rec;
-      } else if (nota1 === nota2 && rec > nota1) {
-        nota1 = rec;
-      }
-    }
-
-    if (nota1 > 0 || nota2 > 0) {
-      return (nota1 + nota2) / 2;
-    }
-    return 0;
+  // Delega o cálculo ao utilitário centralizado — respeita as regras de cada segmento
+  const calcularMediaBimestre = (av1: number, av2: number, av3: number, rec: number): number => {
+    const resultado = calcularNota(
+      { av1: av1 || null, av2: av2 || null, av3: av3 || null, recuperacao: rec || null },
+      segmento
+    );
+    return resultado.mediaFinal ?? 0;
   };
 
   const calcularSituacao = (mediaFinal: number): 'aprovado' | 'recuperacao' | 'reprovado' | 'cursando' => {
@@ -92,12 +84,19 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
 
     setLoading(true);
     try {
-      const { data: alunosData, error: alunosError } = await supabase
+      // Busca alunos da turma filtrados por segmento (admin vê todos)
+      let queryAlunos = supabase
         .from('users')
         .select('id, nome')
         .eq('tipo', 'aluno')
         .eq('serie', serieNome)
         .order('nome', { ascending: true });
+
+      if (usuario?.tipo !== 'administrador') {
+        queryAlunos = queryAlunos.eq('segmento', segmento);
+      }
+
+      const { data: alunosData, error: alunosError } = await queryAlunos;
 
       if (alunosError) throw alunosError;
 
@@ -120,11 +119,16 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
 
         const getNotasBimestre = (bim: number): NotasBimestre => {
           const registro = notasAluno.find(n => n.bimestre === bim);
+          const av1 = registro?.av1 || 0;
+          const av2 = registro?.av2 || 0;
+          const av3 = registro?.av3 || 0; // campo presencial
+          const rec = registro?.recuperacao || 0;
           return {
-            av1: registro?.av1 || 0,
-            av2: registro?.av2 || 0,
-            rec: registro?.recuperacao || 0,
-            media: registro?.media || 0
+            av1,
+            av2,
+            av3,
+            rec,
+            media: registro?.media || 0,
           };
         };
 
@@ -146,7 +150,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
           bimestre3: b3,
           bimestre4: b4,
           mediaFinal,
-          situacao: calcularSituacao(mediaFinal)
+          situacao: calcularSituacao(mediaFinal),
         };
       });
 
@@ -158,16 +162,16 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
     } finally {
       setLoading(false);
     }
-  }, [disciplina.id, serieNome]);
+  }, [disciplina.id, serieNome, segmento, usuario?.tipo]);
 
   useEffect(() => {
     carregarDados();
   }, [carregarDados]);
 
-  const handleEditarNota = (alunoId: string, bimestre: string, tipoNota: 'av1' | 'av2' | 'rec') => {
+  const handleEditarNota = (alunoId: string, bimestre: string, tipoNota: 'av1' | 'av2' | 'av3' | 'rec') => {
     const aluno = alunos.find(a => a.id === alunoId);
     if (aluno) {
-      const bimestreData = aluno[`bimestre${bimestre}` as keyof NotaAlunoAvancada] as any;
+      const bimestreData = aluno[`bimestre${bimestre}` as keyof NotaAlunoAvancada] as NotasBimestre;
       const notaAtual = bimestreData[tipoNota];
       setNotaEditando(notaAtual > 0 ? notaAtual.toString() : '');
       setEditando({ alunoId, bimestre, tipoNota });
@@ -191,16 +195,22 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
 
     try {
       const aluno = alunos.find(a => a.id === alunoId);
-      if (!aluno) throw new Error("Aluno não encontrado");
+      if (!aluno) throw new Error('Aluno não encontrado');
 
       const bimestreKey = `bimestre${bimestre}` as keyof NotaAlunoAvancada;
-      const dadosAtuais = { ...aluno[bimestreKey] as NotasBimestre };
+      const dadosAtuais = { ...(aluno[bimestreKey] as NotasBimestre) };
 
       if (tipoNota === 'av1') dadosAtuais.av1 = notaValor;
       if (tipoNota === 'av2') dadosAtuais.av2 = notaValor;
+      if (tipoNota === 'av3') dadosAtuais.av3 = notaValor;
       if (tipoNota === 'rec') dadosAtuais.rec = notaValor;
 
-      const novaMedia = calcularMediaBimestre(dadosAtuais.av1, dadosAtuais.av2, dadosAtuais.rec);
+      const novaMedia = calcularMediaBimestre(
+        dadosAtuais.av1,
+        dadosAtuais.av2,
+        dadosAtuais.av3,
+        dadosAtuais.rec
+      );
 
       const { data: registroExistente } = await supabase
         .from('notas')
@@ -216,10 +226,12 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
         bimestre: bimestreNumero,
         av1: dadosAtuais.av1,
         av2: dadosAtuais.av2,
+        av3: isPresencial ? dadosAtuais.av3 : null, // só salva av3 se presencial
         recuperacao: dadosAtuais.rec,
         media: novaMedia,
+        segmento: segmento, // sempre salva o segmento
         professor_responsavel: usuario.id,
-        atualizado_em: new Date().toISOString()
+        atualizado_em: new Date().toISOString(),
       };
 
       let error;
@@ -238,22 +250,25 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
 
       if (error) throw error;
 
+      // Atualiza estado local
       setAlunos(prev => prev.map(a => {
         if (a.id === alunoId) {
           const novoAluno = { ...a };
-          (novoAluno[bimestreKey] as any) = {
+          (novoAluno[bimestreKey] as NotasBimestre) = {
             ...dadosAtuais,
-            media: novaMedia
+            media: novaMedia,
           };
 
           const medias = [
             novoAluno.bimestre1.media,
             novoAluno.bimestre2.media,
             novoAluno.bimestre3.media,
-            novoAluno.bimestre4.media
+            novoAluno.bimestre4.media,
           ].filter(m => m > 0);
 
-          novoAluno.mediaFinal = medias.length > 0 ? medias.reduce((acc, m) => acc + m, 0) / medias.length : 0;
+          novoAluno.mediaFinal = medias.length > 0
+            ? medias.reduce((acc, m) => acc + m, 0) / medias.length
+            : 0;
           novoAluno.situacao = calcularSituacao(novoAluno.mediaFinal);
 
           return novoAluno;
@@ -285,102 +300,107 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
     return 'text-gray-400';
   };
 
-const getSituacaoColor = (situacao: string) => {
-  switch (situacao) {
-    case 'aprovado': return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
-    case 'recuperacao': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
-    case 'reprovado': return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
-    default: return 'bg-muted text-muted-foreground';
-  }
-};
+  const getSituacaoColor = (situacao: string) => {
+    switch (situacao) {
+      case 'aprovado': return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+      case 'recuperacao': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+      case 'reprovado': return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
 
-  // ========================================
-  // ✅ EXPORTAR PDF PADRONIZADO (IGUAL COORDENAÇÃO)
-  // ========================================
+  // Célula de nota reutilizável — evita repetição no JSX
+  const CelulaNota = ({
+    alunoId,
+    tipo,
+    valor,
+  }: {
+    alunoId: string;
+    tipo: 'av1' | 'av2' | 'av3' | 'rec';
+    valor: number;
+  }) => {
+    if (isEditing(alunoId, bimestreSelecionado, tipo)) {
+      return (
+        <div className="flex items-center justify-center gap-2">
+          <Input
+            type="number"
+            value={notaEditando}
+            onChange={(e) => setNotaEditando(e.target.value)}
+            className="w-20 text-center"
+            autoFocus
+          />
+          <Button size="sm" onClick={handleSalvarNota} disabled={salvandoNota}>
+            <Save className="w-3 h-3" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleCancelarEdicao}>✕</Button>
+        </div>
+      );
+    }
+    return (
+      <button
+        onClick={() => handleEditarNota(alunoId, bimestreSelecionado, tipo)}
+        className={`hover:bg-muted px-3 py-2 rounded ${getNotaColor(valor)}`}
+      >
+        {valor > 0 ? valor.toFixed(1) : '-'}
+      </button>
+    );
+  };
+
   const exportarPDF = async () => {
     try {
       toast.loading('Gerando PDF...');
       const doc = new jsPDF();
 
-      // 1. Carregar Logo
       const logo = new Image();
-      logo.src = '/logo-colegio-conexao.png'; // Caminho exato da pasta public
-
+      logo.src = '/logo-colegio-conexao.png';
       await new Promise((resolve, reject) => {
         logo.onload = resolve;
         logo.onerror = reject;
       });
 
-      // 2. Cabeçalho Padrão
       doc.addImage(logo, 'PNG', 14, 10, 30, 30);
-
       doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
       doc.text('COLÉGIO CONEXÃO', 50, 20);
-
       doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
       doc.text('Boletim de Notas e Resultados', 50, 28);
-
-      // Metadados alinhados
       doc.setFontSize(10);
       doc.text(`Disciplina: ${disciplina.nome}`, 50, 35);
       doc.text(`Turma: ${serie.nome}`, 50, 40);
-
       doc.text(`Bimestre: ${bimestreSelecionado}º`, 120, 35);
       doc.text(`Professor: ${usuario?.nome || 'Docente'}`, 120, 40);
-
-      // Data no canto direito (padrão coordenação)
       doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 150, 20);
-
-      // Linha Azul Separadora
       doc.setDrawColor(0, 0, 255);
       doc.setLineWidth(0.5);
       doc.line(14, 45, 196, 45);
 
-      // 3. Tabela de Notas
-      const tableColumn = ["Aluno", "AV1", "AV2", "REC", "Média", "Situação"];
-      const tableRows: any[] = [];
+      // Colunas condicionais por segmento
+      const tableColumn = isPresencial
+        ? ['Aluno', 'AV1', 'AV2', 'AV3', 'REC', 'Média', 'Situação']
+        : ['Aluno', 'AV1', 'AV2', 'REC', 'Média', 'Situação'];
 
-      alunos.forEach(aluno => {
-        const bimestreData = aluno[`bimestre${bimestreSelecionado}` as keyof NotaAlunoAvancada] as any;
-        const rowData = [
-          aluno.nome,
-          bimestreData.av1 > 0 ? bimestreData.av1.toFixed(1) : '-',
-          bimestreData.av2 > 0 ? bimestreData.av2.toFixed(1) : '-',
-          bimestreData.rec > 0 ? bimestreData.rec.toFixed(1) : '-',
-          bimestreData.media > 0 ? bimestreData.media.toFixed(2) : '-',
-          aluno.situacao.toUpperCase()
-        ];
-        tableRows.push(rowData);
+      const tableRows: string[][] = alunos.map(aluno => {
+        const b = aluno[`bimestre${bimestreSelecionado}` as keyof NotaAlunoAvancada] as NotasBimestre;
+        const fmt = (v: number) => v > 0 ? v.toFixed(1) : '-';
+        return isPresencial
+          ? [aluno.nome, fmt(b.av1), fmt(b.av2), fmt(b.av3), fmt(b.rec), b.media > 0 ? b.media.toFixed(2) : '-', aluno.situacao.toUpperCase()]
+          : [aluno.nome, fmt(b.av1), fmt(b.av2), fmt(b.rec), b.media > 0 ? b.media.toFixed(2) : '-', aluno.situacao.toUpperCase()];
       });
 
       autoTable(doc, {
-        startY: 55, // Ajustado para não bater na linha azul
+        startY: 55,
         head: [tableColumn],
         body: tableRows,
         theme: 'striped',
-        headStyles: { 
-          fillColor: [41, 128, 185], 
-          textColor: 255,
-          fontStyle: 'bold',
-          halign: 'center'
-        },
-        columnStyles: {
-          0: { halign: 'left' },
-          1: { halign: 'center' },
-          2: { halign: 'center' },
-          3: { halign: 'center' },
-          4: { halign: 'center', fontStyle: 'bold' },
-          5: { halign: 'center' }
-        },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold', halign: 'center' },
+        columnStyles: { 0: { halign: 'left' } },
         styles: { fontSize: 10, cellPadding: 3 },
-        alternateRowStyles: { fillColor: [245, 245, 245] }
+        alternateRowStyles: { fillColor: [245, 245, 245] },
       });
 
-      // Rodapé
       const pageCount = doc.getNumberOfPages();
-      for(let i = 1; i <= pageCount; i++) {
+      for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(150);
@@ -403,11 +423,13 @@ const getSituacaoColor = (situacao: string) => {
     const aprovados = alunos.filter(a => a.situacao === 'aprovado').length;
     const recuperacao = alunos.filter(a => a.situacao === 'recuperacao').length;
     const reprovados = alunos.filter(a => a.situacao === 'reprovado').length;
-    const mediaGeralTurma = alunos.length > 0 ? alunos.reduce((acc, a) => acc + a.mediaFinal, 0) / alunos.length : 0;
+    const mediaGeralTurma = alunos.length > 0
+      ? alunos.reduce((acc, a) => acc + a.mediaFinal, 0) / alunos.length
+      : 0;
     return { aprovados, recuperacao, reprovados, mediaGeralTurma };
   })();
 
-  const isEditing = (alunoId: string, bimestre: string, tipo: 'av1' | 'av2' | 'rec') => {
+  const isEditing = (alunoId: string, bimestre: string, tipo: 'av1' | 'av2' | 'av3' | 'rec') => {
     return editando?.alunoId === alunoId && editando?.bimestre === bimestre && editando?.tipoNota === tipo;
   };
 
@@ -418,15 +440,24 @@ const getSituacaoColor = (situacao: string) => {
           <h2 className="text-lg font-semibold text-foreground">Boletim Avançado</h2>
           <p className="text-sm text-muted-foreground">
             {disciplina.nome} - {serie.nome}
+            {isPresencial && (
+              <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                Presencial
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
-          <Button onClick={exportarPDF} variant="outline" size="sm" className="gap-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30">
+          <Button
+            onClick={exportarPDF}
+            variant="outline"
+            size="sm"
+            className="gap-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30"
+          >
             <FileText className="w-4 h-4" />
             <span className="hidden sm:inline">Exportar PDF</span>
             <span className="sm:hidden">PDF</span>
           </Button>
-
           <Select value={bimestreSelecionado} onValueChange={setBimestreSelecionado}>
             <SelectTrigger className="w-36 sm:w-48">
               <SelectValue />
@@ -442,7 +473,8 @@ const getSituacaoColor = (situacao: string) => {
       </div>
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">        <Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-green-600">{aprovados}</div>
             <div className="text-sm text-muted-foreground">Aprovados</div>
@@ -496,6 +528,10 @@ const getSituacaoColor = (situacao: string) => {
                     <th className="text-left py-3 min-w-[200px]">Aluno</th>
                     <th className="text-center py-3 min-w-[80px]">AV1</th>
                     <th className="text-center py-3 min-w-[80px]">AV2</th>
+                    {/* Coluna AV3 — apenas presencial */}
+                    {isPresencial && (
+                      <th className="text-center py-3 min-w-[80px]">AV3</th>
+                    )}
                     <th className="text-center py-3 min-w-[80px]">REC</th>
                     <th className="text-center py-3 min-w-[100px]">Média</th>
                     <th className="text-center py-3 min-w-[120px]">Situação</th>
@@ -503,98 +539,37 @@ const getSituacaoColor = (situacao: string) => {
                 </thead>
                 <tbody>
                   {alunos.map((aluno) => {
-                    const bimestreData = aluno[`bimestre${bimestreSelecionado}` as keyof NotaAlunoAvancada] as any;
+                    const bimestreData = aluno[`bimestre${bimestreSelecionado}` as keyof NotaAlunoAvancada] as NotasBimestre;
 
                     return (
                       <tr key={aluno.id} className="border-b border-border hover:bg-muted/30">
                         <td className="py-3 font-medium text-foreground">{aluno.nome}</td>
 
-                        {/* AV1 */}
                         <td className="text-center py-3">
-                          {isEditing(aluno.id, bimestreSelecionado, 'av1') ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <Input
-                                type="number"
-                                value={notaEditando}
-                                onChange={(e) => setNotaEditando(e.target.value)}
-                                className="w-20 text-center"
-                                autoFocus
-                              />
-                              <Button size="sm" onClick={handleSalvarNota} disabled={salvandoNota}>
-                                <Save className="w-3 h-3" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={handleCancelarEdicao}>✕</Button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleEditarNota(aluno.id, bimestreSelecionado, 'av1')}
-                              className={`hover:bg-muted px-3 py-2 rounded ${getNotaColor(bimestreData.av1)}`}
-                            >
-                              {bimestreData.av1 > 0 ? bimestreData.av1.toFixed(1) : '-'}
-                            </button>
-                          )}
+                          <CelulaNota alunoId={aluno.id} tipo="av1" valor={bimestreData.av1} />
                         </td>
 
-                        {/* AV2 */}
                         <td className="text-center py-3">
-                          {isEditing(aluno.id, bimestreSelecionado, 'av2') ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <Input
-                                type="number"
-                                value={notaEditando}
-                                onChange={(e) => setNotaEditando(e.target.value)}
-                                className="w-20 text-center"
-                                autoFocus
-                              />
-                              <Button size="sm" onClick={handleSalvarNota} disabled={salvandoNota}>
-                                <Save className="w-3 h-3" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={handleCancelarEdicao}>✕</Button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleEditarNota(aluno.id, bimestreSelecionado, 'av2')}
-                              className={`hover:bg-muted px-3 py-2 rounded ${getNotaColor(bimestreData.av2)}`}
-                            >
-                              {bimestreData.av2 > 0 ? bimestreData.av2.toFixed(1) : '-'}
-                            </button>
-                          )}
+                          <CelulaNota alunoId={aluno.id} tipo="av2" valor={bimestreData.av2} />
                         </td>
 
-                        {/* REC */}
+                        {/* AV3 — apenas presencial */}
+                        {isPresencial && (
+                          <td className="text-center py-3">
+                            <CelulaNota alunoId={aluno.id} tipo="av3" valor={bimestreData.av3} />
+                          </td>
+                        )}
+
                         <td className="text-center py-3">
-                          {isEditing(aluno.id, bimestreSelecionado, 'rec') ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <Input
-                                type="number"
-                                value={notaEditando}
-                                onChange={(e) => setNotaEditando(e.target.value)}
-                                className="w-20 text-center"
-                                autoFocus
-                              />
-                              <Button size="sm" onClick={handleSalvarNota} disabled={salvandoNota}>
-                                <Save className="w-3 h-3" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={handleCancelarEdicao}>✕</Button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleEditarNota(aluno.id, bimestreSelecionado, 'rec')}
-                              className={`hover:bg-muted px-3 py-2 rounded ${getNotaColor(bimestreData.rec)}`}
-                            >
-                              {bimestreData.rec > 0 ? bimestreData.rec.toFixed(1) : '-'}
-                            </button>
-                          )}
+                          <CelulaNota alunoId={aluno.id} tipo="rec" valor={bimestreData.rec} />
                         </td>
 
-                        {/* Média */}
                         <td className="text-center py-3">
                           <span className={`font-bold text-lg ${getNotaColor(bimestreData.media)}`}>
                             {bimestreData.media > 0 ? bimestreData.media.toFixed(2) : '-'}
                           </span>
                         </td>
 
-                        {/* Situação */}
                         <td className="text-center py-3">
                           <Badge className={getSituacaoColor(aluno.situacao)}>
                             {aluno.situacao}
