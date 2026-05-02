@@ -258,7 +258,7 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
                   </div>
                 </Campo>
               </div>
-              <Campo label="Email" dica={`Se não informado: ${dados.nomeUsuario || "usuario"}@escola.local`}>
+              <Campo label="Usuário" dica={`Se não informado: ${dados.nomeUsuario || "usuario"}@escola.local`}>
                 <Input type="email" value={dados.email} placeholder="email@exemplo.com (opcional)"
                   onChange={e => setDados(p => ({ ...p, email: e.target.value }))}
                   className="bg-background border-border text-foreground placeholder:text-muted-foreground" />

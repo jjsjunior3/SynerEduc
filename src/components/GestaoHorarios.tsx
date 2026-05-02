@@ -48,7 +48,6 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
     supabase
       .from('series')
       .select('id, nome')
-      .eq('segmento', segmento)                 // ← filtro por segmento
       .order('nome')
       .then(({ data }) => { if (data) setSeriesDisponiveis(data); });
   }, [segmento]);
@@ -172,7 +171,7 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
                 <SelectContent>
                   {seriesDisponiveis.length === 0 ? (
                     <SelectItem value="_vazio" disabled>
-                      Nenhuma série cadastrada para {segmento}
+                      Nenhuma série cadastrada
                     </SelectItem>
                   ) : (
                     seriesDisponiveis.map(s => (

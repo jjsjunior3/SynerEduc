@@ -266,15 +266,30 @@ export default function DashboardAluno() {
     setLoadingTurma(true);
     setErroTurma(null);
     try {
+      // 1. Busca série E segmento do aluno juntos
       const { data: aluno, error: alunoError } = await supabase
-        .from("users").select("serie").eq("id", usuario.id).single();
+        .from("users")
+        .select("serie, segmento")
+        .eq("id", usuario.id)
+        .single();
       if (alunoError) throw alunoError;
       if (!aluno?.serie) { setErroTurma("Sua série não está definida no sistema."); return; }
 
-      const { data: serieRow, error: serieError } = await supabase
-        .from("series").select("id, nome").eq("nome", aluno.serie).single();
+      // 2. Busca todas as séries com aquele nome — o RLS já filtra por segmento
+      const { data: seriesResult, error: serieError } = await supabase
+        .from("series")
+        .select("id, nome, segmento")
+        .eq("nome", aluno.serie);
+
       if (serieError) throw serieError;
-      if (!serieRow) { setErroTurma(`Série "${aluno.serie}" não encontrada.`); return; }
+      if (!seriesResult || seriesResult.length === 0) {
+        setErroTurma(`Série "${aluno.serie}" não encontrada.`); return;
+      }
+
+      // Prefere série do segmento certo → NULL → qualquer uma
+      const serieRow = seriesResult.find((s: any) => s.segmento === aluno.segmento)
+        ?? seriesResult.find((s: any) => s.segmento === null)
+        ?? seriesResult[0];
 
       const { data: turmasResult, error: turmasError } = await supabase
         .from("turmas").select("id, nome, total_alunos").eq("serie_id", serieRow.id);
