@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabase/supabaseClient";
 import { useAuth } from "../contexts/AuthContext";
+import { useSegmento } from "../hooks/useSegmento";
 
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -37,7 +38,10 @@ interface DisciplinaProfessorProps {
 
 export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: DisciplinaProfessorProps) {
   const { usuario } = useAuth();
-  const [abaAtiva, setAbaAtiva] = useState<Aba>("conteudo");
+  const { isPresencial } = useSegmento();
+
+  // Presencial começa em "atividades"; EAD começa em "conteudo"
+  const [abaAtiva, setAbaAtiva] = useState<Aba>(isPresencial ? "atividades" : "conteudo");
 
   const [materiais, setMateriais] = useState<ConteudoPdf[]>([]);
   const [materialSelecionado, setMaterialSelecionado] = useState<ConteudoPdf | null>(null);
@@ -53,13 +57,17 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
     );
   }
 
-  const menuItens = [
-    { id: "conteudo" as Aba, label: "Conteúdo", shortLabel: "Conteúdo", icon: BookOpen },
-    { id: "atividades" as Aba, label: "Atividades", shortLabel: "Atividades", icon: FileText },
-    { id: "frequencia" as Aba, label: "Frequência", shortLabel: "Frequência", icon: CalendarIcon },
-    { id: "aulaVivo" as Aba, label: "Aulas ao Vivo", shortLabel: "Aulas", icon: Video },
-    { id: "forum" as Aba, label: "Fórum", shortLabel: "Fórum", icon: MessageSquare },
+  const todosMenuItens = [
+    { id: "conteudo" as Aba,    label: "Conteúdo",     shortLabel: "Conteúdo",   icon: BookOpen,      apenasEAD: true  },
+    { id: "atividades" as Aba,  label: "Atividades",   shortLabel: "Atividades", icon: FileText,      apenasEAD: false },
+    { id: "frequencia" as Aba,  label: "Frequência",   shortLabel: "Frequência", icon: CalendarIcon,  apenasEAD: false },
+    { id: "aulaVivo" as Aba,    label: "Aulas ao Vivo",shortLabel: "Aulas",      icon: Video,         apenasEAD: true  },
+    { id: "forum" as Aba,       label: "Fórum",        shortLabel: "Fórum",      icon: MessageSquare, apenasEAD: true  },
   ];
+
+  // Oculta abas EAD-only quando segmento é presencial
+  const menuItens = todosMenuItens.filter(item => !(isPresencial && item.apenasEAD));
+
   const buscarConteudos = useCallback(async () => {
     if (!serie?.nome || !disciplina?.nome) return;
     setLoadingConteudo(true);
@@ -106,7 +114,7 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
   return (
     <div className="flex flex-col min-h-full">
 
-      {/* Abas */}
+      {/* Abas — filtradas por segmento */}
       <div className="border-b border-border mb-4 sm:mb-6">
         <nav className="flex items-center gap-1 overflow-x-auto">
           {menuItens.map((item) => {
@@ -134,8 +142,8 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
       {/* Conteúdo das abas */}
       <div className="flex-1">
 
-        {/* Aba Conteúdo */}
-        {abaAtiva === "conteudo" && (
+        {/* Aba Conteúdo — apenas EAD */}
+        {abaAtiva === "conteudo" && !isPresencial && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
 
             {/* Bimestres */}
@@ -241,13 +249,13 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
           <FrequenciaProfessor disciplina={disciplina} serie={serie} />
         )}
 
-        {/* Aba Aulas ao Vivo */}
-        {abaAtiva === "aulaVivo" && (
+        {/* Aba Aulas ao Vivo — apenas EAD */}
+        {abaAtiva === "aulaVivo" && !isPresencial && (
           <AulasAoVivoProfessor disciplina={disciplina} serie={serie} />
         )}
 
-        {/* Aba Fórum */}
-        {abaAtiva === "forum" && (
+        {/* Aba Fórum — apenas EAD */}
+        {abaAtiva === "forum" && !isPresencial && (
           <ForumProfessor disciplina={disciplina} serie={serie} />
         )}
       </div>

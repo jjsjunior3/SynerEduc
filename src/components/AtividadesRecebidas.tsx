@@ -58,13 +58,42 @@ interface ModalCorrecaoState {
   salvando: boolean;
 }
 
-// Retorna o primeiro e último dia do mês atual como strings YYYY-MM-DD
 function getMesAtual() {
   const hoje = new Date();
   const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return { inicio: fmt(inicio), fim: fmt(fim) };
+}
+
+// ← Retorna classes Tailwind com dark: em vez de hex hardcoded
+function getStatusClasses(status: string): { bg: string; text: string; border: string } {
+  switch (status) {
+    case 'entregue':
+      return {
+        bg: 'bg-blue-100 dark:bg-blue-900/40',
+        text: 'text-blue-900 dark:text-blue-200',
+        border: 'border-blue-300 dark:border-blue-700',
+      };
+    case 'atrasado':
+      return {
+        bg: 'bg-red-100 dark:bg-red-900/40',
+        text: 'text-red-900 dark:text-red-200',
+        border: 'border-red-300 dark:border-red-700',
+      };
+    case 'corrigido':
+      return {
+        bg: 'bg-green-100 dark:bg-green-900/40',
+        text: 'text-green-900 dark:text-green-200',
+        border: 'border-green-300 dark:border-green-700',
+      };
+    default:
+      return {
+        bg: 'bg-muted',
+        text: 'text-muted-foreground',
+        border: 'border-border',
+      };
+  }
 }
 
 export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
@@ -77,18 +106,15 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
 
   const mesAtual = getMesAtual();
 
-  // Filtros de busca
   const [filtroSerie, setFiltroSerie] = useState('todas');
   const [dataInicio, setDataInicio] = useState(mesAtual.inicio);
   const [dataFim, setDataFim] = useState(mesAtual.fim);
   const [filtroAplicado, setFiltroAplicado] = useState(false);
 
-  // Filtros das submissões
   const [atividadeSelecionada, setAtividadeSelecionada] = useState<string | null>(null);
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [busca, setBusca] = useState('');
 
-  // Modal de correção
   const [modalCorrecao, setModalCorrecao] = useState<ModalCorrecaoState>({
     aberto: false, submissao: null, feedback: '', nota: '', salvando: false,
   });
@@ -115,7 +141,6 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
       toast.error('Selecione as datas de início e fim.');
       return;
     }
-
     if (dataInicio > dataFim) {
       toast.error('A data de início deve ser anterior à data de fim.');
       return;
@@ -127,7 +152,6 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
     setAtividades([]);
 
     try {
-      // Filtra por data_entrega dentro do intervalo
       let query = supabase
         .from('atividades')
         .select('*')
@@ -199,10 +223,7 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
     }
   }
 
-  const aplicarFiltro = () => {
-    setFiltroAplicado(true);
-    carregarDados();
-  };
+  const aplicarFiltro = () => { setFiltroAplicado(true); carregarDados(); };
 
   const limparFiltros = () => {
     setFiltroSerie('todas');
@@ -282,30 +303,21 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
     return true;
   });
 
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'entregue': return { bg: '#dbeafe', text: '#1e3a8a', border: '#93c5fd' };
-      case 'atrasado': return { bg: '#fee2e2', text: '#7f1d1d', border: '#fca5a5' };
-      case 'corrigido': return { bg: '#dcfce7', text: '#14532d', border: '#86efac' };
-      default: return { bg: '#f3f4f6', text: '#374151', border: '#d1d5db' };
-    }
-  };
-
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'entregue': return <Clock className="w-3.5 h-3.5" />;
-      case 'atrasado': return <AlertCircle className="w-3.5 h-3.5" />;
+      case 'entregue':  return <Clock className="w-3.5 h-3.5" />;
+      case 'atrasado':  return <AlertCircle className="w-3.5 h-3.5" />;
       case 'corrigido': return <CheckCircle className="w-3.5 h-3.5" />;
-      default: return <XCircle className="w-3.5 h-3.5" />;
+      default:          return <XCircle className="w-3.5 h-3.5" />;
     }
   };
 
   const getStatusTexto = (status: string) => {
     switch (status) {
-      case 'entregue': return 'Aguardando Correção';
-      case 'atrasado': return 'Entregue com Atraso';
+      case 'entregue':  return 'Aguardando Correção';
+      case 'atrasado':  return 'Entregue com Atraso';
       case 'corrigido': return 'Corrigido';
-      default: return 'Pendente';
+      default:          return 'Pendente';
     }
   };
 
@@ -328,8 +340,6 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-
-            {/* Série */}
             <div>
               <Label className="text-muted-foreground mb-1.5 block text-xs">Série</Label>
               <Select value={filtroSerie} onValueChange={setFiltroSerie}>
@@ -343,27 +353,16 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
               </Select>
             </div>
 
-            {/* Data início */}
             <div>
               <Label className="text-muted-foreground mb-1.5 block text-xs">Prazo — De</Label>
-              <Input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-              />
+              <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
             </div>
 
-            {/* Data fim */}
             <div>
               <Label className="text-muted-foreground mb-1.5 block text-xs">Prazo — Até</Label>
-              <Input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-              />
+              <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
             </div>
 
-            {/* Botões */}
             <div className="flex items-end gap-2">
               <Button
                 onClick={aplicarFiltro}
@@ -372,8 +371,7 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
               >
                 {loading
                   ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Buscando...</>
-                  : <><Search className="w-4 h-4 mr-2" />Buscar</>
-                }
+                  : <><Search className="w-4 h-4 mr-2" />Buscar</>}
               </Button>
               {filtroAplicado && (
                 <Button variant="outline" onClick={limparFiltros} title="Limpar filtros">
@@ -383,14 +381,12 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
             </div>
           </div>
 
-          {/* Dica de prazo padrão */}
           {!filtroAplicado && (
             <p className="text-xs text-muted-foreground text-center">
               Por padrão mostra o mês atual ({formatarData(mesAtual.inicio)} a {formatarData(mesAtual.fim)}). Ajuste as datas se necessário e clique em <strong>Buscar</strong>.
             </p>
           )}
 
-          {/* Resumo do filtro aplicado */}
           {filtroAplicado && !loading && (
             <div className="flex flex-wrap gap-2 pt-1">
               <span className="text-xs text-muted-foreground">Exibindo atividades com prazo entre</span>
@@ -445,10 +441,8 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
                         <h3 className="font-medium text-foreground text-sm line-clamp-2 flex-1">
                           {ativ.titulo}
                         </h3>
-                        <span
-                          className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 capitalize"
-                          style={{ backgroundColor: '#e0f2fe', color: '#0c4a6e' }}
-                        >
+                        {/* ← dark mode corrigido */}
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 capitalize bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200">
                           {ativ.tipo}
                         </span>
                       </div>
@@ -456,18 +450,19 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
                         {ativ.disciplina} • {ativ.serie}
                       </p>
 
+                      {/* Contadores — dark mode corrigido */}
                       <div className="grid grid-cols-3 gap-2 mb-3">
-                        <div style={{ backgroundColor: '#dbeafe', borderRadius: 6 }} className="text-center p-2">
-                          <div className="font-bold text-blue-700 text-sm">{ativ.totalEntregues}</div>
-                          <div className="text-[10px] text-blue-600">Entregues</div>
+                        <div className="text-center p-2 rounded-md bg-blue-100 dark:bg-blue-900/40">
+                          <div className="font-bold text-blue-700 dark:text-blue-300 text-sm">{ativ.totalEntregues}</div>
+                          <div className="text-[10px] text-blue-600 dark:text-blue-400">Entregues</div>
                         </div>
-                        <div style={{ backgroundColor: '#dcfce7', borderRadius: 6 }} className="text-center p-2">
-                          <div className="font-bold text-green-700 text-sm">{ativ.totalCorrigidas}</div>
-                          <div className="text-[10px] text-green-600">Corrigidas</div>
+                        <div className="text-center p-2 rounded-md bg-green-100 dark:bg-green-900/40">
+                          <div className="font-bold text-green-700 dark:text-green-300 text-sm">{ativ.totalCorrigidas}</div>
+                          <div className="text-[10px] text-green-600 dark:text-green-400">Corrigidas</div>
                         </div>
-                        <div style={{ backgroundColor: '#f3f4f6', borderRadius: 6 }} className="text-center p-2">
-                          <div className="font-bold text-gray-600 text-sm">{ativ.totalPendentes}</div>
-                          <div className="text-[10px] text-gray-500">Pendentes</div>
+                        <div className="text-center p-2 rounded-md bg-muted">
+                          <div className="font-bold text-muted-foreground text-sm">{ativ.totalPendentes}</div>
+                          <div className="text-[10px] text-muted-foreground">Pendentes</div>
                         </div>
                       </div>
 
@@ -548,7 +543,7 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
             ) : (
               <div className="space-y-3">
                 {submissoesFiltradas.map((sub) => {
-                  const estilo = getStatusStyle(sub.status);
+                  const estilo = getStatusClasses(sub.status); // ← classes Tailwind
                   return (
                     <div key={sub.id} className="rounded-lg border border-border bg-card hover:shadow-md transition-shadow p-4">
                       <div className="flex flex-col md:flex-row items-start gap-4">
@@ -564,10 +559,8 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
                               <p className="text-sm text-muted-foreground">{sub.atividade_titulo}</p>
                               <p className="text-xs text-muted-foreground">{sub.serie} • {sub.disciplina}</p>
                             </div>
-                            <span
-                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border w-fit flex-shrink-0"
-                              style={{ backgroundColor: estilo.bg, color: estilo.text, borderColor: estilo.border }}
-                            >
+                            {/* ← badge de status com classes Tailwind */}
+                            <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border w-fit flex-shrink-0 ${estilo.bg} ${estilo.text} ${estilo.border}`}>
                               {getStatusIcon(sub.status)}
                               {getStatusTexto(sub.status)}
                             </span>
@@ -591,11 +584,9 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
                             </div>
                           )}
 
+                          {/* ← feedback existente: dark mode corrigido */}
                           {sub.feedback && (
-                            <div
-                              className="p-3 rounded-lg mb-3 text-sm"
-                              style={{ backgroundColor: '#fef9c3', border: '1px solid #fde047', color: '#713f12' }}
-                            >
+                            <div className="p-3 rounded-lg mb-3 text-sm bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-900 dark:text-yellow-200">
                               <strong>Feedback:</strong> {sub.feedback}
                             </div>
                           )}
@@ -611,11 +602,9 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
                             </div>
 
                             <div className="flex items-center gap-2">
+                              {/* ← badge nota: dark mode corrigido */}
                               {sub.status === 'corrigido' && sub.nota !== undefined && (
-                                <span
-                                  className="px-3 py-1 rounded-full text-xs font-bold"
-                                  style={{ backgroundColor: '#dcfce7', color: '#14532d' }}
-                                >
+                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200">
                                   Nota: {sub.nota}
                                 </span>
                               )}
@@ -643,18 +632,14 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
       {/* ── Modal de Correção ── */}
       {modalCorrecao.aberto && modalCorrecao.submissao && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center px-4 py-8">
-          {/* Overlay */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => !modalCorrecao.salvando && setModalCorrecao((p) => ({ ...p, aberto: false }))}
           />
-
-          {/* Modal — max-w respeita as margens do sistema */}
           <div
             className="relative w-full max-w-2xl rounded-2xl border border-border shadow-2xl z-10 overflow-hidden"
             style={{ backgroundColor: 'var(--card)' }}
           >
-            {/* Header do modal */}
             <div className="flex items-start justify-between p-3 px-6 py-5 border-b border-border">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
@@ -678,10 +663,7 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
               </button>
             </div>
 
-            {/* Corpo do modal */}
             <div className="px-6 py-5 space-y-5">
-
-              {/* Nota + aviso em linha */}
               <div className="flex items-end gap-4">
                 <div className="flex-shrink-0">
                   <Label htmlFor="nota-input" className="text-foreground p-3 font-medium mb-1.5 block text-sm">
@@ -690,10 +672,7 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
                   <div className="flex items-center gap-2">
                     <Input
                       id="nota-input"
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
+                      type="number" min="0" max="10" step="0.1"
                       placeholder="0.0"
                       value={modalCorrecao.nota}
                       onChange={(e) => setModalCorrecao((p) => ({ ...p, nota: e.target.value }))}
@@ -704,17 +683,13 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
                   </div>
                 </div>
 
-                {/* Aviso de status — ao lado da nota */}
-                <div
-                  className="flex-1 flex items-center gap-2 p-3 rounded-lg text-xs"
-                  style={{ backgroundColor: '#dbeafe', color: '#1e3a8a' }}
-                >
+                {/* ← aviso modal: dark mode corrigido */}
+                <div className="flex-1 flex items-center gap-2 p-3 rounded-lg text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>Ao salvar, o status será alterado para <strong>Corrigido</strong> automaticamente.</span>
                 </div>
               </div>
 
-              {/* Feedback */}
               <div>
                 <Label htmlFor="feedback-input" className="text-foreground p-3 font-medium mb-1.5 block text-sm">
                   Feedback para o aluno
@@ -731,11 +706,9 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
               </div>
             </div>
 
-            {/* Footer com botões */}
             <div className="flex gap-3 px-6 py-4 border-t border-border bg-muted/30">
               <Button
-                variant="outline"
-                className="flex-1"
+                variant="outline" className="flex-1"
                 onClick={() => setModalCorrecao((p) => ({ ...p, aberto: false }))}
                 disabled={modalCorrecao.salvando}
               >
@@ -748,8 +721,7 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
               >
                 {modalCorrecao.salvando
                   ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
-                  : <><Send className="w-4 h-4" />Salvar Correção</>
-                }
+                  : <><Send className="w-4 h-4" />Salvar Correção</>}
               </Button>
             </div>
           </div>

@@ -7,6 +7,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Save, Search, Loader2, Clock } from 'lucide-react';
 import { supabase } from '../supabase/supabaseClient';
+import { useSegmento } from '../hooks/useSegmento';
 import { toast } from 'sonner';
 
 interface GestaoHorarioProps { onVoltar: () => void; }
@@ -34,22 +35,33 @@ const horariosPadrao = [
 const diasSemana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
 
 export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
+  const { segmento, turno } = useSegmento();    // ← segmento e turno do coordenador
+
   const [seriesDisponiveis, setSeriesDisponiveis] = useState<Serie[]>([]);
   const [serie, setSerie] = useState('');
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [grade, setGrade] = useState<AulaGrade[]>([]);
 
+  // ── Carrega séries filtradas pelo segmento ──
   useEffect(() => {
-    supabase.from('series').select('id, nome').order('nome')
+    supabase
+      .from('series')
+      .select('id, nome')
+      .eq('segmento', segmento)                 // ← filtro por segmento
+      .order('nome')
       .then(({ data }) => { if (data) setSeriesDisponiveis(data); });
-  }, []);
+  }, [segmento]);
 
   const inicializarGradeVazia = () => {
     const novaGrade: AulaGrade[] = [];
     diasSemana.forEach(dia =>
       horariosPadrao.forEach(h =>
-        novaGrade.push({ dia_semana: dia, ordem: h.ordem, horario_inicio: h.inicio, horario_fim: h.fim, disciplina: '', sala: '' })
+        novaGrade.push({
+          dia_semana: dia, ordem: h.ordem,
+          horario_inicio: h.inicio, horario_fim: h.fim,
+          disciplina: '', sala: '',
+        })
       )
     );
     setGrade(novaGrade);
@@ -59,11 +71,25 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
     if (!serie) { toast.warning('Selecione a série primeiro.'); return; }
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('horarios_escolar').select('*').eq('serie', serie).eq('turma', 'A');
+      // Filtra por série + segmento + turno (se disponível)
+      let query = supabase
+        .from('horarios_escolar')
+        .select('*')
+        .eq('serie', serie)
+        .eq('segmento', segmento);             // ← filtro por segmento
+
+      if (turno) query = query.eq('turno', turno); // ← filtro por turno se disponível
+
+      const { data, error } = await query;
       if (error) throw error;
-      if (data && data.length > 0) { setGrade(data); toast.success('Grade carregada!'); }
-      else { inicializarGradeVazia(); toast.info('Nenhuma grade encontrada. Preencha e salve.'); }
+
+      if (data && data.length > 0) {
+        setGrade(data);
+        toast.success('Grade carregada!');
+      } else {
+        inicializarGradeVazia();
+        toast.info('Nenhuma grade encontrada. Preencha e salve.');
+      }
     } catch { toast.error('Erro ao carregar grade.'); }
     finally { setLoading(false); }
   };
@@ -78,11 +104,26 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
     if (!serie) return;
     setSalvando(true);
     try {
-      await supabase.from('horarios_escolar').delete().eq('serie', serie).eq('turma', 'A');
+      // Remove grade existente do mesmo segmento/turno/série
+      let deleteQuery = supabase
+        .from('horarios_escolar')
+        .delete()
+        .eq('serie', serie)
+        .eq('segmento', segmento);
+
+      if (turno) deleteQuery = deleteQuery.eq('turno', turno);
+      await deleteQuery;
 
       const dados = grade
         .filter(g => g.disciplina.trim() !== '')
-        .map(({ id, ...resto }) => ({ ...resto, serie, turma: 'A', professor: '' }));
+        .map(({ id, ...resto }) => ({
+          ...resto,
+          serie,
+          turma: 'A',
+          professor: '',
+          segmento,                             // ← salva segmento
+          turno: turno || null,                 // ← salva turno
+        }));
 
       if (!dados.length) { toast.info('Grade vazia, nada para salvar.'); setSalvando(false); return; }
 
@@ -102,9 +143,25 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
       {/* Seletor de série */}
       <Card>
         <CardHeader className="border-b border-border pb-4">
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Clock className="w-5 h-5 text-blue-600" /> Grade Curricular
-          </CardTitle>
+          <div className="flex items-start justify-between">
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Clock className="w-5 h-5 text-blue-600" /> Grade Curricular
+            </CardTitle>
+            {/* Badge de contexto */}
+            <div className="flex gap-2">
+              <span className="text-xs px-2.5 py-1 rounded-full font-medium border
+                bg-blue-100 text-blue-800 border-blue-300
+                dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700 capitalize">
+                {segmento}
+              </span>
+              {turno && (
+                <span className="text-xs px-2.5 py-1 rounded-full font-medium border
+                  bg-muted text-muted-foreground border-border capitalize">
+                  {turno}
+                </span>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="pt-5">
           <div className="flex flex-col md:flex-row gap-5 items-end">
@@ -113,28 +170,27 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
               <Select value={serie} onValueChange={setSerie}>
                 <SelectTrigger><SelectValue placeholder="Selecione a série" /></SelectTrigger>
                 <SelectContent>
-                  {seriesDisponiveis.map(s => (
-                    <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>
-                  ))}
+                  {seriesDisponiveis.length === 0 ? (
+                    <SelectItem value="_vazio" disabled>
+                      Nenhuma série cadastrada para {segmento}
+                    </SelectItem>
+                  ) : (
+                    seriesDisponiveis.map(s => (
+                      <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
-            <Button
-              onClick={carregarGrade}
-              disabled={!serie || loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
-            >
+            <Button onClick={carregarGrade} disabled={!serie || loading} className="gap-2">
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" />Buscando...</>
                 : <><Search className="w-4 h-4" />Buscar Grade</>
               }
             </Button>
             {grade.length > 0 && (
-              <Button
-                onClick={salvarGrade}
-                disabled={salvando}
-                className="bg-green-600 hover:bg-green-700 text-white gap-2"
-              >
+              <Button onClick={salvarGrade} disabled={salvando}
+                className="bg-green-600 hover:bg-green-700 text-white gap-2">
                 {salvando
                   ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
                   : <><Save className="w-4 h-4" />Salvar Grade</>
@@ -166,7 +222,6 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
                 <tbody>
                   {horariosPadrao.map((h, index) => (
                     <Fragment key={h.ordem}>
-                      {/* Intervalo visual */}
                       {index === 3 && (
                         <tr>
                           <td colSpan={6} className="py-2 text-center text-xs font-semibold"
@@ -200,16 +255,16 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
               </table>
             </div>
 
-            {/* Rodapé com botão salvar */}
+            {/* Rodapé */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/20">
               <p className="text-xs text-muted-foreground">
-                Série: <span className="font-semibold text-foreground">{serie}</span> — Turma A
+                Série: <span className="font-semibold text-foreground">{serie}</span>
+                {' '}— Turma A
+                {' '}— <span className="capitalize">{segmento}</span>
+                {turno ? ` — ${turno}` : ''}
               </p>
-              <Button
-                onClick={salvarGrade}
-                disabled={salvando}
-                className="bg-green-600 hover:bg-green-700 text-white gap-2"
-              >
+              <Button onClick={salvarGrade} disabled={salvando}
+                className="bg-green-600 hover:bg-green-700 text-white gap-2">
                 {salvando
                   ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
                   : <><Save className="w-4 h-4" />Salvar Grade</>

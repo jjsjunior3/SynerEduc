@@ -28,6 +28,8 @@ import { AgendaProfessor } from "./AgendaProfessor";
 import { AtividadesRecebidas } from "./AtividadesRecebidas";
 import { SchoolHeader } from "./SchoolHeader";
 import ComunicadosPage from "./ComunicadosPage";
+import { useSegmento } from '../hooks/useSegmento';
+
 
 type ViewType = "dashboard" | "atividades" | "boletim" | "agenda" | "horarios" | "aulas-vivo" | "disciplina" | "comunicados";
 
@@ -80,7 +82,7 @@ export function DashboardProfessor() {
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
-
+  const { segmento } = useSegmento();
   const avatarRef = useRef<HTMLButtonElement>(null);
 
   const getDropdownPos = () => {
@@ -106,7 +108,7 @@ export function DashboardProfessor() {
 
       return () => { supabase.removeChannel(channel); };
     }
-  }, [usuario]);
+  }, [usuario, segmento]);
 
   const fetchNotificacoesCount = async () => {
     if (!usuario) return;
@@ -119,30 +121,30 @@ export function DashboardProfessor() {
   };
 
   const carregarComunicados = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("comunicados")
-        .select(`*, autor:users!comunicados_autor_id_fkey(nome, tipo)`)
-        .order("criado_em", { ascending: false })
-        .limit(20);
-      if (error) throw error;
+  try {
+    const { data, error } = await supabase
+      .from("comunicados")
+      .select(`*, autor:users!comunicados_autor_id_fkey(nome, tipo)`)
+      .in('segmento', [segmento, 'todos'])   // ← filtro por segmento
+      .order("criado_em", { ascending: false })
+      .limit(20);
+    if (error) throw error;
 
-      // Filtrar comunicados destinados a professores
-      const filtrados = (data || []).filter((c: any) => {
-        const publico = (c.publico_alvo || "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-        if (publico.length === 0) return true;
-        return publico.includes("todos") || publico.includes("todos-professores") || publico.includes("professores");
-      });
+    const filtrados = (data || []).filter((c: any) => {
+      const publico = (c.publico_alvo || "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+      if (publico.length === 0) return true;
+      return publico.includes("todos") || publico.includes("todos-professores") || publico.includes("professores");
+    });
 
-      setComunicados(filtrados.map((c: any) => ({
-        id: c.id, titulo: c.titulo, conteudo: c.conteudo,
-        importante: c.importante, criado_em: c.criado_em,
-        remetente: c.autor?.nome || "Coordenação",
-        cargo: c.autor?.tipo || "Administração",
-        imagem_url: c.imagem_url || null,
-      })));
-    } catch { /* silencioso */ }
-  };
+    setComunicados(filtrados.map((c: any) => ({
+      id: c.id, titulo: c.titulo, conteudo: c.conteudo,
+      importante: c.importante, criado_em: c.criado_em,
+      remetente: c.autor?.nome || "Coordenação",
+      cargo: c.autor?.tipo || "Administração",
+      imagem_url: c.imagem_url || null,
+    })));
+  } catch { /* silencioso */ }
+};
 
   const carregarContadoresAtividades = async () => {
     if (!usuario?.id) return;

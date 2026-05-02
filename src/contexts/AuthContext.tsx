@@ -9,7 +9,9 @@ interface UsuarioPerfil {
   id: string;
   email: string;
   nome: string;
-  tipo: "administrador" | "professor" | "aluno" | "responsavel" | "coordenador" | "professor_conteudista";
+  tipo: "administrador" | "professor" | "aluno" | "responsavel" | 
+      "coordenador" | "professor_conteudista" |
+      "gestor_geral" | "secretaria" | "financeiro" | "estoque";
   avatar?: string;
   serie?: string;
   segmento?: "ead" | "presencial";

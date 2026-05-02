@@ -1,4 +1,13 @@
-export type TipoUsuario = 'aluno' | 'professor' | 'coordenador' | 'administrador' | 'professor_conteudista';
+export type TipoUsuario = 'aluno'
+  | 'professor'
+  | 'professor_conteudista'
+  | 'coordenador'
+  | 'administrador'
+  | 'gestor_geral'    // ← adicionar
+  | 'secretaria'      // ← adicionar já para não repetir
+  | 'financeiro'      // ← adicionar já
+  | 'estoque'         // ← adicionar já
+  | 'responsavel';
 
 export type Segmento = 'ead' | 'presencial';
 

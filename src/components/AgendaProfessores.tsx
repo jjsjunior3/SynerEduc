@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { useSegmento } from '../hooks/useSegmento';
 
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -50,6 +51,7 @@ interface FormEdicao {
 
 export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) {
   const { usuario } = useAuth();
+  const { segmento } = useSegmento();            // ← segmento do coordenador
 
   const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
   const [professores, setProfessores] = useState<FiltroOpcao[]>([]);
@@ -64,7 +66,6 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
   const [erro, setErro] = useState<string | null>(null);
   const [eventoSelecionado, setEventoSelecionado] = useState<AgendaEvento | null>(null);
 
-  // ── Edição ──
   const [modoEdicao, setModoEdicao] = useState(false);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [formEdicao, setFormEdicao] = useState<FormEdicao>({
@@ -93,22 +94,46 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
     const n = new Date(prev); n.setDate(n.getDate() + delta); return n;
   });
 
+  // ── Carrega filtros filtrados pelo segmento ──
   useEffect(() => {
     async function carregarFiltros() {
       try {
         const [{ data: profs }, { data: disc }, { data: seriesData }] = await Promise.all([
-          supabase.from('users').select('id, nome').eq('tipo', 'professor').order('nome'),
-          supabase.from('disciplinas').select('id, nome').order('nome'),
-          supabase.from('series').select('nome').order('nome'),
+          // Professores do segmento
+          supabase.from('users').select('id, nome')
+            .eq('tipo', 'professor')
+            .eq('segmento', segmento)           // ← filtro por segmento
+            .order('nome'),
+          // Disciplinas do segmento
+          supabase.from('disciplinas').select('id, nome')
+            .eq('segmento', segmento)           // ← filtro por segmento
+            .order('nome'),
+          // Séries do segmento
+          supabase.from('series').select('nome')
+            .eq('segmento', segmento)           // ← filtro por segmento
+            .order('nome'),
         ]);
-        setProfessores([{ id: 'todos', nome: 'Todos os Professores' }, ...(profs || []).map((p: any) => ({ id: String(p.id), nome: String(p.nome) }))]);
-        setDisciplinas([{ id: 'todas', nome: 'Todas' }, ...(disc || []).map((d: any) => ({ id: String(d.id), nome: String(d.nome) }))]);
-        setSeries(['todas', ...Array.from(new Set((seriesData || []).map((s: any) => String(s.nome).trim()).filter(Boolean)))]);
-      } catch { setErro('Não foi possível carregar os filtros.'); }
+
+        setProfessores([
+          { id: 'todos', nome: 'Todos os Professores' },
+          ...(profs || []).map((p: any) => ({ id: String(p.id), nome: String(p.nome) })),
+        ]);
+        setDisciplinas([
+          { id: 'todas', nome: 'Todas' },
+          ...(disc || []).map((d: any) => ({ id: String(d.id), nome: String(d.nome) })),
+        ]);
+        setSeries([
+          'todas',
+          ...Array.from(new Set((seriesData || []).map((s: any) => String(s.nome).trim()).filter(Boolean))),
+        ]);
+      } catch {
+        setErro('Não foi possível carregar os filtros.');
+      }
     }
     carregarFiltros();
-  }, []);
+  }, [segmento]);
 
+  // ── Carrega eventos filtrados pelo segmento ──
   useEffect(() => {
     async function carregarEventos() {
       setCarregando(true); setErro(null);
@@ -119,7 +144,10 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           editado_por, enviado_em,
           professor:professor_id(id, nome),
           disciplina:disciplina_id(id, nome)
-        `).eq('data_aula', dataISO).order('horario', { ascending: true });
+        `)
+          .eq('data_aula', dataISO)
+          .eq('segmento', segmento)             // ← filtro por segmento
+          .order('horario', { ascending: true });
 
         if (professorId !== 'todos') query = query.eq('professor_id', professorId);
         if (disciplinaId !== 'todas') query = query.eq('disciplina_id', disciplinaId);
@@ -129,16 +157,13 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
         const { data, error } = await query;
         if (error) throw error;
 
-        // Resolver nomes dos editores (editado_por é UUID sem FK, então buscamos separadamente)
+        // Resolver nomes dos editores
         const editorIds = Array.from(new Set(
           (data || []).map((item: any) => item.editado_por).filter(Boolean)
         ));
         let editorMap: Record<string, string> = {};
         if (editorIds.length > 0) {
-          const { data: editores } = await supabase
-            .from('users')
-            .select('id, nome')
-            .in('id', editorIds);
+          const { data: editores } = await supabase.from('users').select('id, nome').in('id', editorIds);
           (editores || []).forEach((e: any) => { editorMap[e.id] = e.nome; });
         }
 
@@ -159,11 +184,12 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           editado_por_nome: item.editado_por ? (editorMap[item.editado_por] || 'Coordenação') : null,
           enviado_em: item.enviado_em ? String(item.enviado_em) : null,
         })));
-      } catch { setErro('Não foi possível carregar as agendas deste dia.'); }
-      finally { setCarregando(false); }
+      } catch {
+        setErro('Não foi possível carregar as agendas deste dia.');
+      } finally { setCarregando(false); }
     }
     carregarEventos();
-  }, [dataISO, professorId, disciplinaId, serieSelecionada, statusFiltro]);
+  }, [dataISO, professorId, disciplinaId, serieSelecionada, statusFiltro, segmento]);
 
   const totalAgendas = eventos.length;
   const totalEnviadas = eventos.filter(e => e.status === 'enviado').length;
@@ -184,7 +210,8 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
   const handleEnviar = async (id: string) => {
     try {
       const enviado_em = new Date().toISOString();
-      const { error } = await supabase.from('agenda_professor').update({ status: 'enviado', enviado_em }).eq('id', id);
+      const { error } = await supabase.from('agenda_professor')
+        .update({ status: 'enviado', enviado_em }).eq('id', id);
       if (error) throw error;
       setEventos(prev => prev.map(e => e.id === id ? { ...e, status: 'enviado', enviado_em } : e));
       setEventoSelecionado(prev => prev?.id === id ? { ...prev, status: 'enviado', enviado_em } : prev);
@@ -192,7 +219,6 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
     } catch { toast.error('Não foi possível enviar a agenda.'); }
   };
 
-  // ── Funções de edição ──
   const abrirEdicao = (evento: AgendaEvento) => {
     setFormEdicao({
       titulo_unidade: evento.titulo_unidade,
@@ -222,27 +248,17 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
         observacao: formEdicao.observacao.trim() || null,
         prazo_entrega: formEdicao.prazo_entrega || null,
         status: 'editado' as StatusAgenda,
-        // ✅ FIX: Enviar o UUID do usuário (id), não o nome/email
-        // A coluna editado_por no banco é do tipo UUID (foreign key para users)
         editado_por: usuario?.id || null,
+        segmento,                               // ← mantém segmento ao editar
       };
 
-      const { error } = await supabase
-        .from('agenda_professor')
-        .update(payload)
-        .eq('id', eventoSelecionado.id);
-
+      const { error } = await supabase.from('agenda_professor')
+        .update(payload).eq('id', eventoSelecionado.id);
       if (error) throw error;
 
       const atualizado: AgendaEvento = {
         ...eventoSelecionado,
-        titulo_unidade: payload.titulo_unidade,
-        conteudo_sala: payload.conteudo_sala,
-        atividade_casa: payload.atividade_casa,
-        observacao: payload.observacao,
-        prazo_entrega: payload.prazo_entrega,
-        status: payload.status,
-        // Mostrar o nome do coordenador na UI
+        ...payload,
         editado_por_nome: usuario?.nome || 'Coordenação',
       };
       setEventos(prev => prev.map(e => e.id === eventoSelecionado.id ? atualizado : e));
@@ -251,9 +267,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       toast.success('Agenda atualizada com sucesso!');
     } catch (err: any) {
       toast.error('Erro ao salvar: ' + err.message);
-    } finally {
-      setSalvandoEdicao(false);
-    }
+    } finally { setSalvandoEdicao(false); }
   };
 
   const getStatusStyle = (status: StatusAgenda) => {
@@ -274,12 +288,12 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
   };
 
   const resumoCards = [
-    { label: 'Total', value: totalAgendas, icon: BookOpen, className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200', iconClass: 'text-blue-500 dark:text-blue-400' },
-    { label: 'Enviadas', value: totalEnviadas, icon: CheckCircle, className: 'bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-200', iconClass: 'text-green-500 dark:text-green-400' },
-    { label: 'Editadas', value: totalEditadas, icon: AlertTriangle, className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-900 dark:text-orange-200', iconClass: 'text-orange-500 dark:text-orange-400' },
-    { label: 'Pendentes', value: totalPendentes, icon: Clock, className: 'bg-red-100 dark:bg-red-900/30 text-red-900 dark:text-red-200', iconClass: 'text-red-500 dark:text-red-400' },
+    { label: 'Total', value: totalAgendas, icon: BookOpen, className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200', iconClass: 'text-blue-500' },
+    { label: 'Enviadas', value: totalEnviadas, icon: CheckCircle, className: 'bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-200', iconClass: 'text-green-500' },
+    { label: 'Editadas', value: totalEditadas, icon: AlertTriangle, className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-900 dark:text-orange-200', iconClass: 'text-orange-500' },
+    { label: 'Pendentes', value: totalPendentes, icon: Clock, className: 'bg-red-100 dark:bg-red-900/30 text-red-900 dark:text-red-200', iconClass: 'text-red-500' },
   ];
-  
+
   return (
     <div className="space-y-6">
 
@@ -288,6 +302,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="w-4 h-4 text-blue-600 flex-shrink-0" />
           <span className="font-medium text-foreground capitalize">{formatarDataExtenso(dataSelecionada)}</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-muted capitalize">{segmento}</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => mudarDia(-1)}>
@@ -301,9 +316,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           <Button variant="outline" size="icon" onClick={() => mudarDia(1)}>
             <ChevronRight className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setDataSelecionada(new Date())}>
-            Hoje
-          </Button>
+          <Button variant="outline" size="sm" onClick={() => setDataSelecionada(new Date())}>Hoje</Button>
         </div>
       </div>
 
@@ -364,7 +377,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
         </CardContent>
       </Card>
 
-      {/* Cards de resumo */}
+      {/* Cards resumo */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5">
         {resumoCards.map(card => {
           const Icon = card.icon;
@@ -380,7 +393,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
         })}
       </div>
 
-      {/* Lista de agendas */}
+      {/* Lista */}
       <div className="space-y-4">
         {carregando ? (
           <div className="flex items-center justify-center py-12">
@@ -424,11 +437,11 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                       <span>{evento.horario || 'Horário não informado'}</span>
                     </div>
                     {evento.prazo_entrega && (
-                      <span className="text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                      <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                         Entrega: {formatarDataCurta(evento.prazo_entrega)}
                       </span>
                     )}
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs sm:text-sm hidden sm:flex"
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs hidden sm:flex"
                       onClick={e => { e.stopPropagation(); setEventoSelecionado(evento); setModoEdicao(false); }}>
                       <Eye className="w-4 h-4" /> Revisar
                     </Button>
@@ -440,7 +453,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
         )}
       </div>
 
-      {/* ── Modal ── */}
+      {/* Modal */}
       <Dialog open={!!eventoSelecionado} onOpenChange={open => {
         if (!open) { setEventoSelecionado(null); cancelarEdicao(); }
       }}>
@@ -457,7 +470,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                   </div>
                   {!modoEdicao && (
                     <Button variant="outline" size="sm"
-                      className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/20 flex-shrink-0"
+                      className="gap-1.5 flex-shrink-0"
                       onClick={() => abrirEdicao(eventoSelecionado)}>
                       <Edit className="w-4 h-4" /> Editar
                     </Button>
@@ -465,7 +478,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                 </div>
               </DialogHeader>
 
-              {/* ── VISUALIZAÇÃO ── */}
+              {/* Visualização */}
               {!modoEdicao && (
                 <>
                   <div className="space-y-5 py-4">
@@ -479,7 +492,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                         { label: 'Turma', value: eventoSelecionado.turma || 'Não informada' },
                       ].map(item => (
                         <div key={item.label}>
-                          <span className="text-xs pt-2 text-muted-foreground block mb-0.5">{item.label}</span>
+                          <span className="text-xs text-muted-foreground block mb-0.5">{item.label}</span>
                           <p className="font-medium text-foreground text-sm">{item.value}</p>
                         </div>
                       ))}
@@ -487,7 +500,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
 
                     {eventoSelecionado.conteudo_sala && (
                       <div>
-                        <span className="text-xs py-2 text-muted-foreground block mb-1.5">Em Sala</span>
+                        <span className="text-xs text-muted-foreground block mb-1.5">Em Sala</span>
                         <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
                           style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
                           {eventoSelecionado.conteudo_sala}
@@ -497,7 +510,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
 
                     {eventoSelecionado.atividade_casa && (
                       <div>
-                        <span className="text-xs py-2 text-muted-foreground block mb-1.5">Para Casa</span>
+                        <span className="text-xs text-muted-foreground block mb-1.5">Para Casa</span>
                         <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
                           style={{ backgroundColor: '#faf5ff', border: '1px solid #e9d5ff' }}>
                           {eventoSelecionado.atividade_casa}
@@ -507,7 +520,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
 
                     {eventoSelecionado.prazo_entrega && (
                       <div>
-                        <span className="text-xs py-2 text-muted-foreground block mb-1.5">Prazo de Entrega</span>
+                        <span className="text-xs text-muted-foreground block mb-1.5">Prazo de Entrega</span>
                         <div className="rounded-lg p-4 text-sm text-foreground"
                           style={{ backgroundColor: '#fef9c3', border: '1px solid #fde047' }}>
                           {formatarDataCurta(eventoSelecionado.prazo_entrega)}
@@ -517,7 +530,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
 
                     {eventoSelecionado.observacao && (
                       <div>
-                        <span className="text-xs py-2 text-muted-foreground block mb-1.5">Observação</span>
+                        <span className="text-xs text-muted-foreground block mb-1.5">Observação</span>
                         <div className="rounded-lg p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed"
                           style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                           {eventoSelecionado.observacao}
@@ -548,7 +561,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
 
                   <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-border">
                     <Button variant="outline"
-                      className="flex-1 sm:flex-none gap-2 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20"
+                      className="flex-1 sm:flex-none gap-2 text-destructive border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20"
                       onClick={() => handleDeletar(eventoSelecionado.id)}>
                       <Trash2 className="w-4 h-4" /> Deletar
                     </Button>
@@ -566,83 +579,53 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                 </>
               )}
 
-              {/* ── EDIÇÃO ── */}
+              {/* Edição */}
               {modoEdicao && (
                 <div className="space-y-5 py-4">
                   <div className="space-y-2">
-                    <Label className="text-foreground font-medium text-sm">
-                      Título da Unidade <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      value={formEdicao.titulo_unidade}
+                    <Label className="text-foreground font-medium text-sm">Título da Unidade <span className="text-red-500">*</span></Label>
+                    <Input value={formEdicao.titulo_unidade}
                       onChange={e => setFormEdicao(p => ({ ...p, titulo_unidade: e.target.value }))}
-                      placeholder="Título da unidade"
-                      disabled={salvandoEdicao}
-                    />
+                      placeholder="Título da unidade" disabled={salvandoEdicao} />
                   </div>
-
                   <div className="space-y-2">
                     <Label className="text-foreground font-medium text-sm">Conteúdo em Sala</Label>
-                    <Textarea
-                      value={formEdicao.conteudo_sala}
+                    <Textarea value={formEdicao.conteudo_sala}
                       onChange={e => setFormEdicao(p => ({ ...p, conteudo_sala: e.target.value }))}
-                      placeholder="O que foi trabalhado em sala..."
-                      rows={4}
-                      disabled={salvandoEdicao}
-                    />
+                      placeholder="O que foi trabalhado em sala..." rows={4} disabled={salvandoEdicao} />
                   </div>
-
                   <div className="space-y-2">
                     <Label className="text-foreground font-medium text-sm">Atividade Para Casa</Label>
-                    <Textarea
-                      value={formEdicao.atividade_casa}
+                    <Textarea value={formEdicao.atividade_casa}
                       onChange={e => setFormEdicao(p => ({ ...p, atividade_casa: e.target.value }))}
-                      placeholder="Atividade para os alunos fazerem em casa..."
-                      rows={4}
-                      disabled={salvandoEdicao}
-                    />
+                      placeholder="Atividade para os alunos fazerem em casa..." rows={4} disabled={salvandoEdicao} />
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                      <Label className="text-foreground font-medium text-sm">
-                        Prazo de Entrega <span className="text-muted-foreground text-xs font-normal">(opcional)</span>
-                      </Label>
-                      <Input
-                        type="date"
-                        value={formEdicao.prazo_entrega}
+                      <Label className="text-foreground font-medium text-sm">Prazo de Entrega</Label>
+                      <Input type="date" value={formEdicao.prazo_entrega}
                         onChange={e => setFormEdicao(p => ({ ...p, prazo_entrega: e.target.value }))}
-                        disabled={salvandoEdicao}
-                      />
+                        disabled={salvandoEdicao} />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-foreground font-medium text-sm">
-                        Observação <span className="text-muted-foreground text-xs font-normal">(opcional)</span>
-                      </Label>
-                      <Input
-                        value={formEdicao.observacao}
+                      <Label className="text-foreground font-medium text-sm">Observação</Label>
+                      <Input value={formEdicao.observacao}
                         onChange={e => setFormEdicao(p => ({ ...p, observacao: e.target.value }))}
-                        placeholder="Observações adicionais..."
-                        disabled={salvandoEdicao}
-                      />
+                        placeholder="Observações adicionais..." disabled={salvandoEdicao} />
                     </div>
                   </div>
 
                   <div className="flex items-start gap-2 p-3 rounded-lg text-xs"
                     style={{ backgroundColor: '#dbeafe', color: '#1e3a8a' }}>
                     <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>
-                      Ao salvar, o status será alterado para <strong>Editada</strong> e o nome
-                      da coordenação será registrado automaticamente.
-                    </span>
+                    <span>Ao salvar, o status será alterado para <strong>Editada</strong> e o nome da coordenação será registrado.</span>
                   </div>
 
                   <div className="flex gap-3 pt-2 border-t border-border">
                     <Button variant="outline" className="flex-1" onClick={cancelarEdicao} disabled={salvandoEdicao}>
                       <X className="w-4 h-4 mr-2" /> Cancelar
                     </Button>
-                    <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
-                      onClick={salvarEdicao} disabled={salvandoEdicao}>
+                    <Button className="flex-1 gap-2" onClick={salvarEdicao} disabled={salvandoEdicao}>
                       {salvandoEdicao
                         ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
                         : <><Save className="w-4 h-4" />Salvar Edição</>

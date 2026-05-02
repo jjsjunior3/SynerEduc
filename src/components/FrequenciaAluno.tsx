@@ -1,6 +1,7 @@
 // src/components/FrequenciaAluno.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../supabase/supabaseClient';
+import { useSegmento } from '../hooks/useSegmento';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -20,7 +21,6 @@ interface AlunoFrequencia {
   percentualFrequencia: number; ultimasFaltas: string[]; situacao: Situacao;
 }
 
-// Padrão: mês atual
 function getMesAtual() {
   const hoje = new Date();
   const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -30,7 +30,10 @@ function getMesAtual() {
 }
 
 export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlunosProps) {
+  const { segmento } = useSegmento();
   const mesAtual = getMesAtual();
+
+  const [seriesDisponiveis, setSeriesDisponiveis] = useState<string[]>([]);
   const [filtroSerie, setFiltroSerie] = useState('todas');
   const [filtroSituacao, setFiltroSituacao] = useState('todas');
   const [busca, setBusca] = useState('');
@@ -40,6 +43,23 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
   const [alunosFiltrados, setAlunosFiltrados] = useState<AlunoFrequencia[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // ── Carrega séries do segmento do coordenador ──
+  useEffect(() => {
+    async function carregarSeries() {
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('serie')
+          .eq('tipo', 'aluno')
+          .eq('segmento', segmento)          // ← filtro por segmento
+          .not('serie', 'is', null);
+        const unicas = Array.from(new Set((data || []).map((s: any) => s.serie))).sort() as string[];
+        setSeriesDisponiveis(unicas);
+      } catch { /* silencioso */ }
+    }
+    carregarSeries();
+  }, [segmento]);
 
   const calcularSituacao = (pct: number): Situacao => pct >= 85 ? 'regular' : pct >= 75 ? 'atencao' : 'critica';
 
@@ -109,9 +129,17 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
       const alunoIds = Array.from(new Set(freqData.map((r: any) => r.aluno_id).filter(Boolean))) as string[];
       if (!alunoIds.length) { setAlunosFiltrados([]); setAlunosCarregados(true); setLoading(false); return; }
 
-      let usersQuery = supabase.from('users').select('id, nome, serie').in('id', alunoIds).eq('tipo', 'aluno');
+      // Filtra alunos pelo segmento do coordenador
+      let usersQuery = supabase
+        .from('users')
+        .select('id, nome, serie')
+        .in('id', alunoIds)
+        .eq('tipo', 'aluno')
+        .eq('segmento', segmento);           // ← filtro por segmento
+
       if (busca.trim()) usersQuery = usersQuery.ilike('nome', `%${busca.trim()}%`);
       if (filtroSerie !== 'todas') usersQuery = usersQuery.eq('serie', filtroSerie);
+
       const { data: usersData, error: usersError } = await usersQuery;
       if (usersError) throw usersError;
       if (!usersData?.length) { setAlunosFiltrados([]); setAlunosCarregados(true); setLoading(false); return; }
@@ -163,7 +191,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
       const ml = 40; let y = 40;
 
       doc.setFont('Helvetica', 'bold'); doc.setFontSize(16);
-      doc.text('Colégio Conexão EAD', ml, y); y += 16;
+      doc.text('SynerTech Escola', ml, y); y += 16;
       doc.setFont('Helvetica', 'normal'); doc.setFontSize(12);
       doc.text('Relatório de Frequência de Aluno', ml, y); y += 24;
 
@@ -194,14 +222,12 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
       const finalY = (doc as any).lastAutoTable?.finalY || y + 30;
       doc.setFontSize(8); doc.setTextColor(150);
       doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, ml, finalY + 20);
-
       doc.save(`frequencia_${aluno.nome.toLowerCase().replace(/\s+/g, '_')}.pdf`);
     } catch {
       toast.error('Erro ao gerar relatório PDF.');
     }
   };
 
-  // Cards de resumo
   const totalAlunos = alunosFiltrados.length;
   const mediaFreq = totalAlunos > 0 ? alunosFiltrados.reduce((a, b) => a + b.percentualFrequencia, 0) / totalAlunos : 0;
   const regulares = alunosFiltrados.filter(a => a.situacao === 'regular').length;
@@ -240,38 +266,42 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
       {/* Filtros */}
       <Card>
         <CardHeader className="border-b border-border pb-4">
-          <CardTitle className="text-foreground text-base">Filtros de Busca</CardTitle>
+          <div>
+            <CardTitle className="text-foreground text-base">Filtros de Busca</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Segmento: <span className="font-semibold capitalize">{segmento}</span>
+            </p>
+          </div>
         </CardHeader>
         <CardContent className="pt-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* Busca por nome */}
             <div className="space-y-2">
-              <Label className="text-xs p-2 text-muted-foreground">Buscar aluno</Label>
+              <Label className="text-xs text-muted-foreground">Buscar aluno</Label>
               <div className="relative">
-                <Search className="w-4 h-4text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                <Input className="pl-9" placeholder="      Nome do aluno" value={busca}
+                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input className="pl-9" placeholder="Nome do aluno" value={busca}
                   onChange={e => setBusca(e.target.value)} />
               </div>
             </div>
 
+            {/* Série — dinâmica, do banco */}
             <div className="space-y-2">
-              <Label className="text-xs p-2 text-muted-foreground">Série</Label>
+              <Label className="text-xs text-muted-foreground">Série</Label>
               <Select value={filtroSerie} onValueChange={setFiltroSerie}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todas">Todas</SelectItem>
-                  <SelectItem value="6º ano">6º ano</SelectItem>
-                  <SelectItem value="7º ano">7º ano</SelectItem>
-                  <SelectItem value="8º ano">8º ano</SelectItem>
-                  <SelectItem value="9º ano">9º ano</SelectItem>
-                  <SelectItem value="1ª série">1ª série</SelectItem>
-                  <SelectItem value="2ª série">2ª série</SelectItem>
-                  <SelectItem value="3ª série">3ª série</SelectItem>
+                  {seriesDisponiveis.map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
+            {/* Situação */}
             <div className="space-y-2">
-              <Label className="text-xs p-2 text-muted-foreground">Situação</Label>
+              <Label className="text-xs text-muted-foreground">Situação</Label>
               <Select value={filtroSituacao} onValueChange={setFiltroSituacao}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -283,22 +313,19 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
               </Select>
             </div>
 
+            {/* Período */}
             <div className="space-y-2">
-              <Label className="text-xs p-2 text-muted-foreground">Período — De</Label>
+              <Label className="text-xs text-muted-foreground">Período — De</Label>
               <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
             </div>
-
             <div className="space-y-2">
-              <Label className="text-xs p-2 text-muted-foreground">Período — Até</Label>
+              <Label className="text-xs text-muted-foreground">Período — Até</Label>
               <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
             </div>
 
-            <div className="flex items-end p-3 gap-2 md:col-span-2">
-              <Button variant="outline" className="flex-1" onClick={handleLimpar}>
-                Limpar
-              </Button>
-              <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2"
-                onClick={buscarFrequenciaAlunos} disabled={loading}>
+            <div className="flex items-end gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleLimpar}>Limpar</Button>
+              <Button className="flex-1 gap-2" onClick={buscarFrequenciaAlunos} disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 Buscar
               </Button>
@@ -315,7 +342,6 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-7 h-7 animate-spin text-blue-600 mr-2" />
@@ -346,47 +372,28 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
                 <Card key={aluno.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-6">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-
-                      {/* Info principal */}
                       <div className="flex-1 space-y-3">
                         <div className="flex items-center gap-3 flex-wrap">
                           <h3 className="font-semibold text-foreground text-base">{aluno.nome}</h3>
-                          <span
-                            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border"
-                            style={{ backgroundColor: estilo.bg, color: estilo.text, borderColor: estilo.border }}
-                          >
+                          <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border"
+                            style={{ backgroundColor: estilo.bg, color: estilo.text, borderColor: estilo.border }}>
                             {getSituacaoIcon(aluno.situacao)}
                             {getSituacaoTexto(aluno.situacao)}
                           </span>
                         </div>
-
                         <p className="text-sm text-muted-foreground">
                           Série: <span className="font-medium text-foreground">{aluno.serie}</span>
                         </p>
-
                         <div className="flex flex-wrap gap-4 text-sm">
-                          <span className="text-muted-foreground">
-                            Total: <span className="font-semibold text-foreground">{aluno.totalAulas}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            Presenças: <span className="font-semibold text-green-600 dark:text-green-400">{aluno.presencas}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            Faltas: <span className="font-semibold text-red-600 dark:text-red-400">{aluno.faltas}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            Frequência: <span className="font-semibold text-foreground">{aluno.percentualFrequencia.toFixed(1)}%</span>
-                          </span>
+                          <span className="text-muted-foreground">Total: <span className="font-semibold text-foreground">{aluno.totalAulas}</span></span>
+                          <span className="text-muted-foreground">Presenças: <span className="font-semibold text-green-600 dark:text-green-400">{aluno.presencas}</span></span>
+                          <span className="text-muted-foreground">Faltas: <span className="font-semibold text-red-600 dark:text-red-400">{aluno.faltas}</span></span>
+                          <span className="text-muted-foreground">Frequência: <span className="font-semibold text-foreground">{aluno.percentualFrequencia.toFixed(1)}%</span></span>
                         </div>
-
                         {aluno.ultimasFaltas.length > 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            Últimas faltas: {aluno.ultimasFaltas.join(', ')}
-                          </p>
+                          <p className="text-xs text-muted-foreground">Últimas faltas: {aluno.ultimasFaltas.join(', ')}</p>
                         )}
-
-                        <Button variant="outline" size="sm"
-                          className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                        <Button variant="outline" size="sm" className="gap-2"
                           onClick={() => handleGerarPDF(aluno)}>
                           <FileText className="w-4 h-4" /> Gerar Relatório PDF
                         </Button>
@@ -397,15 +404,9 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
                         <div className="relative w-24 h-24">
                           <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                             <circle strokeWidth="10" stroke="var(--border)" fill="transparent" r="45" cx="50" cy="50" />
-                            <circle
-                              strokeWidth="10"
-                              strokeDasharray={circumference}
-                              strokeDashoffset={offset}
-                              strokeLinecap="round"
-                              fill="transparent"
-                              r="45" cx="50" cy="50"
-                              style={{ stroke: circleColor, transition: 'stroke-dashoffset 0.5s' }}
-                            />
+                            <circle strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset}
+                              strokeLinecap="round" fill="transparent" r="45" cx="50" cy="50"
+                              style={{ stroke: circleColor, transition: 'stroke-dashoffset 0.5s' }} />
                           </svg>
                           <div className="absolute inset-0 flex items-center justify-center">
                             <span className="text-lg font-bold" style={{ color: circleColor }}>

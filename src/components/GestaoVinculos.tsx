@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Check,
   ArrowLeft,
-  XCircle, // Ícone para desvincular
+  XCircle,
+  Monitor,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../supabase/supabaseClient";
@@ -30,13 +31,14 @@ interface Professor {
 interface Disciplina {
   id: string;
   nome: string;
-  segmento?: string | null;
+  segmento: "ead" | "presencial" | null;
 }
 
 interface Serie {
   id: string;
   nome: string;
   nivel: string | null;
+  segmento: "ead" | "presencial" | null;
 }
 
 interface Vinculo {
@@ -47,48 +49,35 @@ interface Vinculo {
   disciplinaNome: string;
   serieId: string;
   serieNome: string;
+  segmento: "ead" | "presencial" | null;
 }
 
-type SegmentoCodigo = "" | "fundamental1" | "fundamental2" | "medio";
+type SegmentoFiltro = "" | "ead" | "presencial";
 
 const ANO_ATUAL = new Date().getFullYear();
 
-/** Label curto exibido junto ao nome da disciplina */
-function labelSegmentoDisciplina(seg?: string | null): string {
-  if (!seg) return "";
-  const s = seg.toLowerCase();
+// ─── helpers ────────────────────────────────────────────────────────
 
-  if (
-    s.includes("fundamental i") ||
-    s.includes("fundamental 1") ||
-    s.includes("fund. i") ||
-    s.includes("fund 1")
-  ) {
-    return "Fundamental I";
-  }
-
-  if (
-    s.includes("fundamental ii") ||
-    s.includes("fundamental 2") ||
-    s.includes("fund. ii") ||
-    s.includes("fund 2")
-  ) {
-    return "Fundamental II";
-  }
-
-  if (s.includes("medio") || s.includes("médio")) {
-    return "Médio";
-  }
-
-  return seg;
+function badgeSegmento(seg: string | null) {
+  if (seg === "ead")
+    return "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700";
+  if (seg === "presencial")
+    return "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700";
+  return "bg-muted text-muted-foreground border-border";
 }
 
-function labelSegmentoSelect(seg: SegmentoCodigo): string {
-  if (seg === "fundamental1") return "Fundamental I";
-  if (seg === "fundamental2") return "Fundamental II";
-  if (seg === "medio") return "Ensino Médio";
-  return "Todos os segmentos";
+function labelSegmento(seg: string | null) {
+  if (seg === "ead") return "EAD";
+  if (seg === "presencial") return "Presencial";
+  return "";
 }
+
+// Select padronizado com dark mode
+const selectClass =
+  "w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground " +
+  "focus:ring-2 focus:ring-ring focus:border-transparent text-sm";
+
+// ────────────────────────────────────────────────────────────────────
 
 export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
   const [professores, setProfessores] = useState<Professor[]>([]);
@@ -97,8 +86,7 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);
 
   const [professorSelecionado, setProfessorSelecionado] = useState("");
-  const [segmentoSelecionado, setSegmentoSelecionado] =
-    useState<SegmentoCodigo>("");
+  const [segmentoSelecionado, setSegmentoSelecionado] = useState<SegmentoFiltro>("");
   const [disciplinaSelecionada, setDisciplinaSelecionada] = useState("");
   const [seriesSelecionadas, setSeriesSelecionadas] = useState<string[]>([]);
 
@@ -106,7 +94,7 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
   const [mostrarLista, setMostrarLista] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
-  // --------- CARREGAR DADOS ---------
+  // ─── CARREGAR DADOS ────────────────────────────────────────────────
 
   async function carregarProfessores() {
     try {
@@ -115,16 +103,10 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
         .select("id, nome, tipo")
         .in("tipo", ["professor", "professor_conteudista"])
         .order("nome", { ascending: true });
-
       if (error) throw error;
-
-      const mapped: Professor[] =
-        data?.map((u: any) => ({
-          id: u.id,
-          nome: u.nome || "Professor sem nome",
-        })) ?? [];
-
-      setProfessores(mapped);
+      setProfessores(
+        (data || []).map((u: any) => ({ id: u.id, nome: u.nome || "Professor sem nome" }))
+      );
     } catch (e: any) {
       console.error("[GestaoVinculos] Erro ao carregar professores:", e.message);
       toast.error("Erro ao carregar professores");
@@ -138,17 +120,17 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
         .from("disciplinas")
         .select("id, nome, segmento")
         .order("nome", { ascending: true });
-
       if (error) throw error;
-
-      const mapped: Disciplina[] =
-        data?.map((d: any) => ({
+      setDisciplinas(
+        (data || []).map((d: any) => ({
           id: d.id,
           nome: d.nome || "Disciplina sem nome",
-          segmento: d.segmento ?? null,
-        })) ?? [];
-
-      setDisciplinas(mapped);
+          segmento:
+            d.segmento === "ead" || d.segmento === "presencial"
+              ? d.segmento
+              : null,
+        }))
+      );
     } catch (e: any) {
       console.error("[GestaoVinculos] Erro ao carregar disciplinas:", e.message);
       toast.error("Erro ao carregar disciplinas");
@@ -160,19 +142,20 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
     try {
       const { data, error } = await supabase
         .from("series")
-        .select("id, nome, nivel")
+        .select("id, nome, nivel, segmento")
         .order("nome", { ascending: true });
-
       if (error) throw error;
-
-      const mapped: Serie[] =
-        data?.map((s: any) => ({
+      setSeries(
+        (data || []).map((s: any) => ({
           id: s.id,
           nome: s.nome || "Série sem nome",
           nivel: s.nivel || null,
-        })) ?? [];
-
-      setSeries(mapped);
+          segmento:
+            s.segmento === "ead" || s.segmento === "presencial"
+              ? s.segmento
+              : null,
+        }))
+      );
     } catch (e: any) {
       console.error("[GestaoVinculos] Erro ao carregar séries:", e.message);
       toast.error("Erro ao carregar séries");
@@ -185,22 +168,15 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
       const { data, error } = await supabase
         .from("professores_disciplinas_series")
         .select(
-          `
-          id,
-          professor_id,
-          disciplina_id,
-          serie_id,
-          users:professor_id ( id, nome ),
-          disciplinas:disciplina_id ( id, nome ),
-          series:serie_id ( id, nome )
-        `
+          `id, professor_id, disciplina_id, serie_id, segmento,
+           users:professor_id ( id, nome ),
+           disciplinas:disciplina_id ( id, nome ),
+           series:serie_id ( id, nome )`
         )
         .order("id", { ascending: true });
-
       if (error) throw error;
-
-      const mapped: Vinculo[] =
-        data?.map((v: any) => ({
+      setVinculos(
+        (data || []).map((v: any) => ({
           id: v.id,
           professorId: v.professor_id,
           professorNome: v.users?.nome || "Professor",
@@ -208,9 +184,12 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
           disciplinaNome: v.disciplinas?.nome || "Disciplina",
           serieId: v.serie_id,
           serieNome: v.series?.nome || "Série",
-        })) ?? [];
-
-      setVinculos(mapped);
+          segmento:
+            v.segmento === "ead" || v.segmento === "presencial"
+              ? v.segmento
+              : null,
+        }))
+      );
     } catch (e: any) {
       console.error("[GestaoVinculos] Erro ao carregar vínculos:", e.message);
       toast.error("Erro ao carregar vínculos");
@@ -233,124 +212,68 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
     carregarTudo();
   }, []);
 
-  // --------- HELPERS / FILTROS ---------
+  // ─── FILTROS ────────────────────────────────────────────────────────
+
+  // Ao trocar segmento, limpa disciplina e séries selecionadas
+  const handleSegmentoChange = (seg: SegmentoFiltro) => {
+    setSegmentoSelecionado(seg);
+    setDisciplinaSelecionada("");
+    setSeriesSelecionadas([]);
+  };
 
   const disciplinasFiltradas = disciplinas.filter((d) => {
     if (!segmentoSelecionado) return true;
-    if (!d.segmento) return false;
-
-    const segDisc = d.segmento.toLowerCase();
-
-    if (segmentoSelecionado === "fundamental1") {
-      return (
-        segDisc.includes("fundamental i") ||
-        segDisc.includes("fundamental 1") ||
-        segDisc.includes("fund. i") ||
-        segDisc.includes("fund 1")
-      );
-    }
-
-    if (segmentoSelecionado === "fundamental2") {
-      return (
-        segDisc.includes("fundamental ii") ||
-        segDisc.includes("fundamental 2") ||
-        segDisc.includes("fund. ii") ||
-        segDisc.includes("fund 2")
-      );
-    }
-
-    if (segmentoSelecionado === "medio") {
-      return segDisc.includes("medio") || segDisc.includes("médio");
-    }
-
-    return true;
+    return d.segmento === segmentoSelecionado;
   });
 
   const seriesFiltradas = series.filter((s) => {
     if (!segmentoSelecionado) return true;
-
-    const nivel = (s.nivel || "").toLowerCase().trim();
-
-    if (!nivel) {
-      // se nivel não está preenchido, não filtra por segmento
-      return true;
-    }
-
-    if (segmentoSelecionado === "medio") {
-      return nivel.includes("med") || nivel === "medio";
-    }
-
-    if (
-      segmentoSelecionado === "fundamental1" ||
-      segmentoSelecionado === "fundamental2"
-    ) {
-      return nivel.includes("fund") || nivel === "fundamental";
-    }
-
-    return true;
+    return s.segmento === segmentoSelecionado;
   });
 
   const vinculosFiltrados = vinculos.filter((v) => {
     if (!filtro) return true;
-    const termo = filtro.toLowerCase();
+    const t = filtro.toLowerCase();
     return (
-      v.professorNome.toLowerCase().includes(termo) ||
-      v.disciplinaNome.toLowerCase().includes(termo) ||
-      v.serieNome.toLowerCase().includes(termo)
+      v.professorNome.toLowerCase().includes(t) ||
+      v.disciplinaNome.toLowerCase().includes(t) ||
+      v.serieNome.toLowerCase().includes(t)
     );
   });
 
   const vinculosPorProfessor = (profId: string) =>
     vinculos.filter((v) => v.professorId === profId);
 
-  const toggleSerieSelecionada = (serieId: string) => {
+  const toggleSerie = (id: string) =>
     setSeriesSelecionadas((prev) =>
-      prev.includes(serieId)
-        ? prev.filter((id) => id !== serieId)
-        : [...prev, serieId]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-  };
 
-  // --------- AÇÕES ---------
+  // ─── AÇÕES ──────────────────────────────────────────────────────────
 
   const adicionarVinculo = async () => {
-    if (!professorSelecionado) {
-      toast.error("Selecione um professor");
-      return;
-    }
-    if (!disciplinaSelecionada) {
-      toast.error("Selecione uma disciplina");
-      return;
-    }
-    if (seriesSelecionadas.length === 0) {
-      toast.error("Selecione pelo menos uma série");
-      return;
-    }
+    if (!professorSelecionado) { toast.error("Selecione um professor"); return; }
+    if (!disciplinaSelecionada) { toast.error("Selecione uma disciplina"); return; }
+    if (seriesSelecionadas.length === 0) { toast.error("Selecione pelo menos uma série"); return; }
 
     try {
-      const inserts: {
-        professor_id: string;
-        disciplina_id: string;
-        serie_id: string;
-        ano_letivo?: number;
-      }[] = [];
-
-      for (const serieId of seriesSelecionadas) {
-        const jaExiste = vinculos.some(
-          (v) =>
-            v.professorId === professorSelecionado &&
-            v.disciplinaId === disciplinaSelecionada &&
-            v.serieId === serieId
-        );
-        if (jaExiste) continue;
-
-        inserts.push({
+      const inserts = seriesSelecionadas
+        .filter(
+          (serieId) =>
+            !vinculos.some(
+              (v) =>
+                v.professorId === professorSelecionado &&
+                v.disciplinaId === disciplinaSelecionada &&
+                v.serieId === serieId
+            )
+        )
+        .map((serieId) => ({
           professor_id: professorSelecionado,
           disciplina_id: disciplinaSelecionada,
           serie_id: serieId,
           ano_letivo: ANO_ATUAL,
-        });
-      }
+          segmento: segmentoSelecionado || null,
+        }));
 
       if (inserts.length === 0) {
         toast.error("Todos os vínculos selecionados já existem.");
@@ -360,16 +283,13 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
       const { error } = await supabase
         .from("professores_disciplinas_series")
         .insert(inserts);
-
       if (error) throw error;
 
-      toast.success("Vínculo(s) criado(s) com sucesso!");
-
+      toast.success(`${inserts.length} vínculo(s) criado(s) com sucesso!`);
       setProfessorSelecionado("");
       setDisciplinaSelecionada("");
       setSegmentoSelecionado("");
       setSeriesSelecionadas([]);
-
       await carregarVinculos();
     } catch (e: any) {
       console.error("[GestaoVinculos] Erro ao criar vínculo:", e.message);
@@ -379,15 +299,12 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
 
   const removerVinculo = async (id: string) => {
     if (!confirm("Deseja realmente excluir este vínculo?")) return;
-
     try {
       const { error } = await supabase
         .from("professores_disciplinas_series")
         .delete()
         .eq("id", id);
-
       if (error) throw error;
-
       setVinculos((prev) => prev.filter((v) => v.id !== id));
       toast.success("Vínculo removido com sucesso!");
     } catch (e: any) {
@@ -396,81 +313,83 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
     }
   };
 
-  // Nova função para remover TODOS os vínculos de um professor
-  const removerTodosVinculosDoProfessor = async (professorId: string, professorNome: string) => {
-    if (!confirm(`Deseja realmente desvincular o professor ${professorNome} de TODAS as suas disciplinas e séries?`)) return;
-
+  const removerTodosVinculosDoProfessor = async (
+    professorId: string,
+    professorNome: string
+  ) => {
+    if (
+      !confirm(
+        `Deseja desvincular ${professorNome} de TODAS as disciplinas e séries?`
+      )
+    )
+      return;
     try {
       const { error } = await supabase
         .from("professores_disciplinas_series")
         .delete()
         .eq("professor_id", professorId);
-
       if (error) throw error;
-
       setVinculos((prev) => prev.filter((v) => v.professorId !== professorId));
-      toast.success(`Todos os vínculos de ${professorNome} foram removidos com sucesso!`);
+      toast.success(`Todos os vínculos de ${professorNome} removidos!`);
     } catch (e: any) {
-      console.error("[GestaoVinculos] Erro ao remover todos os vínculos do professor:", e.message);
-      toast.error("Erro ao remover todos os vínculos do professor");
+      console.error("[GestaoVinculos] Erro ao remover vínculos:", e.message);
+      toast.error("Erro ao remover vínculos");
     }
   };
 
-  // --------- RENDER ---------
+  // ─── RENDER ─────────────────────────────────────────────────────────
+
+  const professoresComVinculo = professores.filter(
+    (p) => vinculosPorProfessor(p.id).length > 0
+  );
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
+
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {onVoltar && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onVoltar}
-              className="gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
+            <Button variant="ghost" size="sm" onClick={onVoltar}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
               Voltar
             </Button>
           )}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Gestão de Vínculos
-            </h1>
-            <p className="text-gray-600 mt-2">
+            <h1 className="text-2xl font-bold text-foreground">Gestão de Vínculos</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
               Vincule professores às disciplinas e séries que lecionam
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="px-4 py-2">
-            <Link2 className="w-4 h-4 mr-2" />
-            {vinculos.length} vínculo(s) ativo(s)
-          </Badge>
-        </div>
+        <Badge variant="secondary" className="px-3 py-1.5 gap-1.5">
+          <Link2 className="w-3.5 h-3.5" />
+          {vinculos.length} vínculo(s) ativo(s)
+        </Badge>
       </div>
 
-      {/* Formulário */}
-      <Card className="border-2 border-blue-200 bg-blue-50/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-blue-600" />
+      {/* ══ Formulário ══ */}
+      <Card className="border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <UserPlus className="w-4 h-4 text-primary" />
             Criar Novo Vínculo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+          {/* Linha 1: Professor + Segmento */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Professor */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                Professor
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" />
+                Professor *
               </label>
               <select
                 value={professorSelecionado}
                 onChange={(e) => setProfessorSelecionado(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={selectClass}
               >
                 <option value="">Selecione o professor</option>
                 {professores.map((prof) => (
@@ -481,73 +400,99 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
               </select>
             </div>
 
-            {/* Segmento */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <GraduationCap className="w-4 h-4" />
-                Segmento
+            {/* Segmento EAD / Presencial */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <Monitor className="w-3.5 h-3.5" />
+                Segmento *
               </label>
               <select
                 value={segmentoSelecionado}
-                onChange={(e) =>
-                  setSegmentoSelecionado(e.target.value as SegmentoCodigo)
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => handleSegmentoChange(e.target.value as SegmentoFiltro)}
+                className={selectClass}
               >
-                <option value="">Todos</option>
-                <option value="fundamental1">Ensino Fundamental I</option>
-                <option value="fundamental2">Ensino Fundamental II</option>
-                <option value="medio">Ensino Médio</option>
+                <option value="">Selecione o segmento</option>
+                <option value="ead">EAD</option>
+                <option value="presencial">Presencial</option>
               </select>
             </div>
+          </div>
 
+          {/* Linha 2: Disciplina + Séries */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Disciplina */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <BookOpen className="w-4 h-4" />
-                Disciplina
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5" />
+                Disciplina *
+                {segmentoSelecionado && (
+                  <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-medium border ${badgeSegmento(segmentoSelecionado)}`}>
+                    {labelSegmento(segmentoSelecionado)}
+                  </span>
+                )}
               </label>
               <select
                 value={disciplinaSelecionada}
                 onChange={(e) => setDisciplinaSelecionada(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={selectClass}
+                disabled={!segmentoSelecionado}
               >
-                <option value="">Selecione a disciplina</option>
-                {disciplinasFiltradas.map((disc) => {
-                  const segLabel = labelSegmentoDisciplina(disc.segmento);
-                  return (
-                    <option key={disc.id} value={disc.id}>
-                      {disc.nome}
-                      {segLabel ? ` (${segLabel})` : ""}
-                    </option>
-                  );
-                })}
+                <option value="">
+                  {segmentoSelecionado
+                    ? "Selecione a disciplina"
+                    : "Selecione o segmento primeiro"}
+                </option>
+                {disciplinasFiltradas.map((disc) => (
+                  <option key={disc.id} value={disc.id}>
+                    {disc.nome}
+                  </option>
+                ))}
               </select>
+              {segmentoSelecionado && disciplinasFiltradas.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhuma disciplina cadastrada para este segmento.
+                </p>
+              )}
             </div>
 
             {/* Séries (múltiplas) */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <GraduationCap className="w-4 h-4" />
-                Séries ({labelSegmentoSelect(segmentoSelecionado)})
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5" />
+                Séries *
+                {seriesSelecionadas.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-xs font-medium">
+                    {seriesSelecionadas.length} selecionada(s)
+                  </span>
+                )}
               </label>
-              <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2 space-y-1 bg-white">
-                {seriesFiltradas.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    Nenhuma série cadastrada. Cadastre em Gestão Escolar.
+              <div className="max-h-40 overflow-y-auto border border-border rounded-lg p-2 space-y-1 bg-background">
+                {!segmentoSelecionado ? (
+                  <p className="text-xs text-muted-foreground py-1">
+                    Selecione o segmento primeiro.
+                  </p>
+                ) : seriesFiltradas.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-1">
+                    Nenhuma série cadastrada para este segmento.
                   </p>
                 ) : (
                   seriesFiltradas.map((s) => (
                     <label
                       key={s.id}
-                      className="flex items-center gap-2 text-sm cursor-pointer"
+                      className="flex items-center gap-2 text-sm cursor-pointer rounded px-1 py-0.5 hover:bg-muted transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={seriesSelecionadas.includes(s.id)}
-                        onChange={() => toggleSerieSelecionada(s.id)}
+                        onChange={() => toggleSerie(s.id)}
+                        className="accent-primary"
                       />
-                      <span>{s.nome}</span>
+                      <span className="text-foreground">{s.nome}</span>
+                      {s.nivel && (
+                        <span className="text-xs text-muted-foreground">
+                          ({s.nivel})
+                        </span>
+                      )}
                     </label>
                   ))
                 )}
@@ -555,50 +500,47 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
             </div>
           </div>
 
+          {/* Botão */}
           <div className="flex justify-end">
             <Button
               onClick={adicionarVinculo}
-              className="bg-blue-600 hover:bg-blue-700"
               disabled={carregando}
+              className="gap-2"
             >
-              <Check className="w-4 h-4 mr-2" />
+              <Check className="w-4 h-4" />
               Criar Vínculo
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Lista de vínculos (escondida até pesquisar) */}
+      {/* ══ Lista de Vínculos com busca ══ */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Link2 className="w-5 h-5 text-gray-600" />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Link2 className="w-4 h-4 text-muted-foreground" />
               Vínculos Ativos
             </CardTitle>
             <div className="flex items-center gap-2">
-              <div className="relative w-64">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Buscar vínculos (digite o nome do professor)..."
+                  placeholder="Buscar por professor, disciplina ou série..."
                   value={filtro}
                   onChange={(e) => {
-                    const value = e.target.value;
-                    setFiltro(value);
-                    setMostrarLista(!!value); // mostra a lista só quando tiver texto
+                    setFiltro(e.target.value);
+                    setMostrarLista(!!e.target.value);
                   }}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="pl-9 pr-4 py-2 w-72 border border-border rounded-lg bg-background text-foreground text-sm focus:ring-2 focus:ring-ring focus:border-transparent placeholder:text-muted-foreground"
                 />
               </div>
               {mostrarLista && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setFiltro("");
-                    setMostrarLista(false);
-                  }}
+                  onClick={() => { setFiltro(""); setMostrarLista(false); }}
                 >
                   Limpar
                 </Button>
@@ -606,41 +548,43 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
             </div>
           </div>
         </CardHeader>
+
         {mostrarLista && (
           <CardContent className="pt-0">
-            <div className="max-h-[360px] overflow-y-auto space-y-3 pr-1">
+            <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
               {vinculosFiltrados.length === 0 ? (
-                <div className="text-center py-12">
-                  <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">
-                    {filtro
-                      ? "Nenhum vínculo encontrado para esse professor"
-                      : "Nenhum vínculo cadastrado ainda"}
-                  </p>
+                <div className="text-center py-10 text-muted-foreground">
+                  <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p>Nenhum vínculo encontrado para "{filtro}"</p>
                 </div>
               ) : (
                 vinculosFiltrados.map((v) => (
                   <div
                     key={v.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    className="flex items-center justify-between p-3 border border-border rounded-lg bg-background hover:bg-muted/50 transition-colors"
                   >
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Users className="w-6 h-6 text-blue-600" />
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Users className="w-4 h-4 text-primary" />
                       </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground text-sm truncate">
                           {v.professorNome}
-                        </h3>
-                        <div className="flex items-center gap-3 mt-1 flex-wrap">
-                          <Badge variant="outline" className="bg-white">
-                            <BookOpen className="w-3 h-3 mr-1" />
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-muted text-muted-foreground border-border">
+                            <BookOpen className="w-3 h-3" />
                             {v.disciplinaNome}
-                          </Badge>
-                          <Badge variant="outline" className="bg-white">
-                            <GraduationCap className="w-3 h-3 mr-1" />
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-muted text-muted-foreground border-border">
+                            <GraduationCap className="w-3 h-3" />
                             {v.serieNome}
-                          </Badge>
+                          </span>
+                          {v.segmento && (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${badgeSegmento(v.segmento)}`}>
+                              {labelSegmento(v.segmento)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -648,7 +592,7 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
                       variant="ghost"
                       size="sm"
                       onClick={() => removerVinculo(v.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      className="text-destructive hover:text-destructive shrink-0"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -660,67 +604,101 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
         )}
       </Card>
 
-      {/* Resumo por Professor */}
+      {/* ══ Resumo por Professor ══ */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-gray-600" />
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="w-4 h-4 text-muted-foreground" />
             Resumo por Professor
+            <span className="ml-1 text-sm font-normal text-muted-foreground">
+              ({professoresComVinculo.length} professor(es) com vínculos)
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {professores.map((prof) => {
-              const vps = vinculosPorProfessor(prof.id);
-              // AQUI ESTÁ A ALTERAÇÃO: Só renderiza o card se houver vínculos
-              if (vps.length === 0) return null; 
+          {professoresComVinculo.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <Link2 className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p>Nenhum vínculo cadastrado ainda.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {professoresComVinculo.map((prof) => {
+                const vps = vinculosPorProfessor(prof.id);
+                // Agrupa segmentos presentes neste professor
+                const segmentos = [...new Set(vps.map((v) => v.segmento).filter(Boolean))];
 
-              return (
-                <Card key={prof.id} className="border border-gray-200">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-gray-900">
-                        {prof.nome}
-                      </h4>
-                      {vps.length > 0 && ( // O botão "Desvincular Tudo" só aparece se houver vínculos
+                return (
+                  <Card key={prof.id} className="border border-border">
+                    <CardContent className="p-4">
+                      {/* Header do card */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-foreground text-sm truncate">
+                            {prof.nome}
+                          </h4>
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {segmentos.map((seg) => (
+                              <span
+                                key={seg}
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${badgeSegmento(seg)}`}
+                              >
+                                {labelSegmento(seg)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => removerTodosVinculosDoProfessor(prof.id, prof.nome)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
-                          title={`Desvincular ${prof.nome} de todas as disciplinas/séries`}
+                          onClick={() =>
+                            removerTodosVinculosDoProfessor(prof.id, prof.nome)
+                          }
+                          className="text-destructive hover:text-destructive p-1 h-auto shrink-0"
+                          title="Desvincular tudo"
                         >
-                          <XCircle className="w-4 h-4 mr-1" /> Desvincular Tudo
+                          <XCircle className="w-4 h-4" />
                         </Button>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      {vps.length === 0 ? (
-                        <p className="text-sm text-gray-500 italic">
-                          Nenhum vínculo ativo.
-                        </p>
-                      ) : (
-                        vps.map((v) => (
+                      </div>
+
+                      {/* Lista de vínculos */}
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                        {vps.map((v) => (
                           <div
                             key={v.id}
-                            className="text-sm text-gray-600 flex items-center gap-2"
+                            className="flex items-center justify-between gap-2 text-xs text-muted-foreground group"
                           >
-                            <div className="w-2 h-2 bg-blue-600 rounded-full" />
-                            {v.disciplinaNome} - {v.serieNome}
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                              <span className="truncate">
+                                {v.disciplinaNome}
+                                <span className="text-border mx-1">·</span>
+                                {v.serieNome}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => removerVinculo(v.id)}
+                              className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive transition-opacity shrink-0"
+                              title="Remover vínculo"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           </div>
-                        ))
-                      )}
-                    </div>
-                    {vps.length > 0 && (
-                      <Badge variant="secondary" className="mt-3">
-                        {vps.length} vínculo(s)
-                      </Badge>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                        ))}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="mt-3 pt-2 border-t border-border">
+                        <Badge variant="secondary" className="text-xs">
+                          {vps.length} vínculo(s)
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

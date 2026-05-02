@@ -34,6 +34,7 @@ import Boletim from "./Boletim";
 import { DisciplinaPage } from "./DisciplinaPage";
 import { SchoolHeader } from "./SchoolHeader";
 import ComunicadosPage from "./ComunicadosPage";
+import { useSegmento } from '../hooks/useSegmento';
 
 type ViewType =
   | "dashboard"
@@ -102,6 +103,8 @@ function HeaderPadrao({
       right: window.innerWidth - rect.right,
     };
   };
+
+  
 
   const pos = getDropdownPos();
 
@@ -250,7 +253,7 @@ export default function DashboardAluno() {
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
 
   const handleVoltar = useCallback(() => setViewAtual("dashboard"), []);
-
+  const { segmento } = useSegmento();
   const headerProps = {
     usuario, turma, notificacoesNaoLidas,
     mostrarMenuUsuario, setMostrarMenuUsuario,
@@ -312,7 +315,6 @@ export default function DashboardAluno() {
     }
   }, [usuario?.id]);
 
-  useEffect(() => { if (usuario?.id) carregarTurma(); }, [usuario?.id, carregarTurma]);
 
   // ---- Carregar comunicados ----
   const carregarComunicados = useCallback(async () => {
@@ -323,6 +325,7 @@ export default function DashboardAluno() {
       const { data, error } = await supabase
         .from("comunicados")
         .select(`id, titulo, conteudo, criado_em, publico_alvo, importante, imagem_url, users!comunicados_autor_id_fkey ( nome )`)
+        .in('segmento', [segmento, 'todos'])    // ← filtro por segmento
         .order("criado_em", { ascending: false })
         .limit(20);
       if (error) throw error;
@@ -348,7 +351,7 @@ export default function DashboardAluno() {
     } finally {
       setLoadingComunicados(false);
     }
-  }, [usuario]);
+  }, [usuario, segmento]);
 
   // ---- Carregar indicadores do aluno (média geral + frequência) ----
   const carregarIndicadoresAluno = useCallback(async () => {
@@ -400,9 +403,11 @@ export default function DashboardAluno() {
     }
   }, [usuario?.id]);
 
-  useEffect(() => { if (usuario) carregarComunicados(); }, [usuario, carregarComunicados]);
-  useEffect(() => { if (usuario?.id) carregarIndicadoresAluno(); }, [usuario?.id, carregarIndicadoresAluno]);
-  useEffect(() => { setNotificacoesNaoLidas(0); }, []);
+  // ✅ CORRETO — todos os useEffects juntos, APÓS as definições dos useCallbacks
+  useEffect(() => { if (usuario?.id) carregarTurma(); },           [usuario?.id, carregarTurma]);
+  useEffect(() => { if (usuario) carregarComunicados(); },         [usuario, carregarComunicados]);
+  useEffect(() => { if (usuario?.id) carregarIndicadoresAluno(); },[usuario?.id, carregarIndicadoresAluno]);
+  useEffect(() => { setNotificacoesNaoLidas(0); },                 []);
 
   // ---- Helpers ----
   const getCorDisciplina = (cor: string) => {

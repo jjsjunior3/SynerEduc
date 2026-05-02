@@ -2,36 +2,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { useSegmento } from '../hooks/useSegmento';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import {
-  Loader2,
-  AlertCircle,
-  Calendar as CalendarIcon,
-  Clock,
-  BookOpen,
-  Home,
-  Info,
-  ListFilter,
+  Loader2, AlertCircle, Calendar as CalendarIcon,
+  Clock, BookOpen, Home, Info, ListFilter,
 } from 'lucide-react';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 
-interface DisciplinaProps {
-  id: string;
-  nome: string;
-  cor?: string;
-}
-
-interface SerieProps {
-  id: string;
-  nome: string;
-}
-
-interface TurmaProps {
-  id: string;
-  nome: string;
-}
+interface DisciplinaProps { id: string; nome: string; cor?: string; }
+interface SerieProps { id: string; nome: string; }
+interface TurmaProps { id: string; nome: string; }
 
 interface EventoAgenda {
   id: string;
@@ -60,24 +43,25 @@ function resolverCorDisciplina(cor?: string): string {
   if (!cor) return '#3b82f6';
   if (cor.startsWith('#')) return cor;
   const mapa: Record<string, string> = {
-    'bg-blue-500': '#3b82f6', 'bg-blue-600': '#2563eb',
-    'bg-green-500': '#22c55e', 'bg-green-600': '#16a34a',
-    'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
+    'bg-blue-500': '#3b82f6',   'bg-blue-600': '#2563eb',
+    'bg-green-500': '#22c55e',  'bg-green-600': '#16a34a',
+    'bg-red-500': '#ef4444',    'bg-red-600': '#dc2626',
     'bg-purple-500': '#a855f7', 'bg-purple-600': '#9333ea',
     'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
     'bg-yellow-500': '#eab308', 'bg-yellow-600': '#ca8a04',
-    'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777',
+    'bg-pink-500': '#ec4899',   'bg-pink-600': '#db2777',
     'bg-indigo-500': '#6366f1', 'bg-indigo-600': '#4f46e5',
-    'bg-teal-500': '#14b8a6', 'bg-teal-600': '#0d9488',
-    'bg-emerald-500': '#10b981', 'bg-emerald-600': '#059669',
+    'bg-teal-500': '#14b8a6',   'bg-teal-600': '#0d9488',
+    'bg-emerald-500': '#10b981','bg-emerald-600': '#059669',
     'bg-violet-500': '#8b5cf6', 'bg-violet-600': '#7c3aed',
-    'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
+    'bg-gray-500': '#6b7280',   'bg-gray-600': '#4b5563',
   };
   return mapa[cor] || '#3b82f6';
 }
 
 export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoProps) {
   const { usuario } = useAuth();
+  const { segmento } = useSegmento();
 
   const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -97,7 +81,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
     if (!dataISO) return "Data inválida";
     try {
       return new Date(dataISO + 'T00:00:00').toLocaleDateString('pt-BR', {
-        day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC'
+        day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
       });
     } catch { return "Data inválida"; }
   };
@@ -112,21 +96,25 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
       setCarregando(true);
       setErro(null);
 
+      if (disciplinasDoAluno.length === 0) {
+        setEventosAgenda([]);
+        setCarregando(false);
+        return;
+      }
+
       let query = supabase
         .from("agenda_professor")
         .select(`id, titulo_unidade, conteudo_sala, atividade_casa, observacao,
           data_aula, data_entrega, disciplina_id, professor_id, serie, turma, criado_em,
           professor:users(nome), disciplina:disciplinas(nome, cor)`)
         .eq("serie", serie.nome)
-        .eq("data_aula", dataFiltro);
+        .eq("segmento", segmento)                              // ← filtro por segmento
+        .eq("data_aula", dataFiltro)
+        .in("disciplina_id", disciplinasDoAluno.map(d => d.id));
 
-      if (disciplinasDoAluno.length > 0) {
-        query = query.in("disciplina_id", disciplinasDoAluno.map(d => d.id));
-      } else {
-        setEventosAgenda([]); setCarregando(false); return;
+      if (disciplinaFiltro !== 'todas') {
+        query = query.eq("disciplina_id", disciplinaFiltro);
       }
-
-      if (disciplinaFiltro !== 'todas') query = query.eq("disciplina_id", disciplinaFiltro);
 
       const { data, error } = await query
         .order("nome", { foreignTable: "disciplina", ascending: true })
@@ -140,7 +128,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
     } finally {
       setCarregando(false);
     }
-  }, [usuario?.id, serie?.nome, dataFiltro, disciplinasDoAluno, disciplinaFiltro]);
+  }, [usuario?.id, serie?.nome, dataFiltro, disciplinasDoAluno, disciplinaFiltro, segmento]);
 
   useEffect(() => { carregarEventos(); }, [carregarEventos]);
 
@@ -252,6 +240,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
                           <Clock className="w-4 h-4" />
                           <span>{evento.professor?.nome || 'Professor'}</span>
                         </div>
+                        {/* cor dinâmica do banco — style inline é aceitável aqui */}
                         <span className="text-[11px] p-2 font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: corHex }}>
                           {evento.disciplina?.nome || disciplinaNome}
                         </span>
@@ -259,8 +248,9 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
                       <CardContent className="space-y-3">
                         <h3 className="font-semibold text-base text-foreground">{evento.titulo_unidade}</h3>
 
+                        {/* ← dark mode corrigido: style rgba → classes Tailwind */}
                         {evento.conteudo_sala && (
-                          <div className="rounded-lg p-4 border border-green-200 dark:border-green-800" style={{ backgroundColor: 'rgba(22,163,74,0.08)' }}>
+                          <div className="rounded-lg p-4 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
                             <div className="flex items-center gap-2 mb-2">
                               <BookOpen className="w-4 h-4 text-green-600 dark:text-green-400" />
                               <span className="text-xs font-semibold text-green-700 dark:text-green-300">Conteúdo em Sala</span>
@@ -270,7 +260,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
                         )}
 
                         {evento.atividade_casa && (
-                          <div className="rounded-lg p-4 border border-amber-200 dark:border-amber-800" style={{ backgroundColor: 'rgba(217,119,6,0.08)' }}>
+                          <div className="rounded-lg p-4 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
                             <div className="flex items-center gap-2 mb-2">
                               <Home className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                               <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Atividade Para Casa</span>
@@ -280,22 +270,22 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
                         )}
 
                         {evento.data_entrega && (
-                          <div className="rounded-lg p-4 border border-blue-200 dark:border-blue-800 flex items-center gap-2" style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}>
+                          <div className="rounded-lg p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 flex items-center gap-2">
                             <CalendarIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                             <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Prazo de Entrega:</span>
                             <span className="text-xs font-medium text-foreground">{formatarDataCurta(evento.data_entrega)}</span>
                           </div>
                         )}
-                        
+
                         {evento.observacao && (
-                          <div className="rounded-lg p-4 border border-purple-200 dark:border-purple-800" style={{ backgroundColor: 'rgba(147,51,234,0.08)' }}>
+                          <div className="rounded-lg p-4 border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
                             <div className="flex items-center gap-2 mb-2">
                               <AlertCircle className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                               <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">Observação</span>
                             </div>
                             <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">{evento.observacao}</p>
                           </div>
-                        )}                        
+                        )}
                       </CardContent>
                     </Card>
                   );
@@ -307,7 +297,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
       )}
 
       {/* Card informativo */}
-      <div className="rounded-xl p-4 border border-blue-200 dark:border-blue-800" style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}>
+      <div className="rounded-xl p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
         <div className="flex items-start gap-3">
           <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div>

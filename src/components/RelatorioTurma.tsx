@@ -1,6 +1,7 @@
 // src/components/RelatorioTurma.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase/supabaseClient';
+import { useSegmento } from '../hooks/useSegmento';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -28,6 +29,8 @@ interface AlunoAtencao { nome: string; media: number; faltas: number; frequencia
 interface EvolucaoNotas { bimestre: string; media: number; }
 
 export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
+  const { segmento, isPresencial } = useSegmento();
+
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [series, setSeries] = useState<string[]>([]);
@@ -44,18 +47,25 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
   const [reprovados, setReprovados] = useState(0);
   const [frequenciaMedia, setFrequenciaMedia] = useState(0);
 
+  // ── Carrega séries filtradas pelo segmento do coordenador ──
   useEffect(() => {
     async function carregarSeries() {
       try {
-        const { data, error } = await supabase.from('users').select('serie').eq('tipo', 'aluno').not('serie', 'is', null);
+        let query = supabase
+          .from('users')
+          .select('serie')
+          .eq('tipo', 'aluno')
+          .eq('segmento', segmento)          // ← filtro por segmento
+          .not('serie', 'is', null);
+        const { data, error } = await query;
         if (error) throw error;
         setSeries(['todas', ...Array.from(new Set(data?.map((i: any) => i.serie) || [])).sort() as string[]]);
       } catch { /* silencioso */ }
     }
     carregarSeries();
-  }, []);
+  }, [segmento]);
 
-  useEffect(() => { carregarRelatorio(); }, [serieSelecionada, bimestreSelecionado]);
+  useEffect(() => { carregarRelatorio(); }, [serieSelecionada, bimestreSelecionado, segmento]);
 
   const getBimestreDates = (bimestre: string) => {
     const year = new Date().getFullYear();
@@ -71,7 +81,13 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
   async function carregarRelatorio() {
     setCarregando(true); setErro(null);
     try {
-      let queryAlunos = supabase.from('users').select('id, nome, serie').eq('tipo', 'aluno');
+      // Busca alunos do segmento do coordenador
+      let queryAlunos = supabase
+        .from('users')
+        .select('id, nome, serie')
+        .eq('tipo', 'aluno')
+        .eq('segmento', segmento);           // ← filtro por segmento
+
       if (serieSelecionada !== 'todas') queryAlunos = queryAlunos.eq('serie', serieSelecionada);
       const { data: alunosData, error: alunosError } = await queryAlunos;
       if (alunosError) throw alunosError;
@@ -176,10 +192,12 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
     try {
       toast.loading('Gerando PDF...');
       const doc = new jsPDF();
+      const labelSegmento = isPresencial ? 'PRESENCIAL' : 'EAD';
+
       doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-      doc.text('COLÉGIO CONEXÃO EAD', 14, 20);
+      doc.text('SYNERTECH ESCOLA', 14, 20);
       doc.setFontSize(13); doc.setFont('helvetica', 'normal');
-      doc.text('Relatório de Desempenho da Turma', 14, 28);
+      doc.text(`Relatório de Desempenho da Turma — ${labelSegmento}`, 14, 28);
       doc.setFontSize(10);
       doc.text(`Série: ${serieSelecionada === 'todas' ? 'Todas' : serieSelecionada}  |  Bimestre: ${bimestreSelecionado}º  |  Data: ${new Date().toLocaleDateString('pt-BR')}`, 14, 35);
       doc.setDrawColor(59, 130, 246); doc.setLineWidth(0.5); doc.line(14, 40, 196, 40);
@@ -229,11 +247,10 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
       }
 
       toast.success('PDF gerado!');
-      doc.save(`relatorio-${serieSelecionada}-${bimestreSelecionado}bim.pdf`);
+      doc.save(`relatorio-${segmento}-${serieSelecionada}-${bimestreSelecionado}bim.pdf`);
     } catch { toast.error('Erro ao gerar PDF.'); }
   }
 
-  // Cards de estatísticas com cores fixas
   const statsCards = [
     { label: 'Total de Alunos', value: totalAlunos, icon: Users, bg: '#dbeafe', iconBg: '#3b82f6', text: '#1e3a8a' },
     { label: 'Média da Turma', value: mediaGeral.toFixed(1), icon: Target, bg: '#ede9fe', iconBg: '#7c3aed', text: '#4c1d95' },
@@ -244,13 +261,17 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
 
   return (
     <div className="space-y-6">
-
       {/* Filtros + Botão PDF */}
       <Card>
         <CardHeader className="border-b border-border pb-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-foreground">Filtros do Relatório</CardTitle>
-            <Button onClick={handleGerarRelatorio} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+            <div>
+              <CardTitle className="text-foreground">Filtros do Relatório</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Exibindo dados do segmento: <span className="font-semibold capitalize">{segmento}</span>
+              </p>
+            </div>
+            <Button onClick={handleGerarRelatorio} className="gap-2">
               <Download className="w-4 h-4" /> Gerar PDF
             </Button>
           </div>
@@ -279,7 +300,6 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
         </CardContent>
       </Card>
 
-      {/* Loading */}
       {carregando && (
         <div className="flex flex-col items-center justify-center py-24">
           <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
@@ -287,32 +307,30 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
         </div>
       )}
 
-      {/* Erro */}
       {!carregando && erro && (
         <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900">
           <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
           <p className="font-semibold text-red-700 dark:text-red-400 mb-1">Ocorreu um erro</p>
           <p className="text-sm text-red-600 dark:text-red-500 mb-4">{erro}</p>
-          <Button onClick={carregarRelatorio} className="bg-red-600 hover:bg-red-700 text-white">Tentar Novamente</Button>
+          <Button onClick={carregarRelatorio}>Tentar Novamente</Button>
         </div>
       )}
 
       {!carregando && !erro && (
         <div className="space-y-8">
-
-          {/* Cards de estatísticas */}
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-5 gap-5">
+          {/* Cards */}
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
             {statsCards.map((card) => {
               const Icon = card.icon;
               return (
-                <div key={card.label} className="rounded-xl p-6 flex flex-col items-center text-center gap-3"
+                <div key={card.label} className="rounded-xl p-5 flex flex-col items-center text-center gap-3"
                   style={{ backgroundColor: card.bg }}>
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center"
                     style={{ backgroundColor: card.iconBg }}>
                     <Icon style={{ width: 20, height: 20, color: '#fff' }} />
                   </div>
                   <div>
-                    <p className="text-xs font-medium mb-1.5" style={{ color: card.text }}>{card.label}</p>
+                    <p className="text-xs font-medium mb-1" style={{ color: card.text }}>{card.label}</p>
                     <p className="text-3xl font-bold" style={{ color: card.text }}>{card.value}</p>
                   </div>
                 </div>
@@ -334,10 +352,8 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
                       <XAxis dataKey="disciplina" angle={-45} textAnchor="end" height={60} interval={0}
                         tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
                       <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--foreground)' }}
-                        formatter={(v: number) => [v.toFixed(1), 'Média']}
-                      />
+                      <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--foreground)' }}
+                        formatter={(v: number) => [v.toFixed(1), 'Média']} />
                       <Bar dataKey="media" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={40} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -364,10 +380,8 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                       <XAxis dataKey="bimestre" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
                       <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--foreground)' }}
-                        formatter={(v: number) => [v.toFixed(1), 'Média']}
-                      />
+                      <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--foreground)' }}
+                        formatter={(v: number) => [v.toFixed(1), 'Média']} />
                       <Area type="monotone" dataKey="media" stroke="#10b981" strokeWidth={3}
                         fillOpacity={1} fill="url(#colorEv)" activeDot={{ r: 6, fill: '#10b981' }} />
                     </AreaChart>
@@ -387,19 +401,17 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
                   <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400" /> Destaques da Turma
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pl-3">
+              <CardContent className="p-0">
                 {alunosDestaque.length > 0 ? (
                   <div className="divide-y divide-border">
                     {alunosDestaque.map((aluno, i) => (
                       <div key={i} className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                            style={{ backgroundColor: '#16a34a' }}>
-                            {aluno.posicao}º
-                          </div>
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                            style={{ backgroundColor: '#16a34a' }}>{aluno.posicao}º</div>
                           <div>
                             <p className="font-semibold text-foreground text-sm">{aluno.nome}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">Frequência: {aluno.frequencia.toFixed(0)}%</p>
+                            <p className="text-xs text-muted-foreground">Freq: {aluno.frequencia.toFixed(0)}%</p>
                           </div>
                         </div>
                         <span className="text-sm font-bold px-3 py-1.5 rounded-full"
@@ -421,31 +433,23 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
                   <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" /> Atenção Necessária
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pl-3">
+              <CardContent className="p-0">
                 {alunosAtencao.length > 0 ? (
                   <div className="divide-y divide-border">
                     {alunosAtencao.map((aluno, i) => (
                       <div key={i} className="px-5 py-4 hover:bg-muted/30 transition-colors">
-                        <div className="flex items-start justify-between mb-3">
-                          <p className="font-semibold text-foreground text-sm leading-snug">{aluno.nome}</p>
-                          <span className="text-[11px] font-bold p-2 px-2.5 py-1 rounded-full ml-3 flex-shrink-0"
-                            style={{ backgroundColor: '#fef9c3', color: '#713f12' }}>
-                            Alerta
-                          </span>
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="font-semibold text-foreground text-sm">{aluno.nome}</p>
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full ml-3 flex-shrink-0"
+                            style={{ backgroundColor: '#fef9c3', color: '#713f12' }}>Alerta</span>
                         </div>
                         <div className="flex flex-wrap gap-2 mb-2">
-                          <span className="text-xs p-3 font-semibold px-2.5 py-1 rounded-full"
-                            style={{ backgroundColor: '#fee2e2', color: '#7f1d1d' }}>
-                            Média: {aluno.media.toFixed(1)}
-                          </span>
-                          <span className="text-xs p-3 font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                            Faltas: {aluno.faltas}
-                          </span>
-                          <span className="text-xs p-3 font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                            Freq: {aluno.frequencia.toFixed(0)}%
-                          </span>
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                            style={{ backgroundColor: '#fee2e2', color: '#7f1d1d' }}>Média: {aluno.media.toFixed(1)}</span>
+                          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">Faltas: {aluno.faltas}</span>
+                          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">Freq: {aluno.frequencia.toFixed(0)}%</span>
                         </div>
-                        <p className="text-xs p-1 text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
                           {aluno.motivo}
                         </p>
@@ -459,7 +463,7 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
             </Card>
           </div>
 
-          {/* Tabela de disciplinas */}
+          {/* Tabela */}
           <Card>
             <CardHeader className="border-b border-border pb-3">
               <CardTitle className="text-base text-foreground">Detalhamento por Disciplina</CardTitle>
@@ -467,11 +471,11 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
             <CardContent className="p-0">
               {dadosDesempenho.length > 0 ? (
                 <div className="overflow-x-auto p-4">
-                  <table className="w-full p-3 text-sm">
+                  <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
                         <th className="text-left py-3 px-5 font-semibold text-foreground">Disciplina</th>
-                        <th className="text-center p-3 py-3 px-4 font-semibold text-foreground">Média</th>
+                        <th className="text-center py-3 px-4 font-semibold text-foreground">Média</th>
                         <th className="text-center py-3 px-4 font-semibold text-foreground">Aprovados</th>
                         <th className="text-center py-3 px-4 font-semibold text-foreground">Recuperação</th>
                         <th className="text-center py-3 px-5 font-semibold text-foreground">Taxa de Aprovação</th>
@@ -500,11 +504,7 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
                                 <span className="font-semibold text-foreground w-10 text-right text-sm">{taxa.toFixed(0)}%</span>
                                 <div className="w-20 h-2.5 bg-muted rounded-full overflow-hidden">
                                   <div className="h-full rounded-full transition-all"
-                                    style={{
-                                      width: `${taxa}%`,
-                                      backgroundColor: taxa >= 70 ? '#16a34a' : taxa >= 40 ? '#d97706' : '#dc2626',
-                                    }}
-                                  />
+                                    style={{ width: `${taxa}%`, backgroundColor: taxa >= 70 ? '#16a34a' : taxa >= 40 ? '#d97706' : '#dc2626' }} />
                                 </div>
                               </div>
                             </td>

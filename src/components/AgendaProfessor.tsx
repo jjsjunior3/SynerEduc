@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { useSegmento } from '../hooks/useSegmento';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -45,6 +46,7 @@ const hoje = () => new Date().toISOString().split('T')[0];
 
 export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaProfessorProps) {
   const { usuario } = useAuth();
+  const { segmento } = useSegmento();
   const nomeSerie = serie?.nome ?? '';
   const nomeTurma = turma?.nome ?? '';
 
@@ -83,6 +85,7 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
         .eq('professor_id', usuario.id)
         .eq('disciplina_id', disciplina.id)
         .eq('serie', nomeSerie)
+        .eq('segmento', segmento)           // ← filtro por segmento
         .eq('data_aula', dataFiltroLista)
         .or(`turma.is.null,turma.eq.,turma.eq.${nomeTurma}`)
         .order('data_aula', { ascending: false });
@@ -95,7 +98,7 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
     } finally {
       setCarregando(false);
     }
-  }, [usuario?.id, disciplina?.id, nomeSerie, nomeTurma, dataFiltroLista]);
+  }, [usuario?.id, disciplina?.id, nomeSerie, nomeTurma, dataFiltroLista, segmento]);
 
   useEffect(() => { carregarEventos(); }, [carregarEventos]);
 
@@ -130,6 +133,7 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
         serie: nomeSerie,
         turma: nomeTurma && nomeTurma !== 'Única' ? nomeTurma : null,
         data_aula: hoje(),
+        segmento,                           // ← salva segmento no payload
       };
 
       const { error } = modoEdicao
@@ -231,7 +235,6 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
           </CardHeader>
 
           <CardContent className="p-6">
-            {/* Visualização quando existe agenda hoje e não está editando */}
             {agendaHoje && !modoEdicao ? (
               <div className="space-y-4">
                 <h3 className="font-semibold text-base text-foreground mb-2">{agendaHoje.titulo_unidade}</h3>
@@ -244,7 +247,7 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
                   />
                 )}
                 {agendaHoje.atividade_casa && (
-                 <CardColorido
+                  <CardColorido
                     className="border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20"
                     icon={Home} titulo="Atividade Para Casa"
                     conteudo={agendaHoje.atividade_casa}
@@ -266,7 +269,6 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
                 )}
               </div>
             ) : (
-              /* Formulário */
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="tituloUnidade" className="text-foreground font-medium text-sm">
@@ -445,12 +447,11 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
                       />
                     )}
                     {evento.atividade_casa && (
-                    <CardColorido
-                      className="border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
-                      style={{ backgroundColor: 'rgba(22,163,74,0.08)' }}
-                      icon={Home} titulo="Atividade Para Casa"
-                      conteudo={evento.atividade_casa}
-                    />
+                      <CardColorido
+                        className="border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20"
+                        icon={Home} titulo="Atividade Para Casa"
+                        conteudo={evento.atividade_casa}
+                      />
                     )}
                     {evento.data_entrega && (
                       <div className="rounded-lg p-3 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 flex items-center gap-2">
@@ -461,7 +462,7 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
                     )}
                     {evento.observacao && (
                       <CardColorido
-                        bg="#faf5ff" border="#c4b5fd" iconColor="#9333ea"
+                        className="border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20"
                         icon={AlertCircle} titulo="Observação"
                         conteudo={evento.observacao}
                       />

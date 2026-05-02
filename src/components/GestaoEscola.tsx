@@ -14,6 +14,8 @@ import {
   BookOpen,
   GraduationCap,
   AlertCircle,
+  Monitor,
+  Users,
 } from "lucide-react";
 import {
   Dialog,
@@ -25,7 +27,7 @@ import {
 import { Alert, AlertDescription } from "./ui/alert";
 import { toast } from "sonner";
 import { supabase } from "../supabase/supabaseClient";
-import { Checkbox } from "./ui/checkbox"; // Importar Checkbox
+import { Checkbox } from "./ui/checkbox";
 
 interface GestaoEscolaProps {
   onVoltar: () => void;
@@ -34,23 +36,47 @@ interface GestaoEscolaProps {
 interface Disciplina {
   id: string;
   nome: string;
-  descricao: string | null; // Pode ser null no banco
-  segmento?: string | null;
+  descricao: string | null;
+  segmento: "ead" | "presencial" | null; // segmento do sistema
   ativa: boolean;
 }
 
 interface Serie {
   id: string;
   nome: string;
-  segmento: "fundamental" | "medio";
-  totalAlunos: number; // Espera que a coluna exista
+  nivel: string;           // nível educacional: 'fundamental', 'medio', etc.
+  segmento: "ead" | "presencial" | null; // segmento do sistema
+  totalAlunos: number;
   ativa: boolean;
 }
 
+// ─── helpers de label ───────────────────────────────────────────────
+function labelSegmento(seg: string | null) {
+  if (seg === "ead") return "EAD";
+  if (seg === "presencial") return "Presencial";
+  return "Todos";
+}
+
+function badgeSegmento(seg: string | null) {
+  if (seg === "ead")
+    return "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700";
+  if (seg === "presencial")
+    return "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700";
+  return "bg-muted text-muted-foreground border-border";
+}
+
+function labelNivel(nivel: string) {
+  const map: Record<string, string> = {
+    fundamental: "Ens. Fundamental",
+    medio: "Ens. Médio",
+  };
+  return map[nivel] || nivel;
+}
+
+// ────────────────────────────────────────────────────────────────────
+
 function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
-  const [abaSelecionada, setAbaSelecionada] = useState<
-    "disciplinas" | "series"
-  >("disciplinas");
+  const [abaSelecionada, setAbaSelecionada] = useState<"disciplinas" | "series">("disciplinas");
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Disciplina | Serie | null>(null);
 
@@ -58,24 +84,28 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
   const [series, setSeries] = useState<Serie[]>([]);
   const [carregando, setCarregando] = useState(false);
 
+  // Filtros de listagem
+  const [filtroDisciplina, setFiltroDisciplina] = useState<"todos" | "ead" | "presencial">("todos");
+  const [filtroSerie, setFiltroSerie] = useState<"todos" | "ead" | "presencial">("todos");
+
   const [formDisciplina, setFormDisciplina] = useState({
     nome: "",
-    descricao: "", // Descrição de volta no formulário
-    segmento: "" as string | null,
+    descricao: "",
+    segmento: "" as "ead" | "presencial" | "",
     ativa: true,
   });
 
   const [formSerie, setFormSerie] = useState({
     nome: "",
-    segmento: "fundamental" as "fundamental" | "medio",
+    nivel: "fundamental" as string,
+    segmento: "" as "ead" | "presencial" | "",
     ativa: true,
   });
 
-  // --------- CARREGAR DADOS DO SUPABASE ---------
+  // ─── CARREGAR DADOS ──────────────────────────────────────────────
 
   async function carregarDisciplinas() {
     try {
-      // DESCRICAO DE VOLTA NA SELECAO
       const { data, error } = await supabase
         .from("disciplinas")
         .select("id, nome, descricao, segmento, ativa")
@@ -86,8 +116,8 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
       const mapeadas: Disciplina[] = (data || []).map((d: any) => ({
         id: d.id,
         nome: d.nome || "Disciplina sem nome",
-        descricao: d.descricao ?? null, // Pode ser null
-        segmento: d.segmento ?? null,
+        descricao: d.descricao ?? null,
+        segmento: (d.segmento === "ead" || d.segmento === "presencial") ? d.segmento : null,
         ativa: d.ativa ?? true,
       }));
 
@@ -101,21 +131,40 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
 
   async function carregarSeries() {
     try {
-      // TOTAL_ALUNOS DE VOLTA NA SELECAO
-      const { data, error } = await supabase
+      // 1. Busca séries
+      const { data: seriesData, error: seriesError } = await supabase
         .from("series")
-        .select("id, nome, segmento, nivel, ativa, total_alunos")
+        .select("id, nome, nivel, segmento, ativa")
         .order("nome", { ascending: true });
 
-      if (error) throw error;
+      if (seriesError) throw seriesError;
 
-      const mapeadas: Serie[] = (data || []).map((s: any) => ({
+      // 2. Busca contagem de alunos agrupada por serie (campo texto em users)
+      //    Retorna: [{ serie: "1ª série", count: 12 }, ...]
+      const { data: contagemData, error: contagemError } = await supabase
+        .from("users")
+        .select("serie")
+        .eq("tipo", "aluno")
+        .eq("status", "ativo")
+        .not("serie", "is", null);
+
+      if (contagemError) throw contagemError;
+
+      // 3. Monta mapa { nomeSerie -> quantidade }
+      const mapaContagem: Record<string, number> = {};
+      for (const u of contagemData || []) {
+        if (u.serie) {
+          mapaContagem[u.serie] = (mapaContagem[u.serie] || 0) + 1;
+        }
+      }
+
+      // 4. Mapeia séries com contagem real
+      const mapeadas: Serie[] = (seriesData || []).map((s: any) => ({
         id: s.id,
         nome: s.nome || "Série sem nome",
-        segmento:
-          (s.segmento as "fundamental" | "medio") ||
-          (s.nivel === "medio" ? "medio" : "fundamental"), // Prioriza 'segmento', fallback para 'nivel'
-        totalAlunos: s.total_alunos || 0, // Espera total_alunos
+        nivel: s.nivel || "fundamental",
+        segmento: (s.segmento === "ead" || s.segmento === "presencial") ? s.segmento : null,
+        totalAlunos: mapaContagem[s.nome] || 0,
         ativa: s.ativa ?? true,
       }));
 
@@ -137,7 +186,12 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
     carregarTudo();
   }, []);
 
-  // --------- MODAL / FORM ---------
+  // ─── MODAL ───────────────────────────────────────────────────────
+
+  const resetForms = () => {
+    setFormDisciplina({ nome: "", descricao: "", segmento: "", ativa: true });
+    setFormSerie({ nome: "", nivel: "fundamental", segmento: "", ativa: true });
+  };
 
   const handleAbrirModal = (tipo: "disciplina" | "serie", item?: any) => {
     if (item) {
@@ -145,28 +199,21 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
       if (tipo === "disciplina") {
         setFormDisciplina({
           nome: item.nome,
-          descricao: item.descricao ?? "", // Descrição de volta
+          descricao: item.descricao ?? "",
           segmento: item.segmento ?? "",
           ativa: item.ativa,
         });
       } else {
         setFormSerie({
           nome: item.nome,
-          segmento: item.segmento,
+          nivel: item.nivel ?? "fundamental",
+          segmento: item.segmento ?? "",
           ativa: item.ativa,
         });
       }
     } else {
       setEditando(null);
-      if (tipo === "disciplina") {
-        setFormDisciplina({ nome: "", descricao: "", segmento: "", ativa: true }); // Descrição de volta
-      } else {
-        setFormSerie({
-          nome: "",
-          segmento: "fundamental",
-          ativa: true,
-        });
-      }
+      resetForms();
     }
     setModalAberto(true);
   };
@@ -174,11 +221,10 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
   const handleFecharModal = () => {
     setModalAberto(false);
     setEditando(null);
-    setFormDisciplina({ nome: "", descricao: "", segmento: "", ativa: true }); // Descrição de volta
-    setFormSerie({ nome: "", segmento: "fundamental", ativa: true });
+    resetForms();
   };
 
-  // --------- SALVAR / EXCLUIR DISCIPLINA ---------
+  // ─── SALVAR / EXCLUIR DISCIPLINA ──────────────────────────────────
 
   const handleSalvarDisciplina = async () => {
     if (!formDisciplina.nome.trim()) {
@@ -188,20 +234,18 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
 
     const payload: any = {
       nome: formDisciplina.nome.trim(),
-      descricao: formDisciplina.descricao.trim() || null, // Descrição de volta no payload
+      descricao: formDisciplina.descricao.trim() || null,
       segmento: formDisciplina.segmento || null,
       ativa: formDisciplina.ativa,
     };
 
     try {
-      if (editando && "descricao" in editando) { // Verificação mais específica
+      if (editando) {
         const { error } = await supabase
           .from("disciplinas")
           .update(payload)
           .eq("id", editando.id);
-
         if (error) throw error;
-
         setDisciplinas((prev) =>
           prev.map((d) => (d.id === editando.id ? { ...d, ...payload } : d))
         );
@@ -212,13 +256,8 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
           .insert(payload)
           .select("id")
           .single();
-
         if (error) throw error;
-
-        const nova: Disciplina = {
-          id: data?.id || Date.now().toString(),
-          ...payload,
-        };
+        const nova: Disciplina = { id: data?.id || Date.now().toString(), ...payload };
         setDisciplinas((prev) => [...prev, nova]);
         toast.success("Disciplina cadastrada com sucesso!");
       }
@@ -232,13 +271,8 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
   const handleExcluirDisciplina = async (id: string) => {
     if (!confirm("Deseja realmente excluir esta disciplina?")) return;
     try {
-      const { error } = await supabase
-        .from("disciplinas")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("disciplinas").delete().eq("id", id);
       if (error) throw error;
-
       setDisciplinas((prev) => prev.filter((d) => d.id !== id));
       toast.success("Disciplina excluída com sucesso!");
     } catch (e: any) {
@@ -247,31 +281,32 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
     }
   };
 
-  // --------- SALVAR / EXCLUIR SÉRIE ---------
+  // ─── SALVAR / EXCLUIR SÉRIE ───────────────────────────────────────
 
   const handleSalvarSerie = async () => {
     if (!formSerie.nome.trim()) {
       toast.error("Preencha o nome da série");
       return;
     }
+    if (!formSerie.segmento) {
+      toast.error("Selecione o segmento (EAD ou Presencial)");
+      return;
+    }
 
     const payload: any = {
       nome: formSerie.nome.trim(),
+      nivel: formSerie.nivel,
       segmento: formSerie.segmento,
       ativa: formSerie.ativa,
-      // total_alunos não é incluído aqui, pois é um campo calculado ou atualizado em outro lugar
-      // ou pode ser atualizado via trigger/função no banco
     };
 
     try {
-      if (editando && "segmento" in editando) {
+      if (editando) {
         const { error } = await supabase
           .from("series")
           .update(payload)
           .eq("id", editando.id);
-
         if (error) throw error;
-
         setSeries((prev) =>
           prev.map((s) => (s.id === editando.id ? { ...s, ...payload } : s))
         );
@@ -282,12 +317,10 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
           .insert(payload)
           .select("id")
           .single();
-
         if (error) throw error;
-
         const nova: Serie = {
           id: data?.id || Date.now().toString(),
-          totalAlunos: 0, // Valor padrão para nova série
+          totalAlunos: 0,
           ...payload,
         };
         setSeries((prev) => [...prev, nova]);
@@ -305,7 +338,6 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
     try {
       const { error } = await supabase.from("series").delete().eq("id", id);
       if (error) throw error;
-
       setSeries((prev) => prev.filter((s) => s.id !== id));
       toast.success("Série excluída com sucesso!");
     } catch (e: any) {
@@ -313,6 +345,40 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
       toast.error("Erro ao excluir série.");
     }
   };
+
+  // ─── LISTAS FILTRADAS ─────────────────────────────────────────────
+
+  const disciplinasFiltradas = disciplinas.filter((d) => {
+    if (filtroDisciplina === "todos") return true;
+    return d.segmento === filtroDisciplina;
+  });
+
+  const seriesFiltradas = series.filter((s) => {
+    if (filtroSerie === "todos") return true;
+    return s.segmento === filtroSerie;
+  });
+
+  // ─── CONTADORES POR SEGMENTO ──────────────────────────────────────
+
+  const contDisciplinas = {
+    todos: disciplinas.length,
+    ead: disciplinas.filter((d) => d.segmento === "ead").length,
+    presencial: disciplinas.filter((d) => d.segmento === "presencial").length,
+  };
+
+  const contSeries = {
+    todos: series.length,
+    ead: series.filter((s) => s.segmento === "ead").length,
+    presencial: series.filter((s) => s.segmento === "presencial").length,
+  };
+
+  // ─── SELECT STYLE (dark mode safe) ───────────────────────────────
+
+  const selectClass =
+    "col-span-3 px-3 py-2 rounded-lg border border-border bg-background text-foreground " +
+    "focus:ring-2 focus:ring-ring focus:border-transparent text-sm";
+
+  // ─── RENDER ───────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -323,8 +389,8 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Voltar
           </Button>
-          <h2 className="text-2xl font-bold">Gestão Escolar</h2>
-          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">
+          <h2 className="text-2xl font-bold text-foreground">Gestão Escolar</h2>
+          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700">
             Online
           </Badge>
         </div>
@@ -334,9 +400,8 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Os dados desta tela são salvos diretamente no banco de dados
-          (Supabase). Disciplinas e séries cadastradas aqui são usadas nas
-          outras telas do sistema.
+          Os dados desta tela são salvos diretamente no banco de dados (Supabase).
+          Disciplinas e séries cadastradas aqui são usadas nas outras telas do sistema.
         </AlertDescription>
       </Alert>
 
@@ -351,10 +416,7 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
             onValueChange={(v) => setAbaSelecionada(v as any)}
           >
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger
-                value="disciplinas"
-                className="flex items-center gap-2"
-              >
+              <TabsTrigger value="disciplinas" className="flex items-center gap-2">
                 <BookOpen className="w-4 h-4" />
                 Disciplinas
               </TabsTrigger>
@@ -364,87 +426,104 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
               </TabsTrigger>
             </TabsList>
 
-            {/* Aba Disciplinas */}
+            {/* ══════════════ ABA DISCIPLINAS ══════════════ */}
             <TabsContent value="disciplinas" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600">
-                  {disciplinas.length} disciplina(s) cadastrada(s)
-                </p>
-                <Button
-                  onClick={() => handleAbrirModal("disciplina")}
-                  size="sm"
-                >
+              {/* Toolbar */}
+              <div className="flex flex-wrap justify-between items-center gap-3">
+                {/* Filtro por segmento */}
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-muted p-1">
+                  {(["todos", "ead", "presencial"] as const).map((seg) => (
+                    <button
+                      key={seg}
+                      onClick={() => setFiltroDisciplina(seg)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        filtroDisciplina === seg
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {seg === "todos" ? "Todas" : seg === "ead" ? "EAD" : "Presencial"}
+                      <span className="ml-1.5 text-muted-foreground">
+                        ({contDisciplinas[seg]})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <Button onClick={() => handleAbrirModal("disciplina")} size="sm">
                   <Plus className="w-4 h-4 mr-2" />
                   Adicionar Disciplina
                 </Button>
               </div>
 
               {carregando && (
-                <p className="text-xs text-gray-500">Carregando...</p>
+                <p className="text-xs text-muted-foreground">Carregando...</p>
               )}
 
-              <div className="space-y-3">
-                {disciplinas.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <BookOpen className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                    <p>Nenhuma disciplina cadastrada</p>
+              <div className="space-y-2">
+                {disciplinasFiltradas.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">Nenhuma disciplina encontrada</p>
                     <p className="text-sm">
-                      Clique em &quot;Adicionar&quot; para criar a primeira
-                      disciplina
+                      {filtroDisciplina !== "todos"
+                        ? `Não há disciplinas para o segmento ${labelSegmento(filtroDisciplina)}.`
+                        : 'Clique em "Adicionar" para criar a primeira disciplina.'}
                     </p>
                   </div>
                 ) : (
-                  disciplinas.map((disciplina) => (
+                  disciplinasFiltradas.map((disciplina) => (
                     <div
                       key={disciplina.id}
-                      className="flex items-center justify-between p-4 border rounded-lg bg-white hover:bg-gray-50"
+                      className="flex items-center justify-between p-4 border border-border rounded-lg bg-background hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <BookOpen className="w-5 h-5 text-blue-500" />
+                        <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
+                          <BookOpen className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        </div>
                         <div>
-                          <h3 className="font-medium">{disciplina.nome}</h3>
-                          {disciplina.descricao && ( // Descrição de volta na exibição
-                            <p className="text-sm text-gray-500">
-                              {disciplina.descricao}
-                            </p>
+                          <h3 className="font-medium text-foreground">{disciplina.nome}</h3>
+                          {disciplina.descricao && (
+                            <p className="text-sm text-muted-foreground">{disciplina.descricao}</p>
                           )}
-                          <div className="flex gap-2 mt-1">
+                          <div className="flex gap-1.5 mt-1 flex-wrap">
                             {disciplina.segmento && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs text-gray-700"
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${badgeSegmento(disciplina.segmento)}`}
                               >
-                                {disciplina.segmento}
-                              </Badge>
+                                {disciplina.segmento === "ead" ? (
+                                  <Monitor className="w-3 h-3 mr-1" />
+                                ) : (
+                                  <Users className="w-3 h-3 mr-1" />
+                                )}
+                                {labelSegmento(disciplina.segmento)}
+                              </span>
                             )}
-                            <Badge
-                              variant={
-                                disciplina.ativa ? "default" : "secondary"
-                              }
-                              className="text-xs"
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                disciplina.ativa
+                                  ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700"
+                                  : "bg-muted text-muted-foreground border-border"
+                              }`}
                             >
                               {disciplina.ativa ? "Ativa" : "Inativa"}
-                            </Badge>
+                            </span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            handleAbrirModal("disciplina", disciplina)
-                          }
+                          onClick={() => handleAbrirModal("disciplina", disciplina)}
                         >
                           <Edit2 className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            handleExcluirDisciplina(disciplina.id)
-                          }
-                          className="text-red-600 hover:text-red-700"
+                          onClick={() => handleExcluirDisciplina(disciplina.id)}
+                          className="text-destructive hover:text-destructive"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -455,12 +534,30 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
               </div>
             </TabsContent>
 
-            {/* Aba Séries */}
+            {/* ══════════════ ABA SÉRIES ══════════════ */}
             <TabsContent value="series" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600">
-                  {series.length} série(s) cadastrada(s)
-                </p>
+              {/* Toolbar */}
+              <div className="flex flex-wrap justify-between items-center gap-3">
+                {/* Filtro por segmento */}
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-muted p-1">
+                  {(["todos", "ead", "presencial"] as const).map((seg) => (
+                    <button
+                      key={seg}
+                      onClick={() => setFiltroSerie(seg)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        filtroSerie === seg
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {seg === "todos" ? "Todas" : seg === "ead" ? "EAD" : "Presencial"}
+                      <span className="ml-1.5 text-muted-foreground">
+                        ({contSeries[seg]})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
                 <Button onClick={() => handleAbrirModal("serie")} size="sm">
                   <Plus className="w-4 h-4 mr-2" />
                   Adicionar Série
@@ -468,50 +565,68 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
               </div>
 
               {carregando && (
-                <p className="text-xs text-gray-500">Carregando...</p>
+                <p className="text-xs text-muted-foreground">Carregando...</p>
               )}
 
-              <div className="space-y-3">
-                {series.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <GraduationCap className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                    <p>Nenhuma série cadastrada</p>
+              <div className="space-y-2">
+                {seriesFiltradas.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">Nenhuma série encontrada</p>
                     <p className="text-sm">
-                      Clique em &quot;Adicionar&quot; para criar a primeira
-                      série
+                      {filtroSerie !== "todos"
+                        ? `Não há séries para o segmento ${labelSegmento(filtroSerie)}.`
+                        : 'Clique em "Adicionar" para criar a primeira série.'}
                     </p>
                   </div>
                 ) : (
-                  series.map((serie) => (
+                  seriesFiltradas.map((serie) => (
                     <div
                       key={serie.id}
-                      className="flex items-center justify-between p-4 border rounded-lg bg-white hover:bg-gray-50"
+                      className="flex items-center justify-between p-4 border border-border rounded-lg bg-background hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <GraduationCap className="w-5 h-5 text-purple-500" />
+                        <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center shrink-0">
+                          <GraduationCap className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        </div>
                         <div>
-                          <h3 className="font-medium">{serie.nome}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className="text-xs">
-                              {serie.segmento === "fundamental" ? "Ens. Fundamental" : "Ens. Médio"}
-                            </Badge>
-
-                            <Badge
-                              variant="secondary"
-                              className="text-xs"
-                            >
+                          <h3 className="font-medium text-foreground">{serie.nome}</h3>
+                          <div className="flex gap-1.5 mt-1 flex-wrap">
+                            {/* Nível educacional */}
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-muted text-muted-foreground border-border">
+                              {labelNivel(serie.nivel)}
+                            </span>
+                            {/* Segmento */}
+                            {serie.segmento && (
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${badgeSegmento(serie.segmento)}`}
+                              >
+                                {serie.segmento === "ead" ? (
+                                  <Monitor className="w-3 h-3 mr-1" />
+                                ) : (
+                                  <Users className="w-3 h-3 mr-1" />
+                                )}
+                                {labelSegmento(serie.segmento)}
+                              </span>
+                            )}
+                            {/* Alunos */}
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-muted text-muted-foreground border-border">
                               {serie.totalAlunos} aluno(s)
-                            </Badge>
-                            <Badge
-                              variant={serie.ativa ? "default" : "secondary"}
-                              className="text-xs"
+                            </span>
+                            {/* Status */}
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                serie.ativa
+                                  ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700"
+                                  : "bg-muted text-muted-foreground border-border"
+                              }`}
                             >
                               {serie.ativa ? "Ativa" : "Inativa"}
-                            </Badge>
+                            </span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -523,7 +638,7 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleExcluirSerie(serie.id)}
-                          className="text-red-600 hover:text-red-700"
+                          className="text-destructive hover:text-destructive"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -537,9 +652,9 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
         </CardContent>
       </Card>
 
-      {/* Modal de Disciplina/Série */}
+      {/* ══════════════ MODAL ══════════════ */}
       <Dialog open={modalAberto} onOpenChange={setModalAberto}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle>
               {editando
@@ -547,16 +662,19 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                   ? "Editar Disciplina"
                   : "Editar Série"
                 : abaSelecionada === "disciplinas"
-                ? "Adicionar Nova Disciplina"
-                : "Adicionar Nova Série"}
+                ? "Nova Disciplina"
+                : "Nova Série"}
             </DialogTitle>
           </DialogHeader>
+
           <div className="grid gap-4 py-4">
             {abaSelecionada === "disciplinas" ? (
+              /* ── Formulário Disciplina ── */
               <>
+                {/* Nome */}
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="nomeDisciplina" className="text-right">
-                    Nome
+                  <Label htmlFor="nomeDisciplina" className="text-right text-foreground">
+                    Nome *
                   </Label>
                   <Input
                     id="nomeDisciplina"
@@ -564,11 +682,14 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                     onChange={(e) =>
                       setFormDisciplina({ ...formDisciplina, nome: e.target.value })
                     }
+                    placeholder="Ex: Matemática"
                     className="col-span-3"
                   />
                 </div>
+
+                {/* Descrição */}
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="descricaoDisciplina" className="text-right">
+                  <Label htmlFor="descricaoDisciplina" className="text-right text-foreground">
                     Descrição
                   </Label>
                   <Input
@@ -577,29 +698,35 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                     onChange={(e) =>
                       setFormDisciplina({ ...formDisciplina, descricao: e.target.value })
                     }
+                    placeholder="Opcional"
                     className="col-span-3"
                   />
                 </div>
+
+                {/* Segmento EAD / Presencial */}
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="segmentoDisciplina" className="text-right">
-                    Segmento
+                  <Label htmlFor="segmentoDisciplina" className="text-right text-foreground">
+                    Segmento *
                   </Label>
                   <select
                     id="segmentoDisciplina"
-                    value={formDisciplina.segmento || ""}
+                    value={formDisciplina.segmento}
                     onChange={(e) =>
-                      setFormDisciplina({ ...formDisciplina, segmento: e.target.value || null })
+                      setFormDisciplina({
+                        ...formDisciplina,
+                        segmento: e.target.value as "ead" | "presencial" | "",
+                      })
                     }
-                    className="col-span-3 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={selectClass}
                   >
-                    <option value="">Selecione o Segmento</option>
-                    <option value="Ensino Fundamental I">Ensino Fundamental I</option>
-                    <option value="Ensino Fundamental II">Ensino Fundamental II</option>
-                    <option value="Ensino Médio">Ensino Médio</option>
-                    {/* Adicione outros segmentos conforme necessário */}
+                    <option value="">Selecione o segmento</option>
+                    <option value="ead">EAD</option>
+                    <option value="presencial">Presencial</option>
                   </select>
                 </div>
-                <div className="flex items-center space-x-2 col-span-4 justify-end">
+
+                {/* Ativa */}
+                <div className="flex items-center gap-2 justify-end col-span-4">
                   <Checkbox
                     id="ativaDisciplina"
                     checked={formDisciplina.ativa}
@@ -609,17 +736,19 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                   />
                   <label
                     htmlFor="ativaDisciplina"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    className="text-sm font-medium text-foreground leading-none cursor-pointer"
                   >
-                    Ativa
+                    Disciplina ativa
                   </label>
                 </div>
               </>
             ) : (
+              /* ── Formulário Série ── */
               <>
+                {/* Nome */}
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="nomeSerie" className="text-right">
-                    Nome
+                  <Label htmlFor="nomeSerie" className="text-right text-foreground">
+                    Nome *
                   </Label>
                   <Input
                     id="nomeSerie"
@@ -627,12 +756,33 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                     onChange={(e) =>
                       setFormSerie({ ...formSerie, nome: e.target.value })
                     }
+                    placeholder="Ex: 1º Ano"
                     className="col-span-3"
                   />
                 </div>
+
+                {/* Nível educacional */}
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="segmentoSerie" className="text-right">
-                    Segmento
+                  <Label htmlFor="nivelSerie" className="text-right text-foreground">
+                    Nível *
+                  </Label>
+                  <select
+                    id="nivelSerie"
+                    value={formSerie.nivel}
+                    onChange={(e) =>
+                      setFormSerie({ ...formSerie, nivel: e.target.value })
+                    }
+                    className={selectClass}
+                  >
+                    <option value="fundamental">Ensino Fundamental</option>
+                    <option value="medio">Ensino Médio</option>
+                  </select>
+                </div>
+
+                {/* Segmento EAD / Presencial */}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="segmentoSerie" className="text-right text-foreground">
+                    Segmento *
                   </Label>
                   <select
                     id="segmentoSerie"
@@ -640,16 +790,19 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                     onChange={(e) =>
                       setFormSerie({
                         ...formSerie,
-                        segmento: e.target.value as "fundamental" | "medio",
+                        segmento: e.target.value as "ead" | "presencial" | "",
                       })
                     }
-                    className="col-span-3 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={selectClass}
                   >
-                    <option value="fundamental">Ensino Fundamental</option>
-                    <option value="medio">Ensino Médio</option>
+                    <option value="">Selecione o segmento</option>
+                    <option value="ead">EAD</option>
+                    <option value="presencial">Presencial</option>
                   </select>
                 </div>
-                <div className="flex items-center space-x-2 col-span-4 justify-end">
+
+                {/* Ativa */}
+                <div className="flex items-center gap-2 justify-end col-span-4">
                   <Checkbox
                     id="ativaSerie"
                     checked={formSerie.ativa}
@@ -659,14 +812,15 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                   />
                   <label
                     htmlFor="ativaSerie"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    className="text-sm font-medium text-foreground leading-none cursor-pointer"
                   >
-                    Ativa
+                    Série ativa
                   </label>
                 </div>
               </>
             )}
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={handleFecharModal}>
               Cancelar
@@ -678,7 +832,7 @@ function GestaoEscola({ onVoltar }: GestaoEscolaProps) {
                   : handleSalvarSerie
               }
             >
-              Salvar
+              {editando ? "Salvar alterações" : "Cadastrar"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,17 +1,14 @@
 // src/components/DisciplinaPage.tsx
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase/supabaseClient";
+import { useSegmento } from "../hooks/useSegmento";
 
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 
 import {
-  BookOpen,
-  FileText,
-  Video,
-  MessageSquare,
-  FileText as FileTextIcon,
-  Loader2,
+  BookOpen, FileText, Video, MessageSquare,
+  FileText as FileTextIcon, Loader2,
 } from "lucide-react";
 
 import { AtividadesAluno } from "./AtividadesAluno";
@@ -43,7 +40,10 @@ interface DisciplinaPageProps {
 }
 
 export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPageProps) {
-  const [abaAtiva, setAbaAtiva] = useState<Aba>("conteudo");
+  const { isPresencial } = useSegmento();
+
+  // Presencial começa em "atividades"; EAD começa em "conteudo"
+  const [abaAtiva, setAbaAtiva] = useState<Aba>(isPresencial ? "atividades" : "conteudo");
 
   const [materiais, setMateriais] = useState<ConteudoPdf[]>([]);
   const [materialSelecionado, setMaterialSelecionado] = useState<ConteudoPdf | null>(null);
@@ -59,12 +59,15 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
     );
   }
 
- const menuItens = [
-  { id: "conteudo" as Aba, label: "Conteúdo", shortLabel: "Conteúdo", icon: BookOpen },
-  { id: "atividades" as Aba, label: "Atividades", shortLabel: "Atividades", icon: FileText },
-  { id: "aulaVivo" as Aba, label: "Aulas ao Vivo", shortLabel: "Aulas", icon: Video },
-  { id: "forum" as Aba, label: "Fórum", shortLabel: "Fórum", icon: MessageSquare },
-];
+  const todosMenuItens = [
+    { id: "conteudo"   as Aba, label: "Conteúdo",      shortLabel: "Conteúdo",   icon: BookOpen,      apenasEAD: true  },
+    { id: "atividades" as Aba, label: "Atividades",    shortLabel: "Atividades", icon: FileText,      apenasEAD: false },
+    { id: "aulaVivo"   as Aba, label: "Aulas ao Vivo", shortLabel: "Aulas",      icon: Video,         apenasEAD: true  },
+    { id: "forum"      as Aba, label: "Fórum",         shortLabel: "Fórum",      icon: MessageSquare, apenasEAD: true  },
+  ];
+
+  // Oculta abas EAD-only quando segmento é presencial
+  const menuItens = todosMenuItens.filter(item => !(isPresencial && item.apenasEAD));
 
   useEffect(() => {
     async function carregarMateriais() {
@@ -83,15 +86,11 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
         if (error) throw error;
 
         const mapeados: ConteudoPdf[] = (data || []).map((row: any) => ({
-          id: row.id,
-          url: row.url,
+          id: row.id, url: row.url,
           nome: row.nome || row.titulo || "Material",
-          titulo: row.titulo,
-          descricao: row.descricao,
-          disciplina: row.disciplina,
-          serie: row.serie,
-          bimestre: row.bimestre,
-          autor_nome: row.autor_nome,
+          titulo: row.titulo, descricao: row.descricao,
+          disciplina: row.disciplina, serie: row.serie,
+          bimestre: row.bimestre, autor_nome: row.autor_nome,
           created_at: row.created_at,
         }));
 
@@ -117,7 +116,7 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
   return (
     <div className="flex flex-col min-h-full">
 
-      {/* Abas de navegação — sem cabeçalho duplicado */}
+      {/* Abas — filtradas por segmento */}
       <div className="border-b border-border mb-4 sm:mb-6">
         <nav className="flex items-center gap-1 overflow-x-auto">
           {menuItens.map((item) => {
@@ -127,7 +126,8 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
               <button
                 key={item.id}
                 onClick={() => setAbaAtiva(item.id)}
-                className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 sm:py-3 border-b-2 text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${                  isAtivo
+                className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 sm:py-3 border-b-2 text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                  isAtivo
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 }`}
@@ -144,11 +144,10 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
       {/* Conteúdo das abas */}
       <div className="flex-1">
 
-        {/* Aba Conteúdo */}
-        {abaAtiva === "conteudo" && (
+        {/* Aba Conteúdo — apenas EAD */}
+        {abaAtiva === "conteudo" && !isPresencial && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
 
-            {/* Coluna dos bimestres */}
             <div className="lg:col-span-1">
               <Card>
                 <CardHeader>
@@ -164,16 +163,13 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
                       Carregando materiais...
                     </div>
                   )}
-
                   {erroConteudo && (
                     <p className="text-xs text-red-600">{erroConteudo}</p>
                   )}
-
                   {!loadingConteudo && !erroConteudo && bimestres.map((bimestre) => {
                     const mat = getMaterialDoBimestre(bimestre);
                     const disponivel = !!mat;
                     const selecionado = materialSelecionado?.bimestre === bimestre;
-
                     return (
                       <button
                         key={bimestre}
@@ -188,30 +184,20 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold">
-                            {bimestre}º bimestre
-                          </span>
+                          <span className="font-semibold">{bimestre}º bimestre</span>
                           {disponivel && !selecionado && (
-                            <Badge
-                              className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-none text-[10px]"
-                              variant="secondary"
-                            >
+                            <Badge className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-none text-[10px]" variant="secondary">
                               Disponível
                             </Badge>
                           )}
                           {selecionado && (
-                            <Badge
-                              className="bg-white/20 text-white border-none text-[10px]"
-                              variant="secondary"
-                            >
+                            <Badge className="bg-white/20 text-white border-none text-[10px]" variant="secondary">
                               Aberto
                             </Badge>
                           )}
                         </div>
                         <span className={`text-xs truncate ${selecionado ? "text-blue-100" : "text-muted-foreground"}`}>
-                          {disponivel
-                            ? mat?.nome || "Material disponível"
-                            : "Ainda não disponível"}
+                          {disponivel ? mat?.nome || "Material disponível" : "Ainda não disponível"}
                         </span>
                       </button>
                     );
@@ -220,27 +206,18 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
               </Card>
             </div>
 
-            {/* Visualizador de PDF */}
             <div className="lg:col-span-3">
               <PDFViewerModerno
                 material={materialSelecionado}
-                disciplina={{
-                  id: disciplina.id,
-                  nome: disciplina.nome,
-                  professor: undefined,
-                }}
-                onMarcarConcluido={(_id) => {
-                  // Futuro: salvar em tabela de progresso
-                }}
-                onEnviarDuvida={(_id) => {
-                  // Futuro: abrir modal de dúvida / fórum
-                }}
+                disciplina={{ id: disciplina.id, nome: disciplina.nome, professor: undefined }}
+                onMarcarConcluido={(_id) => {}}
+                onEnviarDuvida={(_id) => {}}
               />
             </div>
           </div>
         )}
 
-        {/* Aba Atividades */}
+        {/* Aba Atividades — EAD e Presencial */}
         {abaAtiva === "atividades" && (
           <AtividadesAluno
             disciplinaId={disciplina.id}
@@ -249,8 +226,8 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
           />
         )}
 
-        {/* Aba Aulas ao Vivo */}
-        {abaAtiva === "aulaVivo" && (
+        {/* Aba Aulas ao Vivo — apenas EAD */}
+        {abaAtiva === "aulaVivo" && !isPresencial && (
           <AulasAoVivo
             disciplina={disciplina}
             serie={{ id: turma.serieId, nome: turma.serieNome }}
@@ -258,8 +235,8 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
           />
         )}
 
-        {/* Aba Fórum */}
-        {abaAtiva === "forum" && (
+        {/* Aba Fórum — apenas EAD */}
+        {abaAtiva === "forum" && !isPresencial && (
           <Forum
             disciplina={disciplina}
             serie={{ id: turma.serieId, nome: turma.serieNome }}

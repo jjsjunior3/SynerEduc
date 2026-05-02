@@ -53,6 +53,7 @@ const tiposUsuario = [
   { value: "coordenador", label: "Coordenador" },
   { value: "administrador", label: "Administrador" },
   { value: "professor_conteudista", label: "Prof. Conteudista" },
+  { value: "gestor_geral", label: "Gestor Geral" },
 ];
 
 const useSeriesFromSupabase = () => {

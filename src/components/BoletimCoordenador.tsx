@@ -319,7 +319,7 @@ export default function BoletimCoordenador({ onVoltar }: BoletimCoordenadorProps
   <div class="header">
     ${logoHtml}
     <div>
-      <h1>Colégio Conexão EAD Maranhense</h1>
+      <h1>Colégio Conexão Maranhense</h1>
       <p>Sistema de Gestão Escolar — Boletim Oficial${isPresencial ? ' · Segmento Presencial' : ''}</p>
     </div>
   </div>
@@ -354,7 +354,7 @@ export default function BoletimCoordenador({ onVoltar }: BoletimCoordenadorProps
     REC: Recuperação &nbsp;|&nbsp; ${legendaMed} &nbsp;|&nbsp;
     Pts Total: soma das 4 médias &nbsp;|&nbsp; Média Final: Pts÷4
     &nbsp;&nbsp;
-    <strong>Aprovação:</strong> ✅ ≥ 7.0 → Aprovado &nbsp;|&nbsp; ⚠️ 5.0–6.9 → Recuperação &nbsp;|&nbsp; ❌ &lt;5.0 → Reprovado
+    <strong>Aprovação:</strong> ✅ Média para Aprocação ≥ 7.0
   </div>
   <div class="assinaturas">
     <div class="assinatura"><div class="linha">Coordenação Pedagógica</div></div>

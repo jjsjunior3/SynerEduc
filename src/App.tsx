@@ -10,6 +10,7 @@ import DashboardProfessor from "./components/DashboardProfessor";
 import DashboardCoordenador from "./components/DashboardCoordenador";
 import DashboardConteudista from "./components/DashboardConteudista";
 import {DashboardAdministrador} from "./components/DashboardAdministrador";
+import DashboardGestorGeral from './components/DashboardGestorGeral';
 import DashboardFallback from "./components/DashboardFallback";
 
 // Site / Login
@@ -82,7 +83,9 @@ export default function App() {
         case "professor_conteudista":
           return <DashboardConteudista {...commonProps} />;
         case "administrador":
-          return <DashboardAdministrador {...commonProps} />;
+          return <DashboardAdministrador />;
+        case 'gestor_geral':
+          return <DashboardGestorGeral {...commonProps} />;
         default:
           return (
             <DashboardFallback
