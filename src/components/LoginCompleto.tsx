@@ -7,32 +7,38 @@ import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
 import { useTheme } from "../contexts/ThemeContext";
 import {
-  BookOpen,
-  Eye,
-  EyeOff,
-  Loader2,
-  AlertCircle,
-  ArrowLeft,
-  Phone,
-  Sun,
-  Moon,
+  BookOpen, Eye, EyeOff, Loader2, AlertCircle,
+  ArrowLeft, Mail, Sun, Moon, KeyRound, CheckCircle, Send,
 } from "lucide-react";
 import { Usuario, TipoUsuario } from "../types/auth";
 import { supabase } from "../supabase/supabaseClient";
 
 interface LoginCompletoProps {
-  onLogin: (user: Usuario) => void;
+  onLogin: (user: Usuario, senhaProvisoria?: boolean) => void;
   onBackToSite: () => void;
 }
 
+type Tela = "login" | "recuperar" | "recuperar_enviado";
+
 export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoProps) {
   const { theme, toggleTheme } = useTheme();
+
+  // ── Estado da tela atual ──────────────────────────────────────────────────
+  const [tela, setTela] = useState<Tela>("login");
+
+  // ── Login ─────────────────────────────────────────────────────────────────
   const [loginField, setLoginField] = useState("");
-  const [senha, setSenha] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState("");
+  const [senha, setSenha]           = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [erro, setErro]             = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // ── Recuperação de senha ──────────────────────────────────────────────────
+  const [emailRecuperacao, setEmailRecuperacao] = useState("");
+  const [loadingRecup, setLoadingRecup]         = useState(false);
+  const [erroRecup, setErroRecup]               = useState("");
+
+  // ── Login ─────────────────────────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -55,9 +61,10 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
         return;
       }
 
+      // ✅ Busca perfil + campo senha_provisoria
       const { data: perfil, error: perfilError } = await supabase
         .from("users")
-        .select("nome, tipo, serie, avatar")
+        .select("nome, tipo, serie, avatar, segmento, status, senha_provisoria")
         .eq("id", user.id)
         .single();
 
@@ -71,16 +78,21 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
         tipoBanco === "admin" ? "administrador" : (tipoBanco || "aluno");
 
       const usuario: Usuario = {
-        id: user.id,
-        nome: perfil?.nome || user.email || "Usuário",
-        email: user.email || "",
-        tipo: tipoNormalizado,
-        serie: perfil?.serie,
-        avatar: perfil?.avatar,
+        id:       user.id,
+        nome:     perfil?.nome    || user.email || "Usuário",
+        email:    user.email      || "",
+        tipo:     tipoNormalizado,
+        serie:    perfil?.serie,
+        avatar:   perfil?.avatar,
+        segmento: perfil?.segmento,
+        status:   perfil?.status,
       };
 
       localStorage.setItem("ava_user", JSON.stringify(usuario));
-      onLogin(usuario);
+
+      // ✅ Passa flag de senha provisória para o App.tsx decidir
+      onLogin(usuario, perfil?.senha_provisoria === true);
+
     } catch {
       setErro("Ocorreu um erro inesperado durante o login.");
     } finally {
@@ -88,40 +100,187 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
     }
   };
 
-  const handleForgotPassword = () => {
-    const phone = "5598988887777";
-    const message = "Olá! Esqueci minha senha do Portal AVA. Podem me ajudar?";
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+  // ── Recuperação de senha ──────────────────────────────────────────────────
+  const handleRecuperarSenha = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoadingRecup(true);
+    setErroRecup("");
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        emailRecuperacao.trim(),
+        {
+          // URL para onde o Supabase redireciona após o clique no email
+          // Ajuste para a URL real do seu sistema em produção
+          redirectTo: `${window.location.origin}/?recuperar_senha=true`,
+        }
+      );
+
+      if (error) throw error;
+
+      setTela("recuperar_enviado");
+
+    } catch (err: any) {
+      // Supabase retorna sucesso mesmo se o email não existir (por segurança)
+      // então só mostramos erro em casos reais de falha
+      console.error("[Recuperação]", err);
+      setErroRecup(
+        err.message?.includes("rate limit")
+          ? "Aguarde 60 segundos antes de tentar novamente."
+          : "Erro ao enviar o email. Verifique o endereço e tente novamente."
+      );
+    } finally {
+      setLoadingRecup(false);
+    }
   };
 
+  // ─── Tela: Recuperação enviada ────────────────────────────────────────────
+  if (tela === "recuperar_enviado") {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 relative bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950">
+        <div className="absolute inset-0 bg-black/30" />
+        <Card className="w-full max-w-md relative z-10 shadow-2xl border border-border bg-card">
+          <CardContent className="pt-8 pb-8 text-center space-y-5">
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Email enviado!</h2>
+              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                Enviamos um link de recuperação para{" "}
+                <span className="font-medium text-foreground">{emailRecuperacao}</span>.
+                <br />Verifique sua caixa de entrada e spam.
+              </p>
+            </div>
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-3 text-left">
+              <p className="text-xs text-blue-800 dark:text-blue-300">
+                O link expira em <strong>1 hora</strong>. Após clicar nele, você será
+                redirecionado para criar sua nova senha.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => { setTela("login"); setEmailRecuperacao(""); }}
+              className="w-full gap-2">
+              <ArrowLeft className="w-4 h-4" /> Voltar ao login
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Problemas?{" "}
+              <a href="tel:+559889255294" className="text-blue-500 hover:underline">
+                (98) 98 8925-5294
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ─── Tela: Recuperar senha ────────────────────────────────────────────────
+  if (tela === "recuperar") {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 relative bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950">
+        <div className="absolute inset-0 bg-black/30" />
+
+        <button
+          onClick={toggleTheme}
+          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/20"
+          aria-label="Alternar tema">
+          {theme === "light" ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+        </button>
+
+        <Card className="w-full max-w-md relative z-10 shadow-2xl border border-border bg-card">
+          <CardHeader className="text-center space-y-4 pb-2">
+            <Button
+              onClick={() => { setTela("login"); setErroRecup(""); }}
+              variant="ghost" size="sm"
+              className="absolute top-4 left-4 text-muted-foreground hover:text-foreground gap-1">
+              <ArrowLeft className="w-4 h-4" /> Voltar
+            </Button>
+
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center mx-auto shadow-lg mt-4">
+              <KeyRound className="w-8 h-8 text-white" />
+            </div>
+
+            <div>
+              <CardTitle className="text-xl text-foreground">Recuperar Senha</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                Digite o email de recuperação cadastrado pela secretaria.
+                Enviaremos um link para você criar uma nova senha.
+              </p>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-5 pt-4">
+            <form onSubmit={handleRecuperarSenha} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="emailRecup" className="text-foreground font-medium">
+                  Email de recuperação
+                </Label>
+                <Input
+                  id="emailRecup"
+                  type="email"
+                  value={emailRecuperacao}
+                  onChange={e => setEmailRecuperacao(e.target.value)}
+                  placeholder="seu@email.com"
+                  required
+                  disabled={loadingRecup}
+                  autoFocus
+                />
+              </div>
+
+              {erroRecup && (
+                <Alert variant="destructive">
+                  <AlertCircle className="w-4 h-4" />
+                  <AlertDescription>{erroRecup}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-2"
+                disabled={!emailRecuperacao.trim() || loadingRecup}>
+                {loadingRecup
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando...</>
+                  : <><Send className="w-4 h-4" />Enviar link de recuperação</>}
+              </Button>
+            </form>
+
+            <p className="text-xs text-center text-muted-foreground">
+              Não tem email cadastrado?{" "}
+              <a
+                href="https://wa.me/5598988887777?text=Olá!%20Preciso%20recuperar%20minha%20senha%20do%20Portal%20AVA."
+                target="_blank" rel="noopener noreferrer"
+                className="text-blue-500 hover:underline">
+                Fale conosco
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ─── Tela: Login principal ────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950">
-      {/* Overlay sutil */}
       <div className="absolute inset-0 bg-black/30" />
 
-      {/* Toggle de tema — canto superior direito */}
       <button
         onClick={toggleTheme}
         className="absolute top-4 right-4 z-20 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/20"
-        aria-label="Alternar tema"
-      >
-        {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+        aria-label="Alternar tema">
+        {theme === "light" ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
       </button>
 
       <Card className="w-full max-w-md relative z-10 shadow-2xl border border-border bg-card backdrop-blur-sm">
         <CardHeader className="text-center space-y-4 pb-2">
-          {/* Botão voltar */}
           <Button
-            onClick={onBackToSite}
-            variant="ghost"
-            size="sm"
-            className="absolute top-4 left-4 text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Voltar
+            onClick={onBackToSite} variant="ghost" size="sm"
+            className="absolute top-4 left-4 text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
           </Button>
 
-          {/* Ícone */}
           <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center mx-auto shadow-lg mt-4">
             <BookOpen className="w-10 h-10 text-white" />
           </div>
@@ -138,13 +297,13 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <Label htmlFor="loginField" className="text-foreground font-medium">
-                Usuário
+                Usuário (email de acesso)
               </Label>
               <Input
                 id="loginField"
                 type="email"
                 value={loginField}
-                onChange={(e) => setLoginField(e.target.value)}
+                onChange={e => setLoginField(e.target.value)}
                 placeholder="seu@email.com"
                 className="mt-1"
                 required
@@ -161,20 +320,15 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
                   id="senha"
                   type={showPassword ? "text" : "password"}
                   value={senha}
-                  onChange={(e) => setSenha(e.target.value)}
+                  onChange={e => setSenha(e.target.value)}
                   placeholder="Digite sua senha"
                   className="pr-10"
                   required
                   disabled={loading}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
+                <Button type="button" variant="ghost" size="sm"
                   className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading}
-                >
+                  onClick={() => setShowPassword(!showPassword)} disabled={loading}>
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </Button>
               </div>
@@ -190,30 +344,24 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
             <Button
               type="submit"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-                  Entrando...
-                </>
-              ) : (
-                "Entrar no Portal"
-              )}
+              disabled={loading}>
+              {loading
+                ? <><Loader2 className="mr-2 w-4 h-4 animate-spin" />Entrando...</>
+                : "Entrar no Portal"}
             </Button>
           </form>
 
           <div className="space-y-3 pt-4 border-t border-border text-center">
+            {/* ✅ NOVO: recuperação de senha por email */}
             <Button
-              type="button"
-              variant="ghost"
-              onClick={handleForgotPassword}
-              className="w-full text-muted-foreground hover:text-blue-600 text-sm"
-              disabled={loading}
-            >
-              <Phone className="mr-2 w-4 h-4" />
+              type="button" variant="ghost"
+              onClick={() => { setTela("recuperar"); setErro(""); }}
+              className="w-full text-muted-foreground hover:text-blue-600 text-sm gap-2"
+              disabled={loading}>
+              <Mail className="w-4 h-4" />
               Esqueci minha senha
             </Button>
+
             <p className="text-xs text-muted-foreground">
               Problemas para acessar?{" "}
               <a href="tel:+559889255294" className="text-blue-500 hover:underline">

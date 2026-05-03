@@ -11,7 +11,7 @@ import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import {
   ArrowLeft, Search, Edit, Trash2, Users, RefreshCw,
-  Eye, EyeOff, Loader2, ShieldCheck, X,
+  Eye, EyeOff, Loader2, ShieldCheck, X, KeyRound, Copy, Check,
 } from 'lucide-react';
 import { projectId } from '../utils/supabase/info';
 import { toast } from 'sonner';
@@ -21,7 +21,7 @@ interface GerenciadorUsuariosProps { onVoltar: () => void; }
 
 interface Usuario {
   id: string; nome: string; email: string;
-  tipo: 'aluno' | 'professor' | 'coordenador' | 'administrador' | 'professor_conteudista';
+  tipo: string;
   serie?: string; disciplinas?: string[]; series?: string[];
   status: 'ativo' | 'inativo';
   segmento: 'ead' | 'presencial';
@@ -30,23 +30,33 @@ interface Usuario {
 }
 
 const tiposUsuario = [
-  { value: 'aluno', label: 'Aluno' },
-  { value: 'professor', label: 'Professor' },
-  { value: 'coordenador', label: 'Coordenador' },
-  { value: 'administrador', label: 'Administrador' },
-  { value: 'professor_conteudista', label: 'Prof. Conteudista' },
+  { value: 'aluno',                label: 'Aluno' },
+  { value: 'professor',            label: 'Professor' },
+  { value: 'coordenador',          label: 'Coordenador' },
+  { value: 'administrador',        label: 'Administrador' },
+  { value: 'professor_conteudista',label: 'Prof. Conteudista' },
+  { value: 'gestor_geral',         label: 'Gestor Geral' },
+  { value: 'secretaria',           label: 'Secretaria' },
+  { value: 'financeiro',           label: 'Financeiro' },
+  { value: 'estoque',              label: 'Estoque' },
+  { value: 'responsavel',          label: 'Responsável' },
 ];
 
 const TIPO_CORES: Record<string, string> = {
-  aluno: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  professor: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  coordenador: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-  administrador: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  aluno:                 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  professor:             'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  coordenador:           'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+  administrador:         'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   professor_conteudista: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  gestor_geral:          'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+  secretaria:            'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300',
+  financeiro:            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  estoque:               'bg-lime-100 text-lime-800 dark:bg-lime-900/30 dark:text-lime-300',
+  responsavel:           'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
 };
 
 const TipoBadge = ({ tipo }: { tipo: string }) => (
-  <Badge className={`${TIPO_CORES[tipo] || TIPO_CORES.aluno} border-0 text-xs font-medium`}>
+  <Badge className={`${TIPO_CORES[tipo] || 'bg-muted text-muted-foreground'} border-0 text-xs font-medium`}>
     {tiposUsuario.find(t => t.value === tipo)?.label || tipo}
   </Badge>
 );
@@ -59,6 +69,7 @@ const SegmentoBadge = ({ segmento }: { segmento: string }) => (
   </Badge>
 );
 
+// ─── Componente principal ─────────────────────────────────────────────────────
 export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,15 +83,16 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
   // ── Edição ───────────────────────────────────────────────────────────────
   const [usuarioEditando, setUsuarioEditando] = useState<Usuario | null>(null);
   const [mostrarDialog, setMostrarDialog] = useState(false);
-  const [mostrarSenhas, setMostrarSenhas] = useState<Record<string, boolean>>({});
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [copiado, setCopiado] = useState(false);
   const [disciplinasDisponiveis, setDisciplinasDisponiveis] = useState<string[]>([]);
   const [seriesDisponiveis, setSeriesDisponiveis] = useState<string[]>([]);
 
   const [edicao, setEdicao] = useState({
-    nome: '', email: '', tipo: 'aluno' as Usuario['tipo'],
+    nome: '', email: '', tipo: 'aluno',
     serie: '', disciplinas: [] as string[], series: [] as string[],
-    status: 'ativo' as Usuario['status'],
+    status: 'ativo' as 'ativo' | 'inativo',
     segmento: 'ead' as 'ead' | 'presencial',
     turno: '', nivel: '', novaSenha: '',
   });
@@ -93,46 +105,55 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
   // ── Loaders ──────────────────────────────────────────────────────────────
   const carregarDisciplinas = async () => {
     const { data } = await supabase.from('disciplinas').select('nome, ativa').order('nome');
-    setDisciplinasDisponiveis((data || []).filter((d: any) => d.ativa !== false).map((d: any) => d.nome).filter(Boolean));
+    setDisciplinasDisponiveis(
+      (data || []).filter((d: any) => d.ativa !== false).map((d: any) => d.nome).filter(Boolean)
+    );
   };
 
   const carregarSeries = async () => {
     const { data } = await supabase.from('series').select('nome, ativa').order('nome');
-    const nomes = (data || []).filter((s: any) => s.ativa !== false).map((s: any) => s.nome).filter(Boolean);
-    setSeriesDisponiveis(nomes.length > 0 ? nomes : []);
+    setSeriesDisponiveis(
+      (data || []).filter((s: any) => s.ativa !== false).map((s: any) => s.nome).filter(Boolean)
+    );
   };
 
+  // ── NOVO: usa RPC para trazer email real de auth.users ────────────────────
   const carregarUsuarios = async () => {
     setLoading(true);
     try {
-      const token = await getToken();
-      if (!token) { toast.error('Sessão expirada.'); setLoading(false); return; }
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/admin-manage-users`, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      });
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      const arr = data.success && Array.isArray(data.usuarios) ? data.usuarios : [];
-      setUsuarios(arr.map((u: any) => ({
-        id: u.id, nome: u.nome || 'Nome não informado', email: u.email || '',
-        tipo: u.tipo || 'aluno', serie: u.serie || '',
-        disciplinas: u.disciplinas || [], series: u.series || [],
-        status: u.status || 'ativo',
-        segmento: u.segmento || 'ead',
-        turno: u.turno || null, nivel: u.nivel || null,
-        criadoEm: u.criadoEm || u.criado_em || new Date().toISOString(),
+      const { data, error } = await supabase.rpc('get_users_with_email');
+      if (error) throw error;
+
+      const arr = (data || []) as any[];
+      setUsuarios(arr.map(u => ({
+        id:          u.id,
+        nome:        u.nome        || 'Nome não informado',
+        email:       u.email       || '—',           // ← email real do auth.users
+        tipo:        u.tipo        || 'aluno',
+        serie:       u.serie       || '',
+        disciplinas: u.disciplinas || [],
+        series:      u.series      || [],
+        status:      u.status      || 'ativo',
+        segmento:    u.segmento    || 'ead',
+        turno:       u.turno       || null,
+        nivel:       u.nivel       || null,
+        criadoEm:    u.criado_em   || new Date().toISOString(),
       })));
     } catch (err: any) {
       toast.error(`Erro ao carregar usuários: ${err.message}`);
       setUsuarios([]);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { Promise.all([carregarUsuarios(), carregarDisciplinas(), carregarSeries()]); }, []);
-  useEffect(() => { setFiltroSerie('todas');}, [filtroSegmento]);
+  useEffect(() => {
+    Promise.all([carregarUsuarios(), carregarDisciplinas(), carregarSeries()]);
+  }, []);
 
-  // ── Séries únicas dos usuários carregados (para o filtro de série) ────────
-  // DEPOIS — séries só dos usuários do segmento selecionado
+  useEffect(() => { setFiltroSerie('todas'); }, [filtroSegmento]);
+
+  // ── Séries únicas para filtro ─────────────────────────────────────────────
   const seriesUnicas = React.useMemo(() => {
     const base = filtroSegmento === 'todos'
       ? usuarios
@@ -144,17 +165,19 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
   // ── Filtragem ─────────────────────────────────────────────────────────────
   const usuariosFiltrados = React.useMemo(() => {
     return usuarios.filter(u => {
-      const matchBusca = !filtroBusca.trim() ||
-        u.nome.toLowerCase().includes(filtroBusca.toLowerCase()) ||
-        u.email.toLowerCase().includes(filtroBusca.toLowerCase());
-      const matchTipo = filtroTipo === 'todos' || u.tipo === filtroTipo;
-      const matchSegmento = filtroSegmento === 'todos' || u.segmento === filtroSegmento;
-      const matchSerie = filtroSerie === 'todas' || u.serie === filtroSerie;
+      const q = filtroBusca.toLowerCase().trim();
+      const matchBusca = !q ||
+        u.nome.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q);
+      const matchTipo     = filtroTipo     === 'todos'  || u.tipo     === filtroTipo;
+      const matchSegmento = filtroSegmento === 'todos'  || u.segmento === filtroSegmento;
+      const matchSerie    = filtroSerie    === 'todas'  || u.serie    === filtroSerie;
       return matchBusca && matchTipo && matchSegmento && matchSerie;
     });
   }, [usuarios, filtroBusca, filtroTipo, filtroSegmento, filtroSerie]);
 
-  const filtrosAtivos = filtroBusca || filtroTipo !== 'todos' || filtroSegmento !== 'todos' || filtroSerie !== 'todas';
+  const filtrosAtivos =
+    filtroBusca || filtroTipo !== 'todos' || filtroSegmento !== 'todos' || filtroSerie !== 'todas';
 
   const limparFiltros = () => {
     setFiltroBusca(''); setFiltroTipo('todos');
@@ -164,13 +187,33 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
   // ── Edição ───────────────────────────────────────────────────────────────
   const abrirEdicao = (u: Usuario) => {
     setUsuarioEditando(u);
+    setMostrarSenha(false);
+    setCopiado(false);
     setEdicao({
-      nome: u.nome, email: u.email, tipo: u.tipo, serie: u.serie || '',
+      nome: u.nome, email: u.email === '—' ? '' : u.email,
+      tipo: u.tipo, serie: u.serie || '',
       disciplinas: u.disciplinas || [], series: u.series || [],
       status: u.status, segmento: u.segmento || 'ead',
       turno: u.turno || '', nivel: u.nivel || '', novaSenha: '',
     });
     setMostrarDialog(true);
+  };
+
+  // Gera senha aleatória segura
+  const gerarSenha = () => {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$!';
+    const senha = Array.from({ length: 12 }, () =>
+      chars[Math.floor(Math.random() * chars.length)]
+    ).join('');
+    setEdicao(p => ({ ...p, novaSenha: senha }));
+    setMostrarSenha(true);
+  };
+
+  const copiarSenha = async () => {
+    if (!edicao.novaSenha) return;
+    await navigator.clipboard.writeText(edicao.novaSenha);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
   };
 
   const salvarEdicao = async () => {
@@ -179,46 +222,65 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
     try {
       const token = await getToken();
       if (!token) { toast.error('Sessão expirada.'); return; }
+
       const payload: any = {
-        id: usuarioEditando.id, nome: edicao.nome, email: edicao.email,
-        tipo: edicao.tipo, serie: edicao.serie,
-        disciplinas: edicao.disciplinas, series: edicao.series,
-        status: edicao.status, segmento: edicao.segmento,
-        turno: mostrarTurno ? edicao.turno || null : null,
-        nivel: mostrarNivel ? edicao.nivel || null : null,
+        id:          usuarioEditando.id,
+        nome:        edicao.nome,
+        email:       edicao.email,
+        tipo:        edicao.tipo,
+        serie:       edicao.serie,
+        disciplinas: edicao.disciplinas,
+        series:      edicao.series,
+        status:      edicao.status,
+        segmento:    edicao.segmento,
+        turno:       mostrarTurno ? edicao.turno || null : null,
+        nivel:       mostrarNivel ? edicao.nivel || null : null,
       };
       if (edicao.novaSenha) payload.novaSenha = edicao.novaSenha;
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/admin-manage-users`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/admin-manage-users`,
+        {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
       if (!response.ok) throw new Error(await response.text());
-      toast.success('Usuário atualizado!');
+
+      toast.success('Usuário atualizado com sucesso!');
       setMostrarDialog(false);
       setUsuarioEditando(null);
       carregarUsuarios();
     } catch (err: any) {
       toast.error(`Erro: ${err.message}`);
-    } finally { setSalvandoEdicao(false); }
+    } finally {
+      setSalvandoEdicao(false);
+    }
   };
 
-  const excluirUsuario = async (id: string) => {
-    if (!confirm('Excluir este usuário? Esta ação é irreversível.')) return;
+  const excluirUsuario = async (id: string, nome: string) => {
+    if (!confirm(`Excluir "${nome}"? Esta ação é irreversível.`)) return;
     try {
       const token = await getToken();
       if (!token) { toast.error('Sessão expirada.'); return; }
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/admin-manage-users`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: id }),
-      });
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/admin-manage-users`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: id }),
+        }
+      );
       if (!response.ok) throw new Error(await response.text());
       toast.success('Usuário excluído!');
       carregarUsuarios();
-    } catch (err: any) { toast.error(`Erro: ${err.message}`); }
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    }
   };
 
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
 
@@ -234,10 +296,13 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
               <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-primary" /> Gerenciar Usuários
               </h1>
-              <p className="text-xs text-muted-foreground">Visualizar, editar e gerenciar todos os usuários do sistema</p>
+              <p className="text-xs text-muted-foreground">
+                Visualizar, editar e gerenciar todos os usuários do sistema
+              </p>
             </div>
           </div>
-          <Button onClick={() => Promise.all([carregarUsuarios(), carregarDisciplinas(), carregarSeries()])}
+          <Button
+            onClick={() => Promise.all([carregarUsuarios(), carregarDisciplinas(), carregarSeries()])}
             disabled={loading} variant="outline" size="sm" className="gap-2">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
           </Button>
@@ -249,16 +314,18 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
         {/* ── Filtros ── */}
         <Card className="border-border shadow-sm">
           <CardContent className="p-5 space-y-4">
-            {/* Busca */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input placeholder="Buscar por nome ou email..."
-                value={filtroBusca} onChange={e => setFiltroBusca(e.target.value)}
-                className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou email..."
+                value={filtroBusca}
+                onChange={e => setFiltroBusca(e.target.value)}
+                className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground"
+              />
             </div>
 
-            {/* Selects de filtro */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Tipo */}
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Tipo</Label>
                 <Select value={filtroTipo} onValueChange={setFiltroTipo}>
@@ -267,11 +334,14 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos os tipos</SelectItem>
-                    {tiposUsuario.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    {tiposUsuario.map(t =>
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
+              {/* Segmento */}
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Segmento</Label>
                 <Select value={filtroSegmento} onValueChange={setFiltroSegmento}>
@@ -286,6 +356,7 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                 </Select>
               </div>
 
+              {/* Série */}
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Série</Label>
                 <Select value={filtroSerie} onValueChange={setFiltroSerie}>
@@ -294,17 +365,19 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas as séries</SelectItem>
-                    {seriesUnicas.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    {seriesUnicas.map(s =>
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* Indicador de filtros ativos */}
             {filtrosAtivos && (
               <div className="flex items-center justify-between pt-1">
                 <p className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">{usuariosFiltrados.length}</span> usuário{usuariosFiltrados.length !== 1 ? 's' : ''} encontrado{usuariosFiltrados.length !== 1 ? 's' : ''}
+                  <span className="font-semibold text-foreground">{usuariosFiltrados.length}</span>
+                  {' '}usuário{usuariosFiltrados.length !== 1 ? 's' : ''} encontrado{usuariosFiltrados.length !== 1 ? 's' : ''}
                 </p>
                 <Button variant="ghost" size="sm" onClick={limparFiltros}
                   className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
@@ -316,20 +389,22 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
         </Card>
 
         {/* ── Estatísticas ── */}
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           <Card className="border-border shadow-sm">
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-primary">{usuarios.length}</div>
               <div className="text-xs text-muted-foreground mt-1">Total</div>
             </CardContent>
           </Card>
-          {tiposUsuario.map(tipo => (
-            <Card key={tipo.value} className="border-border shadow-sm">
+          {['aluno','professor','coordenador','administrador','professor_conteudista'].map(tipo => (
+            <Card key={tipo} className="border-border shadow-sm">
               <CardContent className="p-4 text-center">
                 <div className="text-2xl font-bold text-foreground">
-                  {usuarios.filter(u => u.tipo === tipo.value).length}
+                  {usuarios.filter(u => u.tipo === tipo).length}
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">{tipo.label}s</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {tiposUsuario.find(t => t.value === tipo)?.label}s
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -367,7 +442,8 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                   <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
                       <TableHead className="text-muted-foreground font-medium">Nome</TableHead>
-                      <TableHead className="text-muted-foreground font-medium">Email</TableHead>
+                      {/* ← COLUNA EMAIL SEMPRE VISÍVEL */}
+                      <TableHead className="text-muted-foreground font-medium">Email de acesso</TableHead>
                       <TableHead className="text-muted-foreground font-medium">Tipo</TableHead>
                       <TableHead className="text-muted-foreground font-medium">Segmento</TableHead>
                       <TableHead className="text-muted-foreground font-medium">Turno</TableHead>
@@ -380,7 +456,14 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                     {usuariosFiltrados.map(u => (
                       <TableRow key={u.id} className="border-border hover:bg-muted/30">
                         <TableCell className="font-medium text-foreground">{u.nome}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{u.email}</TableCell>
+
+                        {/* Email real do auth.users */}
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground font-mono">
+                            {u.email}
+                          </span>
+                        </TableCell>
+
                         <TableCell><TipoBadge tipo={u.tipo} /></TableCell>
                         <TableCell><SegmentoBadge segmento={u.segmento} /></TableCell>
                         <TableCell>
@@ -390,7 +473,9 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                         </TableCell>
                         <TableCell>
                           {u.tipo === 'aluno'
-                            ? <Badge variant="outline" className="text-xs border-border text-foreground">{u.serie || 'Não definida'}</Badge>
+                            ? <Badge variant="outline" className="text-xs border-border text-foreground">
+                                {u.serie || 'Não definida'}
+                              </Badge>
                             : ['professor', 'professor_conteudista'].includes(u.tipo) && u.disciplinas?.length
                             ? (
                               <div className="flex flex-wrap gap-1">
@@ -398,7 +483,9 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                                   <Badge key={i} variant="secondary" className="text-xs">{d}</Badge>
                                 ))}
                                 {u.disciplinas.length > 2 && (
-                                  <Badge variant="outline" className="text-xs border-border">+{u.disciplinas.length - 2}</Badge>
+                                  <Badge variant="outline" className="text-xs border-border">
+                                    +{u.disciplinas.length - 2}
+                                  </Badge>
                                 )}
                               </div>
                             ) : <span className="text-muted-foreground text-sm">—</span>}
@@ -413,11 +500,14 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="sm" onClick={() => abrirEdicao(u)}
-                              className="hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 h-8 w-8 p-0">
+                              className="hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 h-8 w-8 p-0"
+                              title="Editar / Redefinir senha">
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => excluirUsuario(u.id)}
-                              className="hover:bg-destructive/10 hover:text-destructive h-8 w-8 p-0">
+                            <Button variant="ghost" size="sm"
+                              onClick={() => excluirUsuario(u.id, u.nome)}
+                              className="hover:bg-destructive/10 hover:text-destructive h-8 w-8 p-0"
+                              title="Excluir usuário">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
@@ -433,47 +523,67 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
       </div>
 
       {/* ── Dialog Edição ── */}
-      <Dialog open={mostrarDialog} onOpenChange={setMostrarDialog}>
+      <Dialog open={mostrarDialog} onOpenChange={open => { if (!open) { setMostrarDialog(false); setUsuarioEditando(null); } }}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-background border-border">
           <DialogHeader>
             <DialogTitle className="text-foreground">Editar Usuário</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Modifique as informações do usuário.
+              {usuarioEditando?.email && (
+                <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">
+                  {usuarioEditando.email}
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+
+            {/* Nome */}
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-foreground">Nome Completo</Label>
-              <Input value={edicao.nome} onChange={e => setEdicao(p => ({ ...p, nome: e.target.value }))}
-                className="bg-background border-border text-foreground placeholder:text-muted-foreground" />
+              <Input
+                value={edicao.nome}
+                onChange={e => setEdicao(p => ({ ...p, nome: e.target.value }))}
+                className="bg-background border-border text-foreground placeholder:text-muted-foreground"
+              />
             </div>
 
+            {/* Email */}
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-foreground">Email</Label>
-              <Input type="email" value={edicao.email} onChange={e => setEdicao(p => ({ ...p, email: e.target.value }))}
-                className="bg-background border-border text-foreground placeholder:text-muted-foreground" />
+              <Label className="text-sm font-medium text-foreground">Email de acesso</Label>
+              <Input
+                type="email"
+                value={edicao.email}
+                onChange={e => setEdicao(p => ({ ...p, email: e.target.value }))}
+                className="bg-background border-border text-foreground placeholder:text-muted-foreground"
+              />
             </div>
 
+            {/* Tipo */}
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-foreground">Tipo de Usuário</Label>
-              <Select value={edicao.tipo}
-                onValueChange={(v: Usuario['tipo']) => setEdicao(p => ({ ...p, tipo: v, nivel: '' }))}>
+              <Select
+                value={edicao.tipo}
+                onValueChange={v => setEdicao(p => ({ ...p, tipo: v, nivel: '' }))}>
                 <SelectTrigger className="bg-background border-border text-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {tiposUsuario.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  {tiposUsuario.map(t =>
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Segmento + Turno + Nível em grid */}
+            {/* Segmento + Turno + Nível */}
             <div className={`grid gap-3 ${mostrarTurno ? (mostrarNivel ? 'grid-cols-3' : 'grid-cols-2') : 'grid-cols-1'}`}>
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium text-foreground">Segmento</Label>
-                <Select value={edicao.segmento}
-                  onValueChange={(v: 'ead' | 'presencial') => setEdicao(p => ({ ...p, segmento: v, turno: '', nivel: '' }))}>
+                <Select
+                  value={edicao.segmento}
+                  onValueChange={(v: 'ead' | 'presencial') =>
+                    setEdicao(p => ({ ...p, segmento: v, turno: '', nivel: '' }))}>
                   <SelectTrigger className="bg-background border-border text-foreground">
                     <SelectValue />
                   </SelectTrigger>
@@ -517,6 +627,7 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
               )}
             </div>
 
+            {/* Série (aluno) */}
             {edicao.tipo === 'aluno' && (
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium text-foreground">Série</Label>
@@ -531,6 +642,7 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
               </div>
             )}
 
+            {/* Disciplinas + Séries (professor) */}
             {['professor', 'professor_conteudista'].includes(edicao.tipo) && (
               <>
                 <div className="space-y-1.5">
@@ -540,10 +652,15 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                       ? <p className="text-sm text-muted-foreground">Nenhuma disciplina cadastrada.</p>
                       : disciplinasDisponiveis.map(d => (
                         <div key={d} className="flex items-center gap-2">
-                          <Checkbox checked={edicao.disciplinas.includes(d)}
+                          <Checkbox
+                            checked={edicao.disciplinas.includes(d)}
                             onCheckedChange={checked => setEdicao(p => ({
-                              ...p, disciplinas: checked ? [...p.disciplinas, d] : p.disciplinas.filter(x => x !== d)
-                            }))} />
+                              ...p,
+                              disciplinas: checked
+                                ? [...p.disciplinas, d]
+                                : p.disciplinas.filter(x => x !== d),
+                            }))}
+                          />
                           <Label className="text-sm text-foreground cursor-pointer">{d}</Label>
                         </div>
                       ))}
@@ -554,10 +671,15 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
                   <div className="max-h-36 overflow-y-auto border border-border rounded-lg p-3 bg-muted/20 space-y-2">
                     {seriesDisponiveis.map(s => (
                       <div key={s} className="flex items-center gap-2">
-                        <Checkbox checked={edicao.series.includes(s)}
+                        <Checkbox
+                          checked={edicao.series.includes(s)}
                           onCheckedChange={checked => setEdicao(p => ({
-                            ...p, series: checked ? [...p.series, s] : p.series.filter(x => x !== s)
-                          }))} />
+                            ...p,
+                            series: checked
+                              ? [...p.series, s]
+                              : p.series.filter(x => x !== s),
+                          }))}
+                        />
                         <Label className="text-sm text-foreground cursor-pointer">{s}</Label>
                       </div>
                     ))}
@@ -566,29 +688,68 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
               </>
             )}
 
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-foreground">
-                Nova Senha <span className="text-muted-foreground font-normal text-xs">(opcional)</span>
-              </Label>
-              <div className="relative">
-                <Input
-                  type={mostrarSenhas[usuarioEditando?.id || 'tmp'] ? 'text' : 'password'}
-                  value={edicao.novaSenha}
-                  onChange={e => setEdicao(p => ({ ...p, novaSenha: e.target.value }))}
-                  placeholder="Deixe em branco para não alterar"
-                  className="bg-background border-border text-foreground placeholder:text-muted-foreground pr-10" />
-                <Button type="button" variant="ghost" size="sm"
-                  className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
-                  onClick={() => setMostrarSenhas(p => ({ ...p, [usuarioEditando?.id || 'tmp']: !p[usuarioEditando?.id || 'tmp'] }))}>
-                  {mostrarSenhas[usuarioEditando?.id || 'tmp'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
+            {/* ── SENHA — seção destacada ── */}
+            <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <KeyRound className="w-4 h-4 text-primary" />
+                <Label className="text-sm font-semibold text-foreground">Redefinir Senha</Label>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Digite uma nova senha manualmente ou gere uma aleatória segura. Deixe em branco para não alterar.
+              </p>
+
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={mostrarSenha ? 'text' : 'password'}
+                    value={edicao.novaSenha}
+                    onChange={e => setEdicao(p => ({ ...p, novaSenha: e.target.value }))}
+                    placeholder="Nova senha..."
+                    className="bg-background border-border text-foreground placeholder:text-muted-foreground pr-10 font-mono"
+                  />
+                  <Button
+                    type="button" variant="ghost" size="sm"
+                    className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                    onClick={() => setMostrarSenha(p => !p)}>
+                    {mostrarSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+
+                {/* Copiar senha */}
+                {edicao.novaSenha && (
+                  <Button
+                    type="button" variant="outline" size="sm"
+                    onClick={copiarSenha}
+                    className="gap-1.5 shrink-0"
+                    title="Copiar senha">
+                    {copiado ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    {copiado ? 'Copiado' : 'Copiar'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Gerar senha */}
+              <Button
+                type="button" variant="outline" size="sm"
+                onClick={gerarSenha}
+                className="gap-2 w-full mt-1">
+                <KeyRound className="w-3.5 h-3.5" />
+                Gerar senha aleatória segura
+              </Button>
+
+              {edicao.novaSenha && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-1">
+                  ⚠️ Anote ou copie a senha antes de salvar — ela não será exibida novamente.
+                </p>
+              )}
             </div>
 
+            {/* Status */}
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-foreground">Status</Label>
-              <Select value={edicao.status}
-                onValueChange={(v: Usuario['status']) => setEdicao(p => ({ ...p, status: v }))}>
+              <Select
+                value={edicao.status}
+                onValueChange={(v: 'ativo' | 'inativo') => setEdicao(p => ({ ...p, status: v }))}>
                 <SelectTrigger className="bg-background border-border text-foreground">
                   <SelectValue />
                 </SelectTrigger>
@@ -599,14 +760,18 @@ export function GerenciadorUsuarios({ onVoltar }: GerenciadorUsuariosProps) {
               </Select>
             </div>
 
+            {/* Ações */}
             <div className="flex gap-2 pt-4 border-t border-border">
-              <Button onClick={salvarEdicao}
-                disabled={!edicao.nome || !edicao.email || salvandoEdicao} className="flex-1 gap-2">
+              <Button
+                onClick={salvarEdicao}
+                disabled={!edicao.nome || !edicao.email || salvandoEdicao}
+                className="flex-1 gap-2">
                 {salvandoEdicao
                   ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
                   : 'Salvar Alterações'}
               </Button>
-              <Button variant="outline"
+              <Button
+                variant="outline"
                 onClick={() => { setMostrarDialog(false); setUsuarioEditando(null); }}>
                 Cancelar
               </Button>

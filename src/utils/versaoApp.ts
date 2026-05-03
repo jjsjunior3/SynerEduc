@@ -7,7 +7,7 @@
 //   '1.0.2' → '1.0.3' (correção de bug)
 //   '1.0.3' → '1.1.0' (nova funcionalidade)
 
-const VERSAO_ATUAL = '1.3.2';
+const VERSAO_ATUAL = '1.3.3';
 const CHAVE_VERSAO = 'ava_versao';
 
 export function verificarVersao(): void {
