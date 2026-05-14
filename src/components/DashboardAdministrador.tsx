@@ -18,6 +18,7 @@ import logoEscola from "../assets/e339c695d5503d560f7e53d2039456d52fd95ea5.png";
 import { Usuario } from "../types/auth";
 import { GerenciadorUsuarios } from "./GerenciadorUsuariosFixed";
 import { GestaoConteudoPDF } from "./GestaoConteudoPDF";
+import FrequenciaProfessores from "./FrequenciaProfessores";
 import ComunicadosPage from "./ComunicadosPage";
 import { Forum } from "./Forum";
 import { GestaoVinculos } from "./GestaoVinculos";
@@ -35,31 +36,25 @@ interface DashboardAdministradorProps {
 }
 
 interface Metricas {
-  // Totais gerais
   totalAlunos: number;
   totalProfessores: number;
   totalDisciplinas: number;
   totalTurmas: number;
-  // Segmentado
   alunosEAD: number;
   alunosPresencial: number;
   professoresEAD: number;
   professoresPresencial: number;
-  // Status
   alunosAtivos: number;
   alunosInativos: number;
-  // Últimas 24h
   novosUltimas24h: number;
-  // Online agora (Presence)
   onlineAgora: number;
   usuariosOnline: { id: string; nome: string; tipo: string }[];
 }
 
 type ViewType =
   | "dashboard" | "cadastrar-usuario" | "gestao" | "relatorios"
-  | "admin-usuarios" | "gestao-conteudo" | "comunicados" | "forum" | "gestao-vinculos";
+  | "admin-usuarios" | "gestao-conteudo" | "comunicados" | "forum" | "gestao-vinculos"| "frequencia-professores";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 const tipoLabel: Record<string, string> = {
   aluno: "Aluno", professor: "Professor", coordenador: "Coordenador",
   administrador: "Admin", professor_conteudista: "Conteudista",
@@ -84,7 +79,6 @@ function PulseOnline() {
   );
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
 export function DashboardAdministrador({
   onBackToSite, usuario, logout, atualizarUsuario,
 }: DashboardAdministradorProps) {
@@ -99,19 +93,26 @@ export function DashboardAdministrador({
   });
   const [carregando, setCarregando] = useState(true);
   const [horaAtual, setHoraAtual] = useState(new Date());
-  const channelRef = useRef<any>(null);
+  // ✅ O canal agora é apenas LISTENER (não faz track aqui — o App.tsx já faz via usePresence)
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // ── Relógio ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setHoraAtual(new Date()), 60_000);
     return () => clearInterval(t);
   }, []);
 
-  // ── Carregar métricas ─────────────────────────────────────────────────────
   useEffect(() => {
     carregarMetricas();
-    iniciarPresence();
-    return () => { channelRef.current?.unsubscribe(); };
+    // Pequeno delay para garantir que o usePresence no App.tsx
+    // já fez o track antes de começarmos a escutar o estado.
+    const t = setTimeout(() => escutarPresence(), 800);
+    return () => {
+      clearTimeout(t);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
   }, []);
 
   async function carregarMetricas() {
@@ -148,17 +149,17 @@ export function DashboardAdministrador({
 
       setMetricas(prev => ({
         ...prev,
-        totalAlunos:         totalAlunos         ?? 0,
-        totalProfessores:    totalProfessores     ?? 0,
-        totalDisciplinas:    totalDisciplinas     ?? 0,
-        totalTurmas:         totalTurmas          ?? 0,
-        alunosEAD:           alunosEAD            ?? 0,
-        alunosPresencial:    alunosPresencial     ?? 0,
-        professoresEAD:      professoresEAD       ?? 0,
-        professoresPresencial: professoresPresencial ?? 0,
-        alunosAtivos:        alunosAtivos         ?? 0,
-        alunosInativos:      alunosInativos       ?? 0,
-        novosUltimas24h:     novosUltimas24h      ?? 0,
+        totalAlunos:           totalAlunos           ?? 0,
+        totalProfessores:      totalProfessores       ?? 0,
+        totalDisciplinas:      totalDisciplinas       ?? 0,
+        totalTurmas:           totalTurmas            ?? 0,
+        alunosEAD:             alunosEAD              ?? 0,
+        alunosPresencial:      alunosPresencial       ?? 0,
+        professoresEAD:        professoresEAD         ?? 0,
+        professoresPresencial: professoresPresencial  ?? 0,
+        alunosAtivos:          alunosAtivos           ?? 0,
+        alunosInativos:        alunosInativos         ?? 0,
+        novosUltimas24h:       novosUltimas24h        ?? 0,
       }));
     } catch (err) {
       console.error("[DashboardAdmin] Erro ao carregar métricas:", err);
@@ -167,46 +168,57 @@ export function DashboardAdministrador({
     }
   }
 
-  // ── Supabase Realtime Presence — usuários online ───────────────────────────
-  async function iniciarPresence() {
+  // Escuta o canal de presença global para atualizar o painel em tempo real.
+  // Usa o MESMO nome de canal do usePresence ('presenca_global') para que
+  // o Supabase Realtime compartilhe o estado de presença entre os subscribers.
+  function escutarPresence() {
+    if (channelRef.current) return;
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // O Supabase permite múltiplos subscribers no mesmo canal.
+      // Este subscriber só lê o estado — quem faz o track é o usePresence no App.tsx.
+      const canal = supabase.channel('presenca_global');
 
-      const { data: perfil } = await supabase
-        .from("users").select("nome, tipo").eq("id", user.id).single();
-
-      const channel = supabase.channel("presenca_global", {
-        config: { presence: { key: user.id } },
-      });
-
-      channel
-        .on("presence", { event: "sync" }, () => {
-          const state = channel.presenceState();
-          const online: { id: string; nome: string; tipo: string }[] = [];
-          Object.entries(state).forEach(([key, presences]: [string, any[]]) => {
-            const p = presences[0];
-            if (p) online.push({ id: key, nome: p.nome || "Usuário", tipo: p.tipo || "aluno" });
-          });
-          setMetricas(prev => ({ ...prev, onlineAgora: online.length, usuariosOnline: online }));
-        })
-        .subscribe(async (status) => {
-          if (status === "SUBSCRIBED") {
-            await channel.track({
-              nome: perfil?.nome || "Administrador",
-              tipo: perfil?.tipo || "administrador",
-              entrou_em: new Date().toISOString(),
+      canal
+        .on('presence', { event: 'sync' }, () => {
+          try {
+            const state = canal.presenceState();
+            const online: { id: string; nome: string; tipo: string }[] = [];
+            Object.entries(state).forEach(([key, presences]: [string, any[]]) => {
+              const p = (presences as any[])[0];
+              if (p) online.push({ id: key, nome: p.nome || 'Usuário', tipo: p.tipo || 'aluno' });
             });
-          }
-        });
+            setMetricas(prev => ({ ...prev, onlineAgora: online.length, usuariosOnline: online }));
+          } catch { /* falha no sync não afeta o dashboard */ }
+        })
+        .on('presence', { event: 'join' }, ({ key, newPresences }: any) => {
+          try {
+            const p = newPresences[0];
+            if (!p) return;
+            setMetricas(prev => {
+              const jaExiste = prev.usuariosOnline.some(u => u.id === key);
+              if (jaExiste) return prev;
+              const lista = [...prev.usuariosOnline, { id: key, nome: p.nome || 'Usuário', tipo: p.tipo || 'aluno' }];
+              return { ...prev, onlineAgora: lista.length, usuariosOnline: lista };
+            });
+          } catch { /* silencioso */ }
+        })
+        .on('presence', { event: 'leave' }, ({ key }: any) => {
+          try {
+            setMetricas(prev => {
+              const lista = prev.usuariosOnline.filter(u => u.id !== key);
+              return { ...prev, onlineAgora: lista.length, usuariosOnline: lista };
+            });
+          } catch { /* silencioso */ }
+        })
+        .subscribe();
 
-      channelRef.current = channel;
-    } catch (err) {
-      console.error("[DashboardAdmin] Erro ao iniciar Presence:", err);
+      channelRef.current = canal;
+    } catch {
+      /* falha ao criar canal não afeta o dashboard */
     }
   }
 
-  // ── Menu items ────────────────────────────────────────────────────────────
   const menuItems: Array<{
     id: ViewType; title: string; description: string;
     icon: React.ReactNode; gradient: string; iconBg: string;
@@ -267,6 +279,14 @@ export function DashboardAdministrador({
       gradient: "from-slate-500/10 to-slate-600/5 dark:from-slate-500/20 dark:to-slate-900/10",
       iconBg: "bg-slate-500",
     },
+    {
+      id: "frequencia-professores",
+      title: "Frequência Professores",
+      description: "Controle diário de presença",
+      icon: <UserCheck className="w-5 h-5" />,
+      gradient: "from-rose-500/10 to-rose-600/5 dark:from-rose-500/20 dark:to-rose-900/10",
+      iconBg: "bg-rose-500",
+    },
   ];
 
   const saudacao = () => {
@@ -280,7 +300,6 @@ export function DashboardAdministrador({
     ? Math.round((metricas.alunosAtivos / metricas.totalAlunos) * 100)
     : 0;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background flex flex-col">
 
@@ -301,7 +320,6 @@ export function DashboardAdministrador({
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Online agora — indicador no header */}
               {metricas.onlineAgora > 0 && (
                 <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <PulseOnline />
@@ -329,7 +347,9 @@ export function DashboardAdministrador({
                 <Avatar className="w-8 h-8">
                   <AvatarImage src={usuario?.avatar} alt={usuario?.nome} />
                   <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                    {usuario?.nome ? usuario.nome.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "A"}
+                    {usuario?.nome
+                      ? usuario.nome.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+                      : "A"}
                   </AvatarFallback>
                 </Avatar>
                 <span className="text-sm text-foreground hidden sm:block">
@@ -350,7 +370,6 @@ export function DashboardAdministrador({
       <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
 
         {viewAtual !== "dashboard" ? (
-          /* ── Views internas ── */
           <>
             {viewAtual === "cadastrar-usuario" && <CadastrarUsuarioNovo onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "gestao"            && <GestaoEscola onVoltar={() => setViewAtual("dashboard")} />}
@@ -360,9 +379,9 @@ export function DashboardAdministrador({
             {viewAtual === "comunicados"       && <ComunicadosPage onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "forum"             && <Forum onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "gestao-vinculos"   && <GestaoVinculos onVoltar={() => setViewAtual("dashboard")} />}
+            {viewAtual === "frequencia-professores" && <FrequenciaProfessores onVoltar={() => setViewAtual("dashboard")} usuario={usuario} />}
           </>
         ) : (
-          /* ── Dashboard principal ── */
           <div className="space-y-6">
 
             {/* ── Saudação + hora ── */}
@@ -386,8 +405,6 @@ export function DashboardAdministrador({
 
             {/* ── Faixa de alertas rápidos ── */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-
-              {/* Online agora */}
               <div className="flex items-center gap-3 p-3 rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
                 <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-green-500/20">
                   <Wifi className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -400,7 +417,6 @@ export function DashboardAdministrador({
                 </div>
               </div>
 
-              {/* Novos nas últimas 24h */}
               <div className="flex items-center gap-3 p-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
                 <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-500/20">
                   <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -413,7 +429,6 @@ export function DashboardAdministrador({
                 </div>
               </div>
 
-              {/* Ativos */}
               <div className="flex items-center gap-3 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
                 <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-500/20">
                   <UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -426,7 +441,6 @@ export function DashboardAdministrador({
                 </div>
               </div>
 
-              {/* Inativos */}
               <div className="flex items-center gap-3 p-3 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
                 <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-red-500/20">
                   <UserX className="w-4 h-4 text-red-600 dark:text-red-400" />
@@ -442,8 +456,6 @@ export function DashboardAdministrador({
 
             {/* ── Métricas principais ── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-
-              {/* Alunos */}
               <Card className="border-border hover:shadow-md transition-shadow overflow-hidden">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -471,7 +483,6 @@ export function DashboardAdministrador({
                 </CardContent>
               </Card>
 
-              {/* Professores */}
               <Card className="border-border hover:shadow-md transition-shadow overflow-hidden">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -499,7 +510,6 @@ export function DashboardAdministrador({
                 </CardContent>
               </Card>
 
-              {/* Disciplinas */}
               <Card className="border-border hover:shadow-md transition-shadow overflow-hidden">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -517,7 +527,6 @@ export function DashboardAdministrador({
                 </CardContent>
               </Card>
 
-              {/* Ativos vs Inativos */}
               <Card className="border-border hover:shadow-md transition-shadow overflow-hidden">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -549,7 +558,6 @@ export function DashboardAdministrador({
             {/* ── Linha: Usuários online + Menu ── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-              {/* Usuários online agora */}
               <Card className="border-border lg:col-span-1">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between mb-4">
@@ -587,7 +595,6 @@ export function DashboardAdministrador({
                     </div>
                   )}
 
-                  {/* Resumo rápido abaixo */}
                   <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-2">
                     <div className="text-center p-2 rounded-lg bg-muted/50">
                       <div className="text-base font-bold text-blue-600 dark:text-blue-400">
@@ -605,7 +612,6 @@ export function DashboardAdministrador({
                 </CardContent>
               </Card>
 
-              {/* Menu de módulos — 2/3 da largura */}
               <div className="lg:col-span-2">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">

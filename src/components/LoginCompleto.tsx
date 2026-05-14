@@ -7,7 +7,7 @@ import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
 import { useTheme } from "../contexts/ThemeContext";
 import {
-  BookOpen, Eye, EyeOff, Loader2, AlertCircle,
+  Eye, EyeOff, Loader2, AlertCircle,
   ArrowLeft, Mail, Sun, Moon, KeyRound, CheckCircle, Send,
 } from "lucide-react";
 import { Usuario, TipoUsuario } from "../types/auth";
@@ -23,7 +23,6 @@ type Tela = "login" | "recuperar" | "recuperar_enviado";
 export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoProps) {
   const { theme, toggleTheme } = useTheme();
 
-  // ── Estado da tela atual ──────────────────────────────────────────────────
   const [tela, setTela] = useState<Tela>("login");
 
   // ── Login ─────────────────────────────────────────────────────────────────
@@ -61,7 +60,6 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
         return;
       }
 
-      // ✅ Busca perfil + campo senha_provisoria
       const { data: perfil, error: perfilError } = await supabase
         .from("users")
         .select("nome, tipo, serie, avatar, segmento, status, senha_provisoria")
@@ -89,8 +87,6 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
       };
 
       localStorage.setItem("ava_user", JSON.stringify(usuario));
-
-      // ✅ Passa flag de senha provisória para o App.tsx decidir
       onLogin(usuario, perfil?.senha_provisoria === true);
 
     } catch {
@@ -110,19 +106,14 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
       const { error } = await supabase.auth.resetPasswordForEmail(
         emailRecuperacao.trim(),
         {
-          // URL para onde o Supabase redireciona após o clique no email
-          // Ajuste para a URL real do seu sistema em produção
           redirectTo: `${window.location.origin}/?recuperar_senha=true`,
         }
       );
 
       if (error) throw error;
-
       setTela("recuperar_enviado");
 
     } catch (err: any) {
-      // Supabase retorna sucesso mesmo se o email não existir (por segurança)
-      // então só mostramos erro em casos reais de falha
       console.error("[Recuperação]", err);
       setErroRecup(
         err.message?.includes("rate limit")
@@ -164,12 +155,6 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
               className="w-full gap-2">
               <ArrowLeft className="w-4 h-4" /> Voltar ao login
             </Button>
-            <p className="text-xs text-muted-foreground">
-              Problemas?{" "}
-              <a href="tel:+559889255294" className="text-blue-500 hover:underline">
-                (98) 98 8925-5294
-              </a>
-            </p>
           </CardContent>
         </Card>
       </div>
@@ -205,7 +190,7 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
             <div>
               <CardTitle className="text-xl text-foreground">Recuperar Senha</CardTitle>
               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                Digite o email de recuperação cadastrado pela secretaria.
+                Digite o email cadastrado pela secretaria.
                 Enviaremos um link para você criar uma nova senha.
               </p>
             </div>
@@ -222,7 +207,7 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
                   type="email"
                   value={emailRecuperacao}
                   onChange={e => setEmailRecuperacao(e.target.value)}
-                  placeholder="seu@email.com"
+                  placeholder="seu@conexao"
                   required
                   disabled={loadingRecup}
                   autoFocus
@@ -245,16 +230,6 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
                   : <><Send className="w-4 h-4" />Enviar link de recuperação</>}
               </Button>
             </form>
-
-            <p className="text-xs text-center text-muted-foreground">
-              Não tem email cadastrado?{" "}
-              <a
-                href="https://wa.me/5598988887777?text=Olá!%20Preciso%20recuperar%20minha%20senha%20do%20Portal%20AVA."
-                target="_blank" rel="noopener noreferrer"
-                className="text-blue-500 hover:underline">
-                Fale conosco
-              </a>
-            </p>
           </CardContent>
         </Card>
       </div>
@@ -281,14 +256,26 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
             <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
           </Button>
 
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center mx-auto shadow-lg mt-4">
-            <BookOpen className="w-10 h-10 text-white" />
+          {/* ── Logo da escola ── */}
+          <div className="w-20 h-20 rounded-full overflow-hidden mx-auto shadow-lg mt-4 bg-white flex items-center justify-center">
+            <img
+              src="/logo-colegio-conexao.png"
+              alt="Colégio Conexão"
+              className="w-full h-full object-contain p-1"
+              onError={e => {
+                // fallback se o logo não carregar
+                (e.target as HTMLImageElement).style.display = 'none';
+                (e.target as HTMLImageElement).parentElement!.classList.add(
+                  'bg-gradient-to-br', 'from-blue-600', 'to-blue-700'
+                );
+              }}
+            />
           </div>
 
           <div>
-            <CardTitle className="text-2xl text-foreground">Portal AVA</CardTitle>
+            <CardTitle className="text-2xl text-foreground">Colégio Conexão</CardTitle>
             <p className="text-muted-foreground text-sm mt-1">
-              Colégio Conexão EAD Maranhense
+              Sistema SynerEduc
             </p>
           </div>
         </CardHeader>
@@ -297,14 +284,14 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <Label htmlFor="loginField" className="text-foreground font-medium">
-                Usuário (email de acesso)
+                Usuário:
               </Label>
               <Input
                 id="loginField"
                 type="email"
                 value={loginField}
                 onChange={e => setLoginField(e.target.value)}
-                placeholder="seu@email.com"
+                placeholder="seu@conexao"
                 className="mt-1"
                 required
                 disabled={loading}
@@ -313,7 +300,7 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
 
             <div>
               <Label htmlFor="senha" className="text-foreground font-medium">
-                Senha
+                Senha:
               </Label>
               <div className="relative mt-1">
                 <Input
@@ -351,8 +338,7 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
             </Button>
           </form>
 
-          <div className="space-y-3 pt-4 border-t border-border text-center">
-            {/* ✅ NOVO: recuperação de senha por email */}
+          <div className="pt-4 border-t border-border text-center">
             <Button
               type="button" variant="ghost"
               onClick={() => { setTela("recuperar"); setErro(""); }}
@@ -361,13 +347,6 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
               <Mail className="w-4 h-4" />
               Esqueci minha senha
             </Button>
-
-            <p className="text-xs text-muted-foreground">
-              Problemas para acessar?{" "}
-              <a href="tel:+559889255294" className="text-blue-500 hover:underline">
-                (98) 98 8925-5294
-              </a>
-            </p>
           </div>
         </CardContent>
       </Card>

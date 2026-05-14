@@ -3,10 +3,11 @@ export type TipoUsuario = 'aluno'
   | 'professor_conteudista'
   | 'coordenador'
   | 'administrador'
-  | 'gestor_geral'    // ← adicionar
-  | 'secretaria'      // ← adicionar já para não repetir
-  | 'financeiro'      // ← adicionar já
-  | 'estoque'         // ← adicionar já
+  | "admin_presencial"        
+  | 'gestor_geral'    
+  | 'secretaria'      
+  | 'financeiro'    
+  | 'estoque'         
   | 'responsavel';
 
 export type Segmento = 'ead' | 'presencial';

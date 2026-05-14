@@ -22,8 +22,33 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-hook-form',
+      '@supabase/supabase-js',
+      'recharts',
+      'jspdf',
+      'jspdf-autotable',
+      'lucide-react',
+      'motion',
+      'clsx',
+      'tailwind-merge',
+      'class-variance-authority',
+      'sonner',
+      'next-themes',
+      'embla-carousel-react',
+      'react-day-picker',
+      'react-resizable-panels',
+      'recharts',
+    ],
+  },
   server: {
     port: 3000,
     open: true,
+    warmup: {
+      clientFiles: ['./src/main.tsx', './src/App.tsx'],
+    },
   },
 });

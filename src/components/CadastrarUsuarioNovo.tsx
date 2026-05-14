@@ -18,6 +18,7 @@ import { supabase } from "../supabase/supabaseClient";
 interface CadastrarUsuarioNovoProps {
   onVoltar: () => void;
   onUsuarioCriado?: () => void;
+  segmentoForcado?: 'ead' | 'presencial';
 }
 
 type SegmentoDisciplina = "Fundamental 1" | "Fundamental 2" | "Ensino Médio";
@@ -27,8 +28,8 @@ type Nivel              = "fundamental1" | "fundamental2" | "medio";
 
 interface NovoUsuario {
   nome: string;
-  nomeUsuario: string;       // login — vira email: nomeUsuario@conexaoead.com.br
-  emailRecuperacao: string;  // email real para recuperação de senha
+  nomeUsuario: string;
+  emailRecuperacao: string;
   senha: string;
   confirmarSenha: string;
   tipo: string;
@@ -60,24 +61,30 @@ const seriesPorSegmento: Record<SegmentoDisciplina, string[]> = {
 };
 
 const tiposUsuario = [
-  { value: "aluno",                  label: "Aluno" },
-  { value: "professor",              label: "Professor" },
-  { value: "coordenador",            label: "Coordenador" },
-  { value: "administrador",          label: "Administrador" },
-  { value: "professor_conteudista",  label: "Prof. Conteudista" },
-  { value: "gestor_geral",           label: "Gestor Geral" },
-  { value: "secretaria",             label: "Secretaria" },
-  { value: "financeiro",             label: "Financeiro" },
-  { value: "estoque",                label: "Estoque" },
-  { value: "responsavel",            label: "Responsável" },
+  { value: "aluno",                 label: "Aluno" },
+  { value: "professor",             label: "Professor" },
+  { value: "coordenador",           label: "Coordenador" },
+  { value: "administrador",         label: "Administrador" },
+  { value: "admin_presencial",      label: "Admin Presencial" },
+  { value: "professor_conteudista", label: "Prof. Conteudista" },
+  { value: "gestor_geral",          label: "Gestor Geral" },
+  { value: "secretaria",            label: "Secretaria" },
+  { value: "financeiro",            label: "Financeiro" },
+  { value: "estoque",               label: "Estoque" },
+  { value: "responsavel",           label: "Responsável" },
 ];
 
-// ── Domínio de login interno ──────────────────────────────────────────────────
-const DOMINIO_LOGIN = "conexaoead.com.br";
+// Domínios por segmento
+// EAD: @conexaoead — Presencial: @colegioconexao
+const DOMINIO_EAD        = "conexaoead";
+const DOMINIO_PRESENCIAL = "colegioconexao";
 
-// ── Hook séries ───────────────────────────────────────────────────────────────
+function getDominio(segmento: SegmentoAVA) {
+  return segmento === "presencial" ? DOMINIO_PRESENCIAL : DOMINIO_EAD;
+}
+
 const useSeriesFromSupabase = () => {
-  const [series, setSeries]       = useState<string[]>([]);
+  const [series, setSeries]         = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
   useEffect(() => {
     supabase.from("series").select("nome, ativa").order("nome").then(({ data, error }) => {
@@ -89,7 +96,6 @@ const useSeriesFromSupabase = () => {
   return { series, carregando };
 };
 
-// ── UI helpers ────────────────────────────────────────────────────────────────
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="space-y-4">
@@ -117,25 +123,24 @@ function Campo({ label, obrigatorio, children, dica }: {
   );
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
-export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsuarioNovoProps) {
+export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado, segmentoForcado }: CadastrarUsuarioNovoProps) {
   const [dados, setDados] = useState<NovoUsuario>({
     nome: "", nomeUsuario: "", emailRecuperacao: "",
     senha: "", confirmarSenha: "",
-    tipo: "", serie: "", segmento: "ead", turno: "", nivel: "",
+    tipo: "", serie: "", segmento: segmentoForcado ?? "ead", turno: "", nivel: "",
     vinculacoesProfessor: [],
   });
 
-  const [mostrarSenha, setMostrarSenha]           = useState(false);
+  const [mostrarSenha, setMostrarSenha]             = useState(false);
   const [mostrarConfirmacao, setMostrarConfirmacao] = useState(false);
-  const [copiado, setCopiado]                     = useState(false);
-  const [salvando, setSalvando]                   = useState(false);
-  const [modalConfirmacao, setModalConfirmacao]   = useState(false);
-  const [usuarioCriado, setUsuarioCriado]         = useState<any>(null);
+  const [copiado, setCopiado]                       = useState(false);
+  const [salvando, setSalvando]                     = useState(false);
+  const [modalConfirmacao, setModalConfirmacao]     = useState(false);
+  const [usuarioCriado, setUsuarioCriado]           = useState<any>(null);
   const [disciplinasDisponiveis, setDisciplinasDisponiveis] = useState<DisciplinaDisponivel[]>([]);
   const [carregandoDisciplinas, setCarregandoDisciplinas]   = useState(true);
-  const [modalDisciplina, setModalDisciplina]     = useState(false);
-  const [novaVinculacao, setNovaVinculacao]       = useState<{
+  const [modalDisciplina, setModalDisciplina]       = useState(false);
+  const [novaVinculacao, setNovaVinculacao]         = useState<{
     segmento: SegmentoDisciplina | ""; disciplinaId: string; seriesSelecionadas: string[];
   }>({ segmento: "", disciplinaId: "", seriesSelecionadas: [] });
 
@@ -144,9 +149,9 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
   const mostrarTurno = dados.segmento === "presencial";
   const mostrarNivel = dados.segmento === "presencial" && dados.tipo === "coordenador";
 
-  // Email de login gerado automaticamente
-  const emailLogin = dados.nomeUsuario.trim()
-    ? `${dados.nomeUsuario.trim()}@${DOMINIO_LOGIN}`
+  // Login gerado dinamicamente com domínio por segmento
+  const loginGerado = dados.nomeUsuario.trim()
+    ? `${dados.nomeUsuario.trim()}@${getDominio(dados.segmento)}`
     : "";
 
   useEffect(() => {
@@ -167,7 +172,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
     [disciplinasDisponiveis, novaVinculacao.segmento]
   );
 
-  // ── Validação ──────────────────────────────────────────────────────────────
   const validarFormulario = () => {
     const erros: string[] = [];
     if (!dados.nome.trim()) erros.push("Nome completo é obrigatório");
@@ -190,18 +194,16 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
     return erros;
   };
 
-  const errosValidacao = validarFormulario();
+  const errosValidacao  = validarFormulario();
   const formularioValido = errosValidacao.length === 0;
 
-  // ── Copiar email de login ──────────────────────────────────────────────────
-  const copiarEmailLogin = async () => {
-    if (!emailLogin) return;
-    await navigator.clipboard.writeText(emailLogin);
+  const copiarLogin = async () => {
+    if (!loginGerado) return;
+    await navigator.clipboard.writeText(loginGerado);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2000);
   };
 
-  // ── Adicionar vinculação de disciplina ────────────────────────────────────
   const adicionarVinculacao = () => {
     if (!novaVinculacao.segmento || !novaVinculacao.disciplinaId) {
       toast.error("Segmento e disciplina são obrigatórios"); return;
@@ -228,7 +230,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
     toast.success("Disciplina adicionada!");
   };
 
-  // ── Criar usuário ──────────────────────────────────────────────────────────
   const criarUsuario = async () => {
     if (!formularioValido) { toast.error("Corrija os erros no formulário"); return; }
     setSalvando(true);
@@ -236,23 +237,24 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Sessão inválida.");
 
-      const nome         = dados.nome.trim();
-      const nomeUsuario  = dados.nomeUsuario.trim().toLowerCase();
-      const emailFinal   = `${nomeUsuario}@${DOMINIO_LOGIN}`;
-      const emailRecup   = dados.emailRecuperacao.trim() || null;
+      const nome        = dados.nome.trim();
+      const nomeUsuario = dados.nomeUsuario.trim().toLowerCase();
+      const dominio     = getDominio(dados.segmento);          // ← domínio por segmento
+      const emailFinal  = `${nomeUsuario}@${dominio}`;
+      const emailRecup  = dados.emailRecuperacao.trim() || null;
 
       const payload = {
         action:              "create",
         nome,
-        email:               emailFinal,          // email de login
-        emailRecuperacao:    emailRecup,           // email real (para reset de senha)
+        email:               emailFinal,
+        emailRecuperacao:    emailRecup,
         senha:               dados.senha,
         tipo:                dados.tipo,
         serie:               dados.tipo === "aluno" ? (dados.serie || null) : null,
         segmento:            dados.segmento,
         turno:               mostrarTurno ? dados.turno || null : null,
         nivel:               mostrarNivel ? dados.nivel || null : null,
-        senha_provisoria:    true,                 // ← SEMPRE true ao criar
+        senha_provisoria:    true,
         vinculacoesProfessor: ["professor", "professor_conteudista"].includes(dados.tipo)
           ? dados.vinculacoesProfessor : [],
       };
@@ -272,8 +274,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || result.message || JSON.stringify(result));
 
-      // ✅ Salvar emailRecuperacao em public.users se informado
-      // (a Edge Function pode não lidar com isso — fazemos aqui como fallback)
       if (emailRecup && result.userId) {
         await supabase
           .from("users")
@@ -283,9 +283,9 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
 
       setUsuarioCriado({
         nome,
-        emailLogin: emailFinal,
+        loginAcesso:      emailFinal,
         emailRecuperacao: emailRecup || "Não informado",
-        senhaProvisoria: dados.senha,
+        senhaProvisoria:  dados.senha,
       });
       setModalConfirmacao(true);
       toast.success("Usuário criado com sucesso!");
@@ -299,11 +299,9 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
     }
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
 
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-6 py-4">
         <div className="flex items-center gap-4 max-w-4xl mx-auto">
           <Button variant="ghost" size="sm" onClick={onVoltar}
@@ -326,7 +324,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
           </CardHeader>
           <CardContent className="space-y-8 pt-4">
 
-            {/* ── Identificação ── */}
             <Secao titulo="Identificação">
               <Campo label="Nome Completo" obrigatorio>
                 <Input
@@ -337,37 +334,40 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
                 />
               </Campo>
 
-              {/* Nome de usuário → gera email de login */}
-              <Campo
-                label="Nome de Usuário (login)"
-                obrigatorio
-                dica={`Padrão sugerido: nome.sobrenome — gerará o email de acesso automaticamente.`}>
+              <Campo label="Nome de Usuário (login)" obrigatorio
+                dica="Padrão sugerido: nome.sobrenome — o usuário usará este login para acessar o sistema.">
                 <Input
                   value={dados.nomeUsuario}
                   placeholder="ex: joao.silva"
                   onChange={e => setDados(p => ({ ...p, nomeUsuario: e.target.value.toLowerCase().replace(/[^a-z0-9.]/g, "") }))}
                   className="bg-background border-border text-foreground placeholder:text-muted-foreground font-mono"
                 />
-                {/* Preview do email de login */}
-                {emailLogin && (
+                {/* Preview do login gerado */}
+                {loginGerado && (
                   <div className="flex items-center gap-2 mt-1.5 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                    <Mail className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                    <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                     <span className="text-xs text-blue-800 dark:text-blue-300">
-                      Email de acesso: <span className="font-mono font-semibold">{emailLogin}</span>
+                      Usuário de acesso: <span className="font-mono font-semibold">{loginGerado}</span>
                     </span>
                     <Button type="button" variant="ghost" size="sm"
-                      onClick={copiarEmailLogin}
+                      onClick={copiarLogin}
                       className="h-6 w-6 p-0 ml-auto text-blue-600 hover:text-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/40"
                       title="Copiar">
                       {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     </Button>
                   </div>
                 )}
+                {/* Aviso de domínio por segmento */}
+                {dados.nomeUsuario.trim() && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {dados.segmento === "presencial"
+                      ? "🏫 Usuários presenciais usam o domínio @colegioconexao"
+                      : "💻 Usuários EAD usam o domínio @conexaoead"}
+                  </p>
+                )}
               </Campo>
 
-              {/* Email de recuperação */}
-              <Campo
-                label="Email de recuperação de senha"
+              <Campo label="Email de recuperação de senha"
                 dica="Email pessoal real do usuário (Gmail, Hotmail, etc.). Usado para redefinir a senha caso esqueça.">
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -387,7 +387,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
               </Campo>
             </Secao>
 
-            {/* ── Senha provisória ── */}
             <Secao titulo="Senha Provisória de Acesso">
               <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 space-y-1">
                 <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-2">
@@ -445,7 +444,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
               </div>
             </Secao>
 
-            {/* ── Perfil ── */}
             <Secao titulo="Perfil do Usuário">
               <Campo label="Tipo de Usuário" obrigatorio>
                 <Select value={dados.tipo}
@@ -464,8 +462,11 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
                   mostrarTurno ? (mostrarNivel ? "md:grid-cols-3" : "md:grid-cols-2") : "md:grid-cols-1"
                 }`}>
                   <Campo label="Segmento" obrigatorio>
-                    <Select value={dados.segmento}
-                      onValueChange={(v: SegmentoAVA) => setDados(p => ({ ...p, segmento: v, turno: "", nivel: "" }))}>
+                    <Select
+                      value={dados.segmento}
+                      disabled={!!segmentoForcado}
+                      onValueChange={(v: SegmentoAVA) => setDados(p => ({ ...p, segmento: v, turno: "", nivel: "" }))}
+                    >
                       <SelectTrigger className="bg-background border-border text-foreground">
                         <SelectValue />
                       </SelectTrigger>
@@ -474,6 +475,11 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
                         <SelectItem value="presencial">Presencial</SelectItem>
                       </SelectContent>
                     </Select>
+                    {segmentoForcado && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        🔒 Segmento fixo: apenas <strong>{segmentoForcado}</strong>
+                      </p>
+                    )}
                   </Campo>
 
                   {mostrarTurno && (
@@ -508,7 +514,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
                 </div>
               )}
 
-              {/* Série para aluno */}
               {dados.tipo === "aluno" && (
                 <Campo label="Série" obrigatorio dica="A série deve corresponder exatamente ao cadastro de disciplinas.">
                   <Select value={dados.serie} disabled={carregandoSeries}
@@ -529,7 +534,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
                 </Campo>
               )}
 
-              {/* Vinculação professor */}
               {dados.tipo === "professor" && (
                 <div className="rounded-xl border border-border bg-muted/30 p-5 space-y-4">
                   <div className="flex items-center justify-between">
@@ -542,7 +546,8 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
                         </p>
                       </div>
                     </div>
-                    <Button onClick={() => { setNovaVinculacao({ segmento: "", disciplinaId: "", seriesSelecionadas: [] }); setModalDisciplina(true); }}
+                    <Button
+                      onClick={() => { setNovaVinculacao({ segmento: "", disciplinaId: "", seriesSelecionadas: [] }); setModalDisciplina(true); }}
                       disabled={carregandoDisciplinas} size="sm" variant="outline" className="gap-2">
                       <Plus className="w-4 h-4" /> Adicionar
                     </Button>
@@ -571,7 +576,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
               )}
             </Secao>
 
-            {/* ── Erros ── */}
             {errosValidacao.length > 0 && dados.tipo && (
               <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2">
                 <p className="text-sm font-semibold text-destructive flex items-center gap-2">
@@ -588,7 +592,6 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
               </div>
             )}
 
-            {/* ── Botões ── */}
             <div className="flex justify-between pt-2 border-t border-border">
               <Button variant="outline" onClick={onVoltar}>Cancelar</Button>
               <Button onClick={criarUsuario} disabled={!formularioValido || salvando} className="min-w-36 gap-2">
@@ -639,16 +642,20 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
             )}
             {novaVinculacao.segmento && novaVinculacao.disciplinaId && (
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">3. Séries <span className="text-destructive">*</span></Label>
+                <Label className="text-sm font-medium text-foreground">
+                  3. Séries <span className="text-destructive">*</span>
+                </Label>
                 <div className="max-h-44 overflow-y-auto border border-border rounded-lg p-3 bg-muted/20 space-y-2">
                   {(seriesPorSegmento[novaVinculacao.segmento] || []).map(serie => (
                     <label key={serie} className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" checked={novaVinculacao.seriesSelecionadas.includes(serie)}
+                      <input type="checkbox"
+                        checked={novaVinculacao.seriesSelecionadas.includes(serie)}
                         onChange={e => setNovaVinculacao(p => ({
                           ...p, seriesSelecionadas: e.target.checked
                             ? [...p.seriesSelecionadas, serie]
                             : p.seriesSelecionadas.filter(s => s !== serie)
-                        }))} className="rounded accent-primary" />
+                        }))}
+                        className="rounded accent-primary" />
                       <span className="text-sm text-foreground">{serie}</span>
                     </label>
                   ))}
@@ -680,10 +687,10 @@ export function CadastrarUsuarioNovo({ onVoltar, onUsuarioCriado }: CadastrarUsu
           {usuarioCriado && (
             <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
               {[
-                { icon: User,  label: "Nome",               value: usuarioCriado.nome },
-                { icon: Mail,  label: "Email de acesso",    value: usuarioCriado.emailLogin },
-                { icon: Mail,  label: "Email recuperação",  value: usuarioCriado.emailRecuperacao },
-                { icon: Lock,  label: "Senha provisória",   value: usuarioCriado.senhaProvisoria },
+                { icon: User, label: "Nome",              value: usuarioCriado.nome },
+                { icon: User, label: "Login de acesso",   value: usuarioCriado.loginAcesso },
+                { icon: Mail, label: "Email recuperação", value: usuarioCriado.emailRecuperacao },
+                { icon: Lock, label: "Senha provisória",  value: usuarioCriado.senhaProvisoria },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-center gap-3">
                   <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />

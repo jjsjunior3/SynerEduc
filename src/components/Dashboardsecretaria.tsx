@@ -1,36 +1,31 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { useGestorDados } from '../hooks/useGestorDados';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Avatar, AvatarFallback } from './ui/avatar';
 import { PerfilUsuario } from './PerfilUsuario';
 import {
-  LayoutDashboard, Users, DollarSign, Settings,
+  LayoutDashboard, Users, Settings,
   Search, FileText, Plus, GraduationCap,
-  TrendingUp, TrendingDown, CheckCircle, Clock,
-  XCircle, CreditCard, LogOut, Menu, X,
-  RefreshCw, AlertCircle, Building2, BarChart3,
-  Upload, BookOpen, Sun, Moon, ArrowRight,
-  Stamp,
+  CheckCircle, Clock, XCircle, AlertCircle,
+  LogOut, Menu, X, RefreshCw, Upload,
+  BookOpen, Sun, Moon, ArrowRight, Stamp,
 } from 'lucide-react';
 import logoEscola from '../assets/e339c695d5503d560f7e53d2039456d52fd95ea5.png';
 import { useAlunosPendencias } from '../hooks/useAlunosPendencias';
+import { useGestorDados } from '../hooks/useGestorDados';
 
 // ── Componentes filhos ────────────────────────────────────
 import { FormularioMatricula }  from './FormularioMatricula';
 import { DocumentosRecebidos }  from './DocumentosRecebidos';
 import { EmissaoContratos }     from './EmissaoContratos';
-import { ControlePagamentos }   from './ControlePagamentos';
-import { ControleDespesas }     from './ControleDespesas';
-import { RelatorioFinanceiro }  from './RelatorioFinanceiro';
 import BoletimCoordenador       from './BoletimCoordenador';
-import EmissaoDocumentos        from './EmissaoDocumentos';  // ← NOVO
+import EmissaoDocumentos        from './EmissaoDocumentos';
 
 // ─── Tipos ───────────────────────────────────────────────
 type SecaoAtiva =
@@ -40,13 +35,9 @@ type SecaoAtiva =
   | 'documentos-recebidos'
   | 'emissao-contratos'
   | 'boletins'
-  | 'controle-pagamentos'
-  | 'controle-despesas'
-  | 'relatorio-financeiro'
-  | 'emissao-documentos'   // ← NOVO
+  | 'emissao-documentos'
   | 'configuracoes';
 
-// Estado de navegação contextual — passado como prop para os filhos
 type AcaoContextual =
   | { tipo: 'criar-ficha';    alunoId: string; nomeAluno: string }
   | { tipo: 'criar-contrato'; fichaId: string; nomeAluno: string }
@@ -54,10 +45,6 @@ type AcaoContextual =
   | null;
 
 // ─── Helpers ─────────────────────────────────────────────
-function formatBRL(v: number) {
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     ativo:       'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200 border-green-300 dark:border-green-700',
@@ -73,44 +60,42 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // ─── Componente principal ─────────────────────────────────
-export default function DashboardGestorGeral() {
+export default function DashboardSecretaria() {
   const { usuario, logout }               = useAuth();
   const { theme, toggleTheme }            = useTheme();
   const [secaoAtiva, setSecaoAtiva]       = useState<SecaoAtiva>('dashboard');
   const [sidebarAberta, setSidebarAberta] = useState(true);
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
-
-  // ── Estado de ação contextual — navegação pré-preenchida ──
   const [acaoContextual, setAcaoContextual] = useState<AcaoContextual>(null);
 
   const dados      = useGestorDados();
   const pendencias = useAlunosPendencias();
 
-  // Segmento do gestor logado — isola tudo por segmento
-  const segmentoGestor = dados.segmentoGestor;
-  const segmentoLabel  = segmentoGestor === 'presencial' ? 'Presencial' : 'EAD';
-  const segmentoCor    = segmentoGestor === 'presencial'
+  const segmentoSecretaria = dados.segmentoGestor;
+  const segmentoLabel      = segmentoSecretaria === 'presencial' ? 'Presencial' : 'EAD';
+  const segmentoCor        = segmentoSecretaria === 'presencial'
     ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-200'
     : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200';
 
   const iniciais = usuario?.nome
     ? usuario.nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-    : 'G';
+    : 'SC';
 
-  // ── Navegar para seção com contexto de aluno ─────────────
   const navegarComContexto = (acao: AcaoContextual, secao: SecaoAtiva) => {
     setAcaoContextual(acao);
     setSecaoAtiva(secao);
   };
 
-  // ── Voltar para alunos e limpar contexto ─────────────────
   const voltarParaAlunos = () => {
     setAcaoContextual(null);
     setSecaoAtiva('alunos');
   };
 
-  // ── Grupos do menu lateral ───────────────────────────
-  const menuGrupos: { titulo: string; itens: { id: SecaoAtiva; label: string; icon: React.ReactNode }[] }[] = [
+  // ── Menu lateral ─────────────────────────────────────────
+  const menuGrupos: {
+    titulo: string;
+    itens: { id: SecaoAtiva; label: string; icon: React.ReactNode }[];
+  }[] = [
     {
       titulo: '',
       itens: [
@@ -120,20 +105,12 @@ export default function DashboardGestorGeral() {
     {
       titulo: 'Secretaria',
       itens: [
-        { id: 'alunos',               label: 'Gerenciar Alunos', icon: <Users          className="w-4 h-4" /> },
-        { id: 'matriculas',           label: 'Matrículas',       icon: <GraduationCap  className="w-4 h-4" /> },
-        { id: 'documentos-recebidos', label: 'Documentos',       icon: <Upload         className="w-4 h-4" /> },
-        { id: 'emissao-contratos',    label: 'Contratos',        icon: <FileText       className="w-4 h-4" /> },
-        { id: 'boletins',             label: 'Boletins',         icon: <BookOpen       className="w-4 h-4" /> },
-        { id: 'emissao-documentos',   label: 'Emitir Documentos',icon: <Stamp          className="w-4 h-4" /> }, // ← NOVO
-      ],
-    },
-    {
-      titulo: 'Financeiro',
-      itens: [
-        { id: 'controle-pagamentos',  label: 'Pagamentos',       icon: <CreditCard     className="w-4 h-4" /> },
-        { id: 'controle-despesas',    label: 'Despesas',         icon: <TrendingDown   className="w-4 h-4" /> },
-        { id: 'relatorio-financeiro', label: 'Relatório',        icon: <BarChart3      className="w-4 h-4" /> },
+        { id: 'alunos',               label: 'Gerenciar Alunos',  icon: <Users         className="w-4 h-4" /> },
+        { id: 'matriculas',           label: 'Matrículas',        icon: <GraduationCap className="w-4 h-4" /> },
+        { id: 'documentos-recebidos', label: 'Documentos',        icon: <Upload        className="w-4 h-4" /> },
+        { id: 'emissao-contratos',    label: 'Contratos',         icon: <FileText      className="w-4 h-4" /> },
+        { id: 'boletins',             label: 'Boletins',          icon: <BookOpen      className="w-4 h-4" /> },
+        { id: 'emissao-documentos',   label: 'Emitir Documentos', icon: <Stamp         className="w-4 h-4" /> },
       ],
     },
     {
@@ -144,14 +121,17 @@ export default function DashboardGestorGeral() {
     },
   ];
 
-  // ── Views ────────────────────────────────────────────
+  // ── Dashboard ─────────────────────────────────────────────
   const renderDashboard = () => {
-    const { resumoAlunos, resumoFinanceiro, loading, erro, refetch } = dados;
+    const { resumoAlunos, loading, erro, refetch } = dados;
+    const { resumo, loading: loadingPend } = pendencias;
+    const totalPendencias = resumo.sem_ficha + resumo.sem_contrato + resumo.docs_pendentes + resumo.sem_acesso_portal;
+
     return (
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-foreground">Visão Geral</h2>
+            <h2 className="text-2xl font-bold text-foreground">Visão Geral — Secretaria</h2>
             <p className="text-sm text-muted-foreground mt-1">
               Segmento: <span className="font-semibold text-foreground">{segmentoLabel}</span> ·{' '}
               {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
@@ -173,16 +153,64 @@ export default function DashboardGestorGeral() {
           </Card>
         )}
 
-        {/* Alunos */}
+        {/* Alerta de pendências */}
+        {totalPendencias > 0 && (
+          <Card className="border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20">
+            <CardContent className="p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-orange-800 dark:text-orange-200">
+                  {totalPendencias} pendência(s) aguardando ação da secretaria
+                </p>
+                <button
+                  onClick={() => setSecaoAtiva('alunos')}
+                  className="text-xs text-orange-700 dark:text-orange-300 underline underline-offset-2 mt-0.5 hover:no-underline">
+                  Ver lista de alunos →
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Cards de alunos */}
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
             Alunos
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Total Ativos',  valor: resumoAlunos?.total ?? 0,     sub: segmentoLabel,            icon: <Users         className="w-6 h-6 text-white" />, cor: 'from-blue-500 to-blue-600',     borda: 'border-blue-200 dark:border-blue-800' },
-              { label: segmentoLabel,   valor: resumoAlunos?.total ?? 0,     sub: segmentoGestor === 'ead' ? 'A distância' : 'Em sala', icon: <GraduationCap className="w-6 h-6 text-white" />, cor: segmentoGestor === 'ead' ? 'from-indigo-500 to-indigo-600' : 'from-violet-500 to-violet-600', borda: segmentoGestor === 'ead' ? 'border-indigo-200 dark:border-indigo-800' : 'border-violet-200 dark:border-violet-800' },
-              { label: 'Pendentes',     valor: resumoAlunos?.pendentes ?? 0, sub: 'Aguardando confirmação', icon: <Clock         className="w-6 h-6 text-white" />, cor: 'from-orange-500 to-orange-600', borda: 'border-orange-200 dark:border-orange-800' },
+              {
+                label: 'Total Ativos',
+                valor: resumoAlunos?.total ?? 0,
+                sub: segmentoLabel,
+                icon: <Users className="w-6 h-6 text-white" />,
+                cor: 'from-blue-500 to-blue-600',
+                borda: 'border-blue-200 dark:border-blue-800',
+              },
+              {
+                label: 'Sem Ficha',
+                valor: loadingPend ? 0 : resumo.sem_ficha,
+                sub: 'Matrícula pendente',
+                icon: <FileText className="w-6 h-6 text-white" />,
+                cor: 'from-red-500 to-red-600',
+                borda: 'border-red-200 dark:border-red-800',
+              },
+              {
+                label: 'Sem Contrato',
+                valor: loadingPend ? 0 : resumo.sem_contrato,
+                sub: 'Aguarda emissão',
+                icon: <Clock className="w-6 h-6 text-white" />,
+                cor: 'from-orange-500 to-orange-600',
+                borda: 'border-orange-200 dark:border-orange-800',
+              },
+              {
+                label: 'Docs Pendentes',
+                valor: loadingPend ? 0 : resumo.docs_pendentes,
+                sub: 'Aguarda envio',
+                icon: <Upload className="w-6 h-6 text-white" />,
+                cor: 'from-yellow-500 to-yellow-600',
+                borda: 'border-yellow-200 dark:border-yellow-800',
+              },
             ].map(c => (
               <Card key={c.label} className={`border-2 ${c.borda} bg-card`}>
                 <CardContent className="p-5">
@@ -190,7 +218,7 @@ export default function DashboardGestorGeral() {
                     <div>
                       <p className="text-sm text-muted-foreground">{c.label}</p>
                       <p className="text-3xl font-bold text-foreground mt-1">
-                        {loading ? '—' : c.valor.toLocaleString('pt-BR')}
+                        {loading || loadingPend ? '—' : c.valor.toLocaleString('pt-BR')}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">{c.sub}</p>
                     </div>
@@ -204,50 +232,19 @@ export default function DashboardGestorGeral() {
           </div>
         </div>
 
-        {/* Financeiro */}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-            Financeiro — {new Date().toLocaleDateString('pt-BR', { month: 'long' })}
-          </p>
-          <div className="grid sm:grid-cols-3 gap-4">
-            {[
-              { label: 'Recebido no Mês', valor: resumoFinanceiro?.recebidoMes ?? 0, sub: `${resumoFinanceiro?.qtdPagos ?? 0} pagamentos`,      icon: <CheckCircle className="w-6 h-6 text-white" />, cor: 'from-green-500 to-green-600',  borda: 'border-green-200 dark:border-green-800' },
-              { label: 'A Receber',       valor: resumoFinanceiro?.aReceber ?? 0,    sub: `${resumoFinanceiro?.qtdPendentes ?? 0} pendentes`,    icon: <Clock       className="w-6 h-6 text-white" />, cor: 'from-yellow-500 to-yellow-600', borda: 'border-yellow-200 dark:border-yellow-800' },
-              { label: 'Em Atraso',       valor: resumoFinanceiro?.emAtraso ?? 0,    sub: `${resumoFinanceiro?.qtdAtrasados ?? 0} inadimplentes`, icon: <XCircle    className="w-6 h-6 text-white" />, cor: 'from-red-500 to-red-600',      borda: 'border-red-200 dark:border-red-800' },
-            ].map(c => (
-              <Card key={c.label} className={`border-2 ${c.borda} bg-card`}>
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">{c.label}</p>
-                      <p className="text-2xl font-bold text-foreground mt-1">
-                        {loading ? '—' : formatBRL(c.valor)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">{c.sub}</p>
-                    </div>
-                    <div className={`w-12 h-12 bg-gradient-to-br ${c.cor} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                      {c.icon}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Atalhos */}
+        {/* Ações rápidas */}
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
             Ações Rápidas
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[
-              { label: 'Nova Matrícula',       icon: <Plus         className="w-5 h-5" />, acao: () => setSecaoAtiva('matriculas'),            bgL: '#dbeafe', bgD: '#1e3a5f', cor: '#2563eb' },
-              { label: 'Documentos',           icon: <Upload       className="w-5 h-5" />, acao: () => setSecaoAtiva('documentos-recebidos'),  bgL: '#d1fae5', bgD: '#064e3b', cor: '#059669' },
-              { label: 'Emitir Contrato',      icon: <FileText     className="w-5 h-5" />, acao: () => setSecaoAtiva('emissao-contratos'),     bgL: '#ede9fe', bgD: '#2e1065', cor: '#7c3aed' },
-              { label: 'Registrar Pagamento',  icon: <CreditCard   className="w-5 h-5" />, acao: () => setSecaoAtiva('controle-pagamentos'),   bgL: '#dcfce7', bgD: '#14532d', cor: '#16a34a' },
-              { label: 'Controle de Despesas', icon: <TrendingDown className="w-5 h-5" />, acao: () => setSecaoAtiva('controle-despesas'),     bgL: '#ffedd5', bgD: '#431407', cor: '#ea580c' },
-              { label: 'Emitir Documentos',    icon: <Stamp        className="w-5 h-5" />, acao: () => setSecaoAtiva('emissao-documentos'),    bgL: '#e0f2fe', bgD: '#0c2a3f', cor: '#0284c7' }, // ← NOVO
+              { label: 'Nova Matrícula',      icon: <Plus         className="w-5 h-5" />, acao: () => setSecaoAtiva('matriculas'),           bgL: '#dbeafe', bgD: '#1e3a5f', cor: '#2563eb' },
+              { label: 'Documentos',          icon: <Upload       className="w-5 h-5" />, acao: () => setSecaoAtiva('documentos-recebidos'), bgL: '#d1fae5', bgD: '#064e3b', cor: '#059669' },
+              { label: 'Contratos',           icon: <FileText     className="w-5 h-5" />, acao: () => setSecaoAtiva('emissao-contratos'),    bgL: '#ede9fe', bgD: '#2e1065', cor: '#7c3aed' },
+              { label: 'Gerenciar Alunos',    icon: <Users        className="w-5 h-5" />, acao: () => setSecaoAtiva('alunos'),               bgL: '#ffedd5', bgD: '#431407', cor: '#ea580c' },
+              { label: 'Boletins',            icon: <BookOpen     className="w-5 h-5" />, acao: () => setSecaoAtiva('boletins'),             bgL: '#fef9c3', bgD: '#3b2f00', cor: '#ca8a04' },
+              { label: 'Emitir Documentos',   icon: <Stamp        className="w-5 h-5" />, acao: () => setSecaoAtiva('emissao-documentos'),   bgL: '#e0f2fe', bgD: '#0c2a3f', cor: '#0284c7' },
             ].map(a => (
               <button key={a.label} onClick={a.acao}
                 className="flex items-center gap-4 p-5 rounded-xl border border-border hover:shadow-md hover:scale-[1.02] transition-all text-left"
@@ -264,23 +261,20 @@ export default function DashboardGestorGeral() {
     );
   };
 
-  // ─── renderAlunos — com ações contextuais por linha ──────
+  // ── Gerenciar Alunos (idêntico ao gestor, sem seção financeira) ──
   const renderAlunos = () => {
     const {
       alunos, resumo, loading, total,
       pagina, setPagina,
       busca, setBusca,
       filtro, setFiltro,
-      filtroSegmento, setFiltroSegmento,
       refetch, porPagina,
     } = pendencias;
 
-    const totalPendencias = resumo.sem_ficha + resumo.sem_contrato + resumo.docs_pendentes;
+    const totalPend = resumo.sem_ficha + resumo.sem_contrato + resumo.docs_pendentes;
 
     return (
       <div className="space-y-6">
-
-        {/* Título */}
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-foreground">Gerenciar Alunos</h2>
@@ -294,8 +288,7 @@ export default function DashboardGestorGeral() {
           </Button>
         </div>
 
-        {/* Banner de alerta */}
-        {totalPendencias > 0 && (
+        {totalPend > 0 && (
           <Card className="border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20">
             <CardContent className="p-4 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
@@ -311,41 +304,41 @@ export default function DashboardGestorGeral() {
           </Card>
         )}
 
-        {/* Cards de resumo de pendências */}
+        {/* Cards de resumo */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             {
-              id:         'sem_ficha' as const,
-              label:      'Sem Ficha de Matrícula',
-              valor:      resumo.sem_ficha,
-              icon:       <FileText className="w-5 h-5" />,
+              id: 'sem_ficha' as const,
+              label: 'Sem Ficha de Matrícula',
+              valor: resumo.sem_ficha,
+              icon: <FileText className="w-5 h-5" />,
               corAtiva:   'bg-red-600 text-white border-red-600',
               corInativa: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800',
               corNumero:  'text-red-600 dark:text-red-400',
             },
             {
-              id:         'sem_contrato' as const,
-              label:      'Sem Contrato',
-              valor:      resumo.sem_contrato,
-              icon:       <FileText className="w-5 h-5" />,
+              id: 'sem_contrato' as const,
+              label: 'Sem Contrato',
+              valor: resumo.sem_contrato,
+              icon: <FileText className="w-5 h-5" />,
               corAtiva:   'bg-orange-600 text-white border-orange-600',
               corInativa: 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
               corNumero:  'text-orange-600 dark:text-orange-400',
             },
             {
-              id:         'docs_pendentes' as const,
-              label:      'Documentos Pendentes',
-              valor:      resumo.docs_pendentes,
-              icon:       <Upload className="w-5 h-5" />,
+              id: 'docs_pendentes' as const,
+              label: 'Documentos Pendentes',
+              valor: resumo.docs_pendentes,
+              icon: <Upload className="w-5 h-5" />,
               corAtiva:   'bg-yellow-600 text-white border-yellow-600',
               corInativa: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
               corNumero:  'text-yellow-600 dark:text-yellow-400',
             },
             {
-              id:         'sem_acesso_portal' as const,
-              label:      'Sem Acesso ao Portal',
-              valor:      resumo.sem_acesso_portal,
-              icon:       <Users className="w-5 h-5" />,
+              id: 'sem_acesso_portal' as const,
+              label: 'Sem Acesso ao Portal',
+              valor: resumo.sem_acesso_portal,
+              icon: <Users className="w-5 h-5" />,
               corAtiva:   'bg-blue-600 text-white border-blue-600',
               corInativa: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
               corNumero:  'text-blue-600 dark:text-blue-400',
@@ -373,7 +366,7 @@ export default function DashboardGestorGeral() {
           ))}
         </div>
 
-        {/* Filtros de busca */}
+        {/* Filtros */}
         <Card className="bg-card border-border">
           <CardContent className="p-5">
             <div className="grid sm:grid-cols-2 gap-4">
@@ -422,7 +415,6 @@ export default function DashboardGestorGeral() {
           </CardContent>
         </Card>
 
-        {/* ── Legenda dos badges clicáveis ── */}
         <div className="flex items-center gap-2 px-1">
           <AlertCircle className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           <p className="text-xs text-muted-foreground">
@@ -430,7 +422,7 @@ export default function DashboardGestorGeral() {
           </p>
         </div>
 
-        {/* ── Tabela ── */}
+        {/* Tabela */}
         <Card className="bg-card border-border">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -467,22 +459,19 @@ export default function DashboardGestorGeral() {
                           temPendencia ? 'border-l-2 border-l-orange-400 dark:border-l-orange-600' : ''
                         }`}>
 
-                        {/* Nome */}
                         <td className="px-4 py-3.5 text-sm font-medium text-foreground max-w-[180px]">
                           <span className="block truncate" title={a.nome}>{a.nome}</span>
                         </td>
 
-                        {/* Série */}
                         <td className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
                           {a.serie ?? '—'}
                         </td>
 
-                        {/* Status */}
                         <td className="px-4 py-3.5">
                           <StatusBadge status={a.status ?? ''} />
                         </td>
 
-                        {/* ── Ficha — clicável se pendente ── */}
+                        {/* Ficha */}
                         <td className="px-4 py-3.5">
                           {a.tem_ficha ? (
                             <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded-full font-medium">
@@ -494,9 +483,7 @@ export default function DashboardGestorGeral() {
                                 { tipo: 'criar-ficha', alunoId: a.id, nomeAluno: a.nome },
                                 'matriculas'
                               )}
-                              title={`Criar ficha de matrícula para ${a.nome}`}
-                              className="group inline-flex items-center gap-1.5 text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-800/60 border border-red-300 dark:border-red-700 hover:border-red-400 dark:hover:border-red-500 px-2 py-1 rounded-full font-medium transition-all cursor-pointer hover:shadow-sm active:scale-95"
-                            >
+                              className="group inline-flex items-center gap-1.5 text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-800/60 border border-red-300 dark:border-red-700 hover:border-red-400 px-2 py-1 rounded-full font-medium transition-all cursor-pointer hover:shadow-sm active:scale-95">
                               <AlertCircle className="w-3 h-3" />
                               Criar Ficha
                               <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity -ml-0.5" />
@@ -504,7 +491,7 @@ export default function DashboardGestorGeral() {
                           )}
                         </td>
 
-                        {/* ── Contrato — clicável se tem ficha mas não tem contrato ── */}
+                        {/* Contrato */}
                         <td className="px-4 py-3.5">
                           {a.tem_contrato ? (
                             <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded-full font-medium">
@@ -516,22 +503,19 @@ export default function DashboardGestorGeral() {
                                 { tipo: 'criar-contrato', fichaId: a.ficha_id!, nomeAluno: a.nome },
                                 'emissao-contratos'
                               )}
-                              title={`Criar contrato para ${a.nome}`}
-                              className="group inline-flex items-center gap-1.5 text-xs text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/40 hover:bg-orange-200 dark:hover:bg-orange-800/60 border border-orange-300 dark:border-orange-700 hover:border-orange-400 dark:hover:border-orange-500 px-2 py-1 rounded-full font-medium transition-all cursor-pointer hover:shadow-sm active:scale-95"
-                            >
+                              className="group inline-flex items-center gap-1.5 text-xs text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/40 hover:bg-orange-200 dark:hover:bg-orange-800/60 border border-orange-300 dark:border-orange-700 hover:border-orange-400 px-2 py-1 rounded-full font-medium transition-all cursor-pointer hover:shadow-sm active:scale-95">
                               <Clock className="w-3 h-3" />
                               Criar Contrato
                               <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity -ml-0.5" />
                             </button>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground px-2 py-0.5 rounded-full"
-                              title="Crie a ficha primeiro">
+                            <span className="text-xs text-muted-foreground px-2 py-0.5 rounded-full" title="Crie a ficha primeiro">
                               — aguarda ficha
                             </span>
                           )}
                         </td>
 
-                        {/* ── Documentos — clicável se tem ficha e docs pendentes ── */}
+                        {/* Documentos */}
                         <td className="px-4 py-3.5">
                           {!a.tem_ficha ? (
                             <span className="text-xs text-muted-foreground">—</span>
@@ -541,9 +525,7 @@ export default function DashboardGestorGeral() {
                                 { tipo: 'ver-documentos', fichaId: a.ficha_id!, nomeAluno: a.nome },
                                 'documentos-recebidos'
                               )}
-                              title={`Gerenciar documentos de ${a.nome}`}
-                              className="group inline-flex items-center gap-1.5 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40 hover:bg-yellow-200 dark:hover:bg-yellow-800/60 border border-yellow-300 dark:border-yellow-700 hover:border-yellow-400 dark:hover:border-yellow-500 px-2 py-1 rounded-full font-medium transition-all cursor-pointer hover:shadow-sm active:scale-95"
-                            >
+                              className="group inline-flex items-center gap-1.5 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40 hover:bg-yellow-200 dark:hover:bg-yellow-800/60 border border-yellow-300 dark:border-yellow-700 hover:border-yellow-400 px-2 py-1 rounded-full font-medium transition-all cursor-pointer hover:shadow-sm active:scale-95">
                               <AlertCircle className="w-3 h-3" />
                               Ver Docs
                               <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity -ml-0.5" />
@@ -603,6 +585,7 @@ export default function DashboardGestorGeral() {
     );
   };
 
+  // ── Renderização central ──────────────────────────────────
   const renderConteudo = () => {
     switch (secaoAtiva) {
       case 'dashboard': return renderDashboard();
@@ -612,7 +595,7 @@ export default function DashboardGestorGeral() {
         return (
           <FormularioMatricula
             onVoltar={voltarParaAlunos}
-            segmentoInicial={segmentoGestor}
+            segmentoInicial={segmentoSecretaria}
             alunoIdInicial={
               acaoContextual?.tipo === 'criar-ficha' ? acaoContextual.alunoId : undefined
             }
@@ -651,16 +634,6 @@ export default function DashboardGestorGeral() {
       case 'boletins':
         return <BoletimCoordenador onVoltar={() => setSecaoAtiva('dashboard')} />;
 
-      case 'controle-pagamentos':
-        return <ControlePagamentos onVoltar={() => setSecaoAtiva('dashboard')} segmentoGestor={segmentoGestor} />;
-
-      case 'controle-despesas':
-        return <ControleDespesas onVoltar={() => setSecaoAtiva('dashboard')} segmentoGestor={segmentoGestor} />;
-
-      case 'relatorio-financeiro':
-        return <RelatorioFinanceiro onVoltar={() => setSecaoAtiva('dashboard')} segmentoGestor={segmentoGestor} />;
-
-      // ── NOVO: Emissão de Documentos ──────────────────────────────────────
       case 'emissao-documentos':
         return <EmissaoDocumentos usuario={usuario!} />;
 
@@ -680,7 +653,7 @@ export default function DashboardGestorGeral() {
     }
   };
 
-  // ─── Layout principal ─────────────────────────────────
+  // ── Layout ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background flex flex-col">
 
@@ -689,14 +662,13 @@ export default function DashboardGestorGeral() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src={logoEscola} alt="Colégio Conexão"
-                className="w-10 h-10 object-contain" />
+              <img src={logoEscola} alt="Colégio Conexão" className="w-10 h-10 object-contain" />
               <div>
                 <h1 className="font-semibold text-foreground text-base">
                   Colégio Conexão EAD Maranhense
                 </h1>
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  Painel — Gestor Geral
+                  Painel — Secretaria
                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${segmentoCor}`}>
                     {segmentoLabel}
                   </span>
@@ -713,12 +685,12 @@ export default function DashboardGestorGeral() {
               <Button variant="ghost" className="flex items-center gap-2"
                 onClick={() => setMostrarPerfil(true)}>
                 <Avatar className="w-8 h-8">
-                  <AvatarFallback className="text-sm bg-blue-600 text-white">
+                  <AvatarFallback className="text-sm bg-teal-600 text-white">
                     {iniciais}
                   </AvatarFallback>
                 </Avatar>
                 <span className="text-sm text-foreground hidden sm:inline">
-                  {usuario?.nome ?? 'Gestor'}
+                  {usuario?.nome ?? 'Secretaria'}
                 </span>
               </Button>
             </div>
@@ -771,7 +743,7 @@ export default function DashboardGestorGeral() {
                       w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg
                       transition-colors text-sm font-medium
                       ${secaoAtiva === item.id
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-teal-600 text-white'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       }
                       ${!sidebarAberta ? 'justify-center' : ''}
@@ -793,7 +765,7 @@ export default function DashboardGestorGeral() {
           </div>
         </aside>
 
-        {/* Conteúdo principal */}
+        {/* Conteúdo */}
         <main className="flex-1 min-w-0">
           {renderConteudo()}
         </main>

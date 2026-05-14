@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Save, Search, Loader2, Clock } from 'lucide-react';
+import { Save, Loader2, Clock } from 'lucide-react';
 import { supabase } from '../supabase/supabaseClient';
 import { useSegmento } from '../hooks/useSegmento';
 import { toast } from 'sonner';
@@ -35,24 +35,46 @@ const horariosPadrao = [
 const diasSemana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
 
 export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
-  const { segmento, turno } = useSegmento();    // ← segmento e turno do coordenador
+  const { segmento, turno } = useSegmento();
 
   const [seriesDisponiveis, setSeriesDisponiveis] = useState<Serie[]>([]);
   const [serie, setSerie] = useState('');
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [grade, setGrade] = useState<AulaGrade[]>([]);
+  const [gradeOriginal, setGradeOriginal] = useState<AulaGrade[]>([]);
+
+  // Computed: true apenas quando há diferença real em relação ao banco
+  const houveMudanca = JSON.stringify(grade) !== JSON.stringify(gradeOriginal);
 
   // ── Carrega séries filtradas pelo segmento ──
+  // ATENÇÃO: tabela 'series' usa 'fundamental' para EAD (legado)
+  // TODO: Julho 2025 — remover segmentoBanco e usar segmento direto após rodar:
+  // UPDATE series SET segmento = 'ead' WHERE segmento = 'fundamental';
   useEffect(() => {
+    if (!segmento) return;
+    const segmentoBanco = segmento === 'ead' ? 'fundamental' : segmento;
+
     supabase
       .from('series')
       .select('id, nome')
+      .eq('segmento', segmentoBanco)
+      .eq('ativa', true)
       .order('nome')
       .then(({ data }) => { if (data) setSeriesDisponiveis(data); });
   }, [segmento]);
 
-  const inicializarGradeVazia = () => {
+  // ── Auto-carrega grade quando série muda ──
+  useEffect(() => {
+    if (!serie) {
+      setGrade([]);
+      setGradeOriginal([]);
+      return;
+    }
+    carregarGrade();
+  }, [serie]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const inicializarGradeVazia = (): AulaGrade[] => {
     const novaGrade: AulaGrade[] = [];
     diasSemana.forEach(dia =>
       horariosPadrao.forEach(h =>
@@ -63,30 +85,34 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
         })
       )
     );
-    setGrade(novaGrade);
+    return novaGrade;
   };
 
   const carregarGrade = async () => {
-    if (!serie) { toast.warning('Selecione a série primeiro.'); return; }
+    // horarios_escolar já usa segmento correto ('ead'/'presencial') — sem conversão
     setLoading(true);
+    setGrade([]);
+    setGradeOriginal([]);
     try {
-      // Filtra por série + segmento + turno (se disponível)
       let query = supabase
         .from('horarios_escolar')
         .select('*')
         .eq('serie', serie)
-        .eq('segmento', segmento);             // ← filtro por segmento
+        .eq('segmento', segmento);
 
-      if (turno) query = query.eq('turno', turno); // ← filtro por turno se disponível
+      if (turno) query = query.eq('turno', turno);
 
       const { data, error } = await query;
       if (error) throw error;
 
       if (data && data.length > 0) {
         setGrade(data);
+        setGradeOriginal(data);
         toast.success('Grade carregada!');
       } else {
-        inicializarGradeVazia();
+        const vazia = inicializarGradeVazia();
+        setGrade(vazia);
+        setGradeOriginal(vazia);
         toast.info('Nenhuma grade encontrada. Preencha e salve.');
       }
     } catch { toast.error('Erro ao carregar grade.'); }
@@ -100,10 +126,10 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
   };
 
   const salvarGrade = async () => {
-    if (!serie) return;
+    if (!serie || !houveMudanca) return;
     setSalvando(true);
     try {
-      // Remove grade existente do mesmo segmento/turno/série
+      // horarios_escolar usa segmento direto ('ead'/'presencial') — sem conversão
       let deleteQuery = supabase
         .from('horarios_escolar')
         .delete()
@@ -120,14 +146,20 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
           serie,
           turma: 'A',
           professor: '',
-          segmento,                             // ← salva segmento
-          turno: turno || null,                 // ← salva turno
+          segmento,
+          turno: turno || null,
         }));
 
-      if (!dados.length) { toast.info('Grade vazia, nada para salvar.'); setSalvando(false); return; }
+      if (!dados.length) {
+        toast.info('Grade vazia, nada para salvar.');
+        setSalvando(false);
+        return;
+      }
 
       const { error } = await supabase.from('horarios_escolar').insert(dados);
       if (error) throw error;
+
+      setGradeOriginal([...grade]); // zera houveMudanca
       toast.success('Horário salvo com sucesso!');
     } catch { toast.error('Erro ao salvar.'); }
     finally { setSalvando(false); }
@@ -146,7 +178,6 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Clock className="w-5 h-5 text-blue-600" /> Grade Curricular
             </CardTitle>
-            {/* Badge de contexto */}
             <div className="flex gap-2">
               <span className="text-xs px-2.5 py-1 rounded-full font-medium border
                 bg-blue-100 text-blue-800 border-blue-300
@@ -167,12 +198,12 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
             <div className="flex-1 space-y-2">
               <Label className="text-muted-foreground text-xs">Série</Label>
               <Select value={serie} onValueChange={setSerie}>
-                <SelectTrigger><SelectValue placeholder="Selecione a série" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a série para carregar a grade" />
+                </SelectTrigger>
                 <SelectContent>
                   {seriesDisponiveis.length === 0 ? (
-                    <SelectItem value="_vazio" disabled>
-                      Nenhuma série cadastrada
-                    </SelectItem>
+                    <SelectItem value="_vazio" disabled>Nenhuma série cadastrada</SelectItem>
                   ) : (
                     seriesDisponiveis.map(s => (
                       <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>
@@ -181,15 +212,14 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={carregarGrade} disabled={!serie || loading} className="gap-2">
-              {loading
-                ? <><Loader2 className="w-4 h-4 animate-spin" />Buscando...</>
-                : <><Search className="w-4 h-4" />Buscar Grade</>
-              }
-            </Button>
+
             {grade.length > 0 && (
-              <Button onClick={salvarGrade} disabled={salvando}
-                className="bg-green-600 hover:bg-green-700 text-white gap-2">
+              <Button
+                onClick={salvarGrade}
+                disabled={!houveMudanca || salvando}
+                className="bg-green-600 hover:bg-green-700 text-white gap-2
+                  disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 {salvando
                   ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
                   : <><Save className="w-4 h-4" />Salvar Grade</>
@@ -197,11 +227,25 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
               </Button>
             )}
           </div>
+
+          {/* Feedback de estado */}
+          {serie && !loading && grade.length > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {houveMudanca
+                ? '⚠️ Há alterações não salvas.'
+                : '✅ Grade sincronizada com o banco.'}
+            </p>
+          )}
+          {serie && loading && (
+            <p className="mt-3 text-xs text-muted-foreground flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> Carregando grade...
+            </p>
+          )}
         </CardContent>
       </Card>
 
       {/* Tabela da grade */}
-      {grade.length > 0 && (
+      {grade.length > 0 && !loading && (
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -223,8 +267,8 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
                     <Fragment key={h.ordem}>
                       {index === 3 && (
                         <tr>
-                          <td colSpan={6} className="py-2 text-center text-xs font-semibold"
-                            style={{ backgroundColor: '#fef9c3', color: '#713f12' }}>
+                          <td colSpan={6} className="py-2 text-center text-xs font-semibold
+                            bg-yellow-50 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-200">
                             INTERVALO — 10:05 às 10:20
                           </td>
                         </tr>
@@ -262,8 +306,12 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
                 {' '}— <span className="capitalize">{segmento}</span>
                 {turno ? ` — ${turno}` : ''}
               </p>
-              <Button onClick={salvarGrade} disabled={salvando}
-                className="bg-green-600 hover:bg-green-700 text-white gap-2">
+              <Button
+                onClick={salvarGrade}
+                disabled={!houveMudanca || salvando}
+                className="bg-green-600 hover:bg-green-700 text-white gap-2
+                  disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 {salvando
                   ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
                   : <><Save className="w-4 h-4" />Salvar Grade</>

@@ -1,3 +1,4 @@
+// src/App.tsx
 import React, { useState, useEffect } from "react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -10,15 +11,55 @@ import DashboardProfessor from "./components/DashboardProfessor";
 import DashboardCoordenador from "./components/DashboardCoordenador";
 import DashboardConteudista from "./components/DashboardConteudista";
 import { DashboardAdministrador } from "./components/DashboardAdministrador";
+import { DashboardAdminPresencial } from "./components/DashboardAdminPresencial"; // ← NOVO
 import DashboardGestorGeral from "./components/DashboardGestorGeral";
 import DashboardFallback from "./components/DashboardFallback";
+import DashboardSecretaria from "./components/Dashboardsecretaria";
+import DashboardFinanceiro from "./components/Dashboardfinanceiro";
 
 // Site / Login
 import SiteInstitucional from "./components/SiteInstitucional";
 import LoginCompleto from "./components/LoginCompleto";
-
-// ✅ NOVO: tela de troca de senha obrigatória no primeiro acesso
 import TrocarSenha from "./components/TrocarSenha";
+
+// Hook global de Presence
+import { usePresence } from "./hooks/usePresence";
+
+function AVAComPresence({
+  user,
+  senhaProvisoria,
+  handleLogout,
+  handleBackToSite,
+  renderDashboard,
+  setSenhaProvisoria,
+}: {
+  user: Usuario;
+  senhaProvisoria: boolean;
+  handleLogout: () => void;
+  handleBackToSite: () => void;
+  renderDashboard: (u: Usuario) => React.ReactNode;
+  setSenhaProvisoria: (v: boolean) => void;
+}) {
+  usePresence(user);
+
+  if (senhaProvisoria) {
+    return <TrocarSenha onSenhaTrocada={() => setSenhaProvisoria(false)} />;
+  }
+
+  try {
+    return <>{renderDashboard(user)}</>;
+  } catch (err) {
+    console.error("[AVAComPresence] Erro ao renderizar dashboard:", err);
+    return (
+      <DashboardFallback
+        usuario={user}
+        logout={handleLogout}
+        onBackToSite={handleBackToSite}
+        mensagem="Erro inesperado ao carregar o painel. Tente recarregar a página."
+      />
+    );
+  }
+}
 
 export default function App() {
   const [currentView, setCurrentView] = useState<"website" | "login" | "ava">("website");
@@ -32,25 +73,19 @@ export default function App() {
     }
   });
 
-  // ✅ NOVO: flag de senha provisória — false por padrão (não quebra usuários existentes)
   const [senhaProvisoria, setSenhaProvisoria] = useState(false);
 
-  // Entrar automaticamente no AVA se houver usuário salvo
   useEffect(() => {
-    if (user) {
-      setCurrentView("ava");
-    }
+    if (user) setCurrentView("ava");
   }, [user]);
 
   const handleAccessPortal = () => setCurrentView("login");
   const handleBackToSite   = () => setCurrentView("website");
 
-  // ✅ ALTERADO: handleLogin agora recebe o segundo argumento opcional `provisoria`
-  // Usuários existentes que não passam esse argumento continuam funcionando normalmente
   const handleLogin = (usuario: Usuario, provisoria?: boolean) => {
     setUser(usuario);
     localStorage.setItem("ava_user", JSON.stringify(usuario));
-    setSenhaProvisoria(provisoria === true); // só true se explicitamente true
+    setSenhaProvisoria(provisoria === true);
     setCurrentView("ava");
   };
 
@@ -87,9 +122,15 @@ export default function App() {
         case "professor_conteudista":
           return <DashboardConteudista {...commonProps} />;
         case "administrador":
-          return <DashboardAdministrador />;
+          return <DashboardAdministrador {...commonProps} />;
+        case "admin_presencial":                          // ← NOVO
+          return <DashboardAdminPresencial {...commonProps} />;
         case "gestor_geral":
           return <DashboardGestorGeral {...commonProps} />;
+        case "secretaria":
+          return <DashboardSecretaria {...commonProps} />;
+        case "financeiro":
+          return <DashboardFinanceiro {...commonProps} />;
         default:
           return (
             <DashboardFallback
@@ -129,15 +170,16 @@ export default function App() {
           />
         )}
 
-        {/* ✅ NOVO: intercepta o dashboard se a senha for provisória */}
-        {currentView === "ava" && user && senhaProvisoria && (
-          <TrocarSenha
-            onSenhaTrocada={() => setSenhaProvisoria(false)}
+        {currentView === "ava" && user && (
+          <AVAComPresence
+            user={user}
+            senhaProvisoria={senhaProvisoria}
+            handleLogout={handleLogout}
+            handleBackToSite={handleBackToSite}
+            renderDashboard={renderDashboard}
+            setSenhaProvisoria={setSenhaProvisoria}
           />
         )}
-
-        {/* Dashboard normal — só renderiza se NÃO for senha provisória */}
-        {currentView === "ava" && user && !senhaProvisoria && renderDashboard(user)}
 
         <Toaster richColors position="top-center" />
       </AuthProvider>

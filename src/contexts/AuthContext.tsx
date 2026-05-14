@@ -1,17 +1,24 @@
+// src/contexts/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { supabase } from "../supabase/supabaseClient";
 import { Session, User } from "@supabase/supabase-js";
 
-// ========================================
-// INTERFACES
-// ========================================
 interface UsuarioPerfil {
   id: string;
   email: string;
   nome: string;
-  tipo: "administrador" | "professor" | "aluno" | "responsavel" | 
-      "coordenador" | "professor_conteudista" |
-      "gestor_geral" | "secretaria" | "financeiro" | "estoque";
+  tipo:
+    | "administrador"
+    | "admin_presencial"        // ← NOVO
+    | "professor"
+    | "aluno"
+    | "responsavel"
+    | "coordenador"
+    | "professor_conteudista"
+    | "gestor_geral"
+    | "secretaria"
+    | "financeiro"
+    | "estoque";
   avatar?: string;
   serie?: string;
   segmento?: "ead" | "presencial";
@@ -27,25 +34,16 @@ interface AuthContextData {
   usuario: UsuarioPerfil | null;
   loading: boolean;
   logout: () => Promise<void>;
-  atualizarPerfil: (dadosAtualizados: Partial<UsuarioPerfil>) => void; // ✅ Nova função
+  atualizarPerfil: (dadosAtualizados: Partial<UsuarioPerfil>) => void;
 }
 
-// ========================================
-// CRIAÇÃO DO CONTEXTO
-// ========================================
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
-// ========================================
-// PROVIDER DO CONTEXTO
-// ========================================
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [usuario, setUsuario] = useState<UsuarioPerfil | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ========================================
-  // FUNÇÃO PARA BUSCAR PERFIL DO USUÁRIO
-  // ========================================
   const buscarPerfil = useCallback(async (user: User) => {
     try {
       const { data, error } = await supabase
@@ -62,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data) {
         console.log("✅ Perfil carregado:", data);
-       setUsuario({
+        setUsuario({
           id: user.id,
           email: user.email || data.email || "",
           nome: data.nome || "",
@@ -84,11 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // ========================================
-  // EFEITO PARA GERENCIAR SESSÃO
-  // ========================================
   useEffect(() => {
-    // 1. Verificar sessão atual ao carregar
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log("🔍 Verificando sessão inicial...", session ? "Sessão ativa" : "Sem sessão");
       setSession(session);
@@ -99,7 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // 2. Escutar mudanças na autenticação (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log("🔄 Mudança de autenticação:", _event);
       setSession(session);
@@ -114,42 +107,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [buscarPerfil]);
 
-  // ========================================
-  // FUNÇÃO PARA ATUALIZAR PERFIL GLOBALMENTE
-  // ========================================
   const atualizarPerfil = useCallback((dadosAtualizados: Partial<UsuarioPerfil>) => {
     setUsuario(prev => prev ? { ...prev, ...dadosAtualizados } : null);
     console.log("✅ Perfil atualizado no contexto:", dadosAtualizados);
   }, []);
 
-  // ========================================
-  // FUNÇÃO LOGOUT
-  // ========================================
   const logout = useCallback(async () => {
     try {
       console.log("🚪 Iniciando logout...");
-
-      // 1. Fazer signOut no Supabase
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("❌ Erro no signOut:", error);
-      }
-
-      // 2. Limpar estados
+      if (error) console.error("❌ Erro no signOut:", error);
       setUsuario(null);
       setSession(null);
-
-      // 3. Limpar localStorage
       localStorage.clear();
-
-      // 4. Redirecionar para login (Forçando recarregamento limpo)
       console.log("✅ Logout concluído! Redirecionando...");
-      window.location.href = "/login";
-
+      window.location.href = "/";
     } catch (error) {
       console.error("💥 Erro fatal no logout:", error);
-      // Forçar redirecionamento mesmo com erro
-      window.location.href = "/login";
+      window.location.href = "/";
     }
   }, []);
 
@@ -160,9 +135,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ========================================
-// HOOK PARA USAR O CONTEXTO
-// ========================================
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
