@@ -1,27 +1,31 @@
+// src/components/GestaoVinculos.tsx
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
   UserPlus, Trash2, Search, Link2, Users, GraduationCap,
-  BookOpen, AlertCircle, Check, ArrowLeft, XCircle, Monitor,
+  BookOpen, AlertCircle, Check, ArrowLeft, XCircle, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../supabase/supabaseClient";
 
-interface GestaoVinculosProps { onVoltar?: () => void; }
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+interface GestaoVinculosProps {
+  onVoltar?: () => void;
+  /** Quando informado, trava o segmento e filtra todos os dados por ele */
+  segmentoForcado?: "ead" | "presencial";
+}
 
 interface Professor  { id: string; nome: string; }
-interface Disciplina { id: string; nome: string; segmento: "ead" | "presencial" | null; }
-interface Serie      { id: string; nome: string; nivel: string | null; segmento: "ead" | "presencial" | null; }
+interface Disciplina { id: string; nome: string; descricao: string | null; segmento: "ead" | "presencial" | null; }
+interface Serie      { id: string; nome: string; nivel: string | null;     segmento: "ead" | "presencial" | null; }
 interface Vinculo    {
   id: string; professorId: string; professorNome: string;
   disciplinaId: string; disciplinaNome: string;
   serieId: string; serieNome: string;
   segmento: "ead" | "presencial" | null;
 }
-
-type SegmentoFiltro = "" | "ead" | "presencial";
 
 const ANO_ATUAL = new Date().getFullYear();
 
@@ -41,46 +45,68 @@ function labelSegmento(seg: string | null) {
 
 const selectClass =
   "w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground " +
-  "focus:ring-2 focus:ring-ring focus:border-transparent text-sm";
+  "focus:ring-2 focus:ring-ring focus:border-transparent text-sm disabled:opacity-60 disabled:cursor-not-allowed";
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
+export function GestaoVinculos({ onVoltar, segmentoForcado }: GestaoVinculosProps) {
+  const segmentoFixo = segmentoForcado ?? null; // null = admin geral (sem restrição)
+
   const [professores, setProfessores] = useState<Professor[]>([]);
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [series, setSeries]           = useState<Serie[]>([]);
   const [vinculos, setVinculos]       = useState<Vinculo[]>([]);
 
+  // Formulário — fluxo: Professor → Série → Disciplina(s)
   const [professorSelecionado, setProfessorSelecionado] = useState("");
-  const [segmentoSelecionado, setSegmentoSelecionado]   = useState<SegmentoFiltro>("");
-  const [disciplinaSelecionada, setDisciplinaSelecionada] = useState("");
-  const [seriesSelecionadas, setSeriesSelecionadas]     = useState<string[]>([]);
+  const [serieSelecionada, setSerieSelecionada]         = useState(""); // Bug 6 fix: série ANTES da disciplina
+  const [disciplinasSelecionadas, setDisciplinasSelecionadas] = useState<string[]>([]);
 
-  const [filtro, setFiltro]           = useState("");
+  const [filtro, setFiltro]             = useState("");
   const [mostrarLista, setMostrarLista] = useState(false);
-  const [carregando, setCarregando]   = useState(false);
+  const [carregando, setCarregando]     = useState(false);
 
-  // ✅ NOVO: filtro de segmento do resumo — "todos" | "ead" | "presencial"
-  const [filtroResumo, setFiltroResumo] = useState<"todos" | "ead" | "presencial">("todos");
+  const [filtroResumo, setFiltroResumo] = useState<"todos" | "ead" | "presencial">(
+    segmentoFixo ?? "todos"
+  );
 
-  // ─── Loaders ────────────────────────────────────────────────────────────────
+  // ─── Loaders ─────────────────────────────────────────────────────────────────
   async function carregarProfessores() {
     try {
-      const { data, error } = await supabase
-        .from("users").select("id, nome, tipo")
+      // Bug 5 fix: quando há segmentoForcado, filtra professores do mesmo segmento
+      let query = supabase
+        .from("users")
+        .select("id, nome, tipo, segmento")
         .in("tipo", ["professor", "professor_conteudista"])
         .order("nome", { ascending: true });
+
+      if (segmentoFixo) {
+        query = query.eq("segmento", segmentoFixo);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setProfessores((data || []).map((u: any) => ({ id: u.id, nome: u.nome || "Professor sem nome" })));
-    } catch (e: any) { toast.error("Erro ao carregar professores"); setProfessores([]); }
+    } catch { toast.error("Erro ao carregar professores"); setProfessores([]); }
   }
 
   async function carregarDisciplinas() {
     try {
-      const { data, error } = await supabase
-        .from("disciplinas").select("id, nome, segmento").order("nome", { ascending: true });
+      // Bug 6 fix: busca disciplinas já filtradas pelo segmento (evita duplicatas EAD+Presencial)
+      let query = supabase
+        .from("disciplinas")
+        .select("id, nome, descricao, segmento")
+        .order("nome", { ascending: true });
+
+      if (segmentoFixo) {
+        query = query.eq("segmento", segmentoFixo);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setDisciplinas((data || []).map((d: any) => ({
-        id: d.id, nome: d.nome || "Disciplina sem nome",
+        id: d.id,
+        nome: d.nome || "Disciplina sem nome",
+        descricao: d.descricao ?? null,
         segmento: d.segmento === "ead" || d.segmento === "presencial" ? d.segmento : null,
       })));
     } catch { toast.error("Erro ao carregar disciplinas"); setDisciplinas([]); }
@@ -88,11 +114,21 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
 
   async function carregarSeries() {
     try {
-      const { data, error } = await supabase
-        .from("series").select("id, nome, nivel, segmento").order("nome", { ascending: true });
+      let query = supabase
+        .from("series")
+        .select("id, nome, nivel, segmento")
+        .order("nome", { ascending: true });
+
+      if (segmentoFixo) {
+        query = query.eq("segmento", segmentoFixo);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setSeries((data || []).map((s: any) => ({
-        id: s.id, nome: s.nome || "Série sem nome", nivel: s.nivel || null,
+        id: s.id,
+        nome: s.nome || "Série sem nome",
+        nivel: s.nivel || null,
         segmento: s.segmento === "ead" || s.segmento === "presencial" ? s.segmento : null,
       })));
     } catch { toast.error("Erro ao carregar séries"); setSeries([]); }
@@ -100,13 +136,20 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
 
   async function carregarVinculos() {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("professores_disciplinas_series")
         .select(`id, professor_id, disciplina_id, serie_id, segmento,
                  users:professor_id ( id, nome ),
                  disciplinas:disciplina_id ( id, nome ),
                  series:serie_id ( id, nome )`)
         .order("id", { ascending: true });
+
+      // Bug 5 fix: vínculos exibidos também filtrados por segmento
+      if (segmentoFixo) {
+        query = query.eq("segmento", segmentoFixo);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setVinculos((data || []).map((v: any) => ({
         id: v.id, professorId: v.professor_id,
@@ -126,19 +169,15 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
 
   useEffect(() => { carregarTudo(); }, []);
 
-  // ─── Filtros do formulário ───────────────────────────────────────────────────
-  const handleSegmentoChange = (seg: SegmentoFiltro) => {
-    setSegmentoSelecionado(seg);
-    setDisciplinaSelecionada("");
-    setSeriesSelecionadas([]);
-  };
+  // ─── Helpers de formulário ───────────────────────────────────────────────────
 
-  const disciplinasFiltradas = disciplinas.filter(d =>
-    !segmentoSelecionado || d.segmento === segmentoSelecionado
-  );
-  const seriesFiltradas = series.filter(s =>
-    !segmentoSelecionado || s.segmento === segmentoSelecionado
-  );
+  // Bug 6 fix: disciplinas filtradas pela série selecionada (segmento já veio filtrado do banco)
+  // Como não há vínculo direto série→disciplina na tabela disciplinas, filtramos apenas por segmento.
+  // A série serve como pré-requisito de seleção — o admin presencial vê só disciplinas presenciais.
+  const disciplinasFiltradas = disciplinas; // já filtradas no carregarDisciplinas()
+
+  const seriesFiltradas = series; // já filtradas no carregarSeries()
+
   const vinculosFiltrados = vinculos.filter(v => {
     if (!filtro) return true;
     const t = filtro.toLowerCase();
@@ -150,36 +189,50 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
   const vinculosPorProfessor = (profId: string) =>
     vinculos.filter(v => v.professorId === profId);
 
-  const toggleSerie = (id: string) =>
-    setSeriesSelecionadas(prev =>
+  const toggleDisciplina = (id: string) =>
+    setDisciplinasSelecionadas(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
 
+  const resetFormulario = () => {
+    setProfessorSelecionado("");
+    setSerieSelecionada("");
+    setDisciplinasSelecionadas([]);
+  };
+
   // ─── Ações ───────────────────────────────────────────────────────────────────
   const adicionarVinculo = async () => {
-    if (!professorSelecionado) { toast.error("Selecione um professor"); return; }
-    if (!disciplinaSelecionada) { toast.error("Selecione uma disciplina"); return; }
-    if (seriesSelecionadas.length === 0) { toast.error("Selecione pelo menos uma série"); return; }
+    if (!professorSelecionado)        { toast.error("Selecione um professor"); return; }
+    if (!serieSelecionada)            { toast.error("Selecione uma série"); return; }
+    if (disciplinasSelecionadas.length === 0) { toast.error("Selecione pelo menos uma disciplina"); return; }
+
+    // Bug 5 fix: segmento sempre vem do segmentoForcado; nunca permite EAD quando admin presencial
+    const segmentoParaSalvar = segmentoFixo ?? null;
+
     try {
-      const inserts = seriesSelecionadas
-        .filter(serieId => !vinculos.some(v =>
+      const inserts = disciplinasSelecionadas
+        .filter(discId => !vinculos.some(v =>
           v.professorId === professorSelecionado &&
-          v.disciplinaId === disciplinaSelecionada &&
-          v.serieId === serieId
+          v.disciplinaId === discId &&
+          v.serieId === serieSelecionada
         ))
-        .map(serieId => ({
-          professor_id: professorSelecionado, disciplina_id: disciplinaSelecionada,
-          serie_id: serieId, ano_letivo: ANO_ATUAL,
-          segmento: segmentoSelecionado || null,
+        .map(discId => ({
+          professor_id: professorSelecionado,
+          disciplina_id: discId,
+          serie_id: serieSelecionada,
+          ano_letivo: ANO_ATUAL,
+          segmento: segmentoParaSalvar,
         }));
+
       if (inserts.length === 0) { toast.error("Todos os vínculos selecionados já existem."); return; }
+
       const { error } = await supabase.from("professores_disciplinas_series").insert(inserts);
       if (error) throw error;
+
       toast.success(`${inserts.length} vínculo(s) criado(s) com sucesso!`);
-      setProfessorSelecionado(""); setDisciplinaSelecionada("");
-      setSegmentoSelecionado(""); setSeriesSelecionadas([]);
+      resetFormulario();
       await carregarVinculos();
-    } catch (e: any) { toast.error("Erro ao criar vínculo"); }
+    } catch { toast.error("Erro ao criar vínculo"); }
   };
 
   const removerVinculo = async (id: string) => {
@@ -195,24 +248,23 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
   const removerTodosVinculosDoProfessor = async (professorId: string, professorNome: string) => {
     if (!confirm(`Deseja desvincular ${professorNome} de TODAS as disciplinas e séries?`)) return;
     try {
-      const { error } = await supabase.from("professores_disciplinas_series")
-        .delete().eq("professor_id", professorId);
+      let query = supabase.from("professores_disciplinas_series").delete().eq("professor_id", professorId);
+      if (segmentoFixo) query = query.eq("segmento", segmentoFixo);
+      const { error } = await query;
       if (error) throw error;
       setVinculos(prev => prev.filter(v => v.professorId !== professorId));
       toast.success(`Todos os vínculos de ${professorNome} removidos!`);
     } catch { toast.error("Erro ao remover vínculos"); }
   };
 
-  // ─── Dados do resumo com filtro de segmento ──────────────────────────────────
+  // ─── Dados do resumo ─────────────────────────────────────────────────────────
   const professoresComVinculo = professores.filter(p => {
     const vps = vinculosPorProfessor(p.id);
     if (vps.length === 0) return false;
     if (filtroResumo === "todos") return true;
-    // professor aparece no grupo se tem PELO MENOS um vínculo naquele segmento
     return vps.some(v => v.segmento === filtroResumo);
   });
 
-  // Contagens para os badges dos botões
   const totalEAD        = professores.filter(p => vinculosPorProfessor(p.id).some(v => v.segmento === "ead")).length;
   const totalPresencial = professores.filter(p => vinculosPorProfessor(p.id).some(v => v.segmento === "presencial")).length;
   const totalTodos      = professores.filter(p => vinculosPorProfessor(p.id).length > 0).length;
@@ -222,7 +274,7 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           {onVoltar && (
             <Button variant="ghost" size="sm" onClick={onVoltar}>
@@ -236,94 +288,161 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
             </p>
           </div>
         </div>
-        <Badge variant="secondary" className="px-3 py-1.5 gap-1.5">
-          <Link2 className="w-3.5 h-3.5" />
-          {vinculos.length} vínculo(s) ativo(s)
-        </Badge>
+        <div className="flex items-center gap-2">
+          {segmentoFixo && (
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${badgeSegmento(segmentoFixo)}`}>
+              <Lock className="w-3 h-3" />
+              Segmento: {labelSegmento(segmentoFixo)}
+            </span>
+          )}
+          <Badge variant="secondary" className="px-3 py-1.5 gap-1.5">
+            <Link2 className="w-3.5 h-3.5" />
+            {vinculos.length} vínculo(s) ativo(s)
+          </Badge>
+        </div>
       </div>
 
-      {/* ══ Formulário ══ */}
+      {/* ══ Formulário — Bug 6 fix: fluxo Professor → Série → Disciplina ══ */}
       <Card className="border-border">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <UserPlus className="w-4 h-4 text-primary" /> Criar Novo Vínculo
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Ordem: selecione o professor → escolha a série → marque as disciplinas
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
+
+          {/* Linha 1: Professor + Segmento (fixo quando admin presencial) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" /> Professor *
               </label>
-              <select value={professorSelecionado}
-                onChange={e => setProfessorSelecionado(e.target.value)} className={selectClass}>
+              <select
+                value={professorSelecionado}
+                onChange={e => { setProfessorSelecionado(e.target.value); setSerieSelecionada(""); setDisciplinasSelecionadas([]); }}
+                className={selectClass}
+              >
                 <option value="">Selecione o professor</option>
                 {professores.map(prof => (
                   <option key={prof.id} value={prof.id}>{prof.nome}</option>
                 ))}
               </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                <Monitor className="w-3.5 h-3.5" /> Segmento *
-              </label>
-              <select value={segmentoSelecionado}
-                onChange={e => handleSegmentoChange(e.target.value as SegmentoFiltro)}
-                className={selectClass}>
-                <option value="">Selecione o segmento</option>
-                <option value="ead">EAD</option>
-                <option value="presencial">Presencial</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5" /> Disciplina *
-                {segmentoSelecionado && (
-                  <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-medium border ${badgeSegmento(segmentoSelecionado)}`}>
-                    {labelSegmento(segmentoSelecionado)}
-                  </span>
-                )}
-              </label>
-              <select value={disciplinaSelecionada}
-                onChange={e => setDisciplinaSelecionada(e.target.value)}
-                className={selectClass} disabled={!segmentoSelecionado}>
-                <option value="">{segmentoSelecionado ? "Selecione a disciplina" : "Selecione o segmento primeiro"}</option>
-                {disciplinasFiltradas.map(disc => (
-                  <option key={disc.id} value={disc.id}>{disc.nome}</option>
-                ))}
-              </select>
-              {segmentoSelecionado && disciplinasFiltradas.length === 0 && (
-                <p className="text-xs text-muted-foreground">Nenhuma disciplina cadastrada para este segmento.</p>
+              {professores.length === 0 && !carregando && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Nenhum professor{segmentoFixo ? ` ${labelSegmento(segmentoFixo)}` : ""} cadastrado.
+                </p>
               )}
             </div>
 
+            {/* Bug 5 fix: campo Segmento travado quando segmentoForcado */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                <GraduationCap className="w-3.5 h-3.5" /> Séries *
-                {seriesSelecionadas.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-xs font-medium">
-                    {seriesSelecionadas.length} selecionada(s)
-                  </span>
-                )}
+                <Lock className="w-3.5 h-3.5" /> Segmento
               </label>
-              <div className="max-h-40 overflow-y-auto border border-border rounded-lg p-2 space-y-1 bg-background">
-                {!segmentoSelecionado
-                  ? <p className="text-xs text-muted-foreground py-1">Selecione o segmento primeiro.</p>
-                  : seriesFiltradas.length === 0
-                  ? <p className="text-xs text-muted-foreground py-1">Nenhuma série cadastrada para este segmento.</p>
-                  : seriesFiltradas.map(s => (
-                    <label key={s.id}
-                      className="flex items-center gap-2 text-sm cursor-pointer rounded px-1 py-0.5 hover:bg-muted transition-colors">
-                      <input type="checkbox" checked={seriesSelecionadas.includes(s.id)}
-                        onChange={() => toggleSerie(s.id)} className="accent-primary" />
-                      <span className="text-foreground">{s.nome}</span>
-                      {s.nivel && <span className="text-xs text-muted-foreground">({s.nivel})</span>}
-                    </label>
-                  ))}
-              </div>
+              {segmentoFixo ? (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted text-sm text-foreground`}>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${badgeSegmento(segmentoFixo)}`}>
+                    {labelSegmento(segmentoFixo)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">fixo — não editável</span>
+                </div>
+              ) : (
+                // Admin geral: pode escolher segmento (não usado no admin presencial)
+                <div className="px-3 py-2 rounded-lg border border-border bg-muted text-sm text-muted-foreground">
+                  Definido automaticamente pela série selecionada
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Linha 2: Série (primeiro!) */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+              <GraduationCap className="w-3.5 h-3.5" /> Série *
+            </label>
+            <select
+              value={serieSelecionada}
+              onChange={e => { setSerieSelecionada(e.target.value); setDisciplinasSelecionadas([]); }}
+              disabled={!professorSelecionado}
+              className={selectClass}
+            >
+              <option value="">
+                {professorSelecionado ? "Selecione a série" : "Selecione o professor primeiro"}
+              </option>
+              {seriesFiltradas.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.nome}{s.nivel ? ` (${s.nivel})` : ""}
+                </option>
+              ))}
+            </select>
+            {professorSelecionado && seriesFiltradas.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma série{segmentoFixo ? ` ${labelSegmento(segmentoFixo)}` : ""} cadastrada.
+                Cadastre séries em Gestão Escolar primeiro.
+              </p>
+            )}
+          </div>
+
+          {/* Linha 3: Disciplinas com checkbox — Bug 6 fix: só depois de selecionar série, mostra descrição */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5" /> Disciplinas *
+              {disciplinasSelecionadas.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-xs font-medium">
+                  {disciplinasSelecionadas.length} selecionada(s)
+                </span>
+              )}
+            </label>
+            <div className="border border-border rounded-lg bg-background overflow-hidden">
+              {!serieSelecionada ? (
+                <p className="text-xs text-muted-foreground p-3">
+                  Selecione uma série primeiro para ver as disciplinas disponíveis.
+                </p>
+              ) : disciplinasFiltradas.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-3">
+                  Nenhuma disciplina{segmentoFixo ? ` ${labelSegmento(segmentoFixo)}` : ""} cadastrada.
+                  Cadastre disciplinas em Gestão Escolar primeiro.
+                </p>
+              ) : (
+                <div className="max-h-56 overflow-y-auto divide-y divide-border">
+                  {disciplinasFiltradas.map(d => {
+                    const jaVinculada = vinculos.some(v =>
+                      v.professorId === professorSelecionado &&
+                      v.disciplinaId === d.id &&
+                      v.serieId === serieSelecionada
+                    );
+                    return (
+                      <label
+                        key={d.id}
+                        className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors hover:bg-muted/60 ${
+                          jaVinculada ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={disciplinasSelecionadas.includes(d.id)}
+                          disabled={jaVinculada}
+                          onChange={() => !jaVinculada && toggleDisciplina(d.id)}
+                          className="accent-primary mt-0.5 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-foreground">{d.nome}</span>
+                          {/* Bug 6 fix: descrição visível para diferenciar ex. "Matemática – Fundamental 1" */}
+                          {d.descricao && (
+                            <span className="block text-xs text-muted-foreground truncate">{d.descricao}</span>
+                          )}
+                          {jaVinculada && (
+                            <span className="text-xs text-amber-600 dark:text-amber-400">já vinculada</span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -345,11 +464,12 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input type="text"
-                  placeholder="Buscar por professor, disciplina ou série..."
+                <input
+                  type="text"
+                  placeholder="Buscar professor, disciplina ou série..."
                   value={filtro}
                   onChange={e => { setFiltro(e.target.value); setMostrarLista(!!e.target.value); }}
-                  className="pl-9 pr-4 py-2 w-72 border border-border rounded-lg bg-background text-foreground text-sm focus:ring-2 focus:ring-ring focus:border-transparent placeholder:text-muted-foreground"
+                  className="pl-9 pr-4 py-2 w-full sm:w-72 border border-border rounded-lg bg-background text-foreground text-sm focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
                 />
               </div>
               {mostrarLista && (
@@ -372,7 +492,7 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
               ) : vinculosFiltrados.map(v => (
                 <div key={v.id}
                   className="flex items-center justify-between p-3 border border-border rounded-lg bg-background hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3 flex-1">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                       <Users className="w-4 h-4 text-primary" />
                     </div>
@@ -416,65 +536,33 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
               </span>
             </CardTitle>
 
-            {/* ✅ NOVO: Filtro de segmento — botões toggle */}
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-muted border border-border">
-              {/* Todos */}
-              <button
-                onClick={() => setFiltroResumo("todos")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  filtroResumo === "todos"
-                    ? "bg-background text-foreground shadow-sm border border-border"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}>
-                <Users className="w-3.5 h-3.5" />
-                Todos
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-                  filtroResumo === "todos"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted-foreground/20 text-muted-foreground"
-                }`}>
-                  {totalTodos}
-                </span>
-              </button>
-
-              {/* EAD */}
-              <button
-                onClick={() => setFiltroResumo("ead")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  filtroResumo === "ead"
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}>
-                <Monitor className="w-3.5 h-3.5" />
-                EAD
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-                  filtroResumo === "ead"
-                    ? "bg-white/20 text-white"
-                    : "bg-muted-foreground/20 text-muted-foreground"
-                }`}>
-                  {totalEAD}
-                </span>
-              </button>
-
-              {/* Presencial */}
-              <button
-                onClick={() => setFiltroResumo("presencial")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  filtroResumo === "presencial"
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}>
-                <GraduationCap className="w-3.5 h-3.5" />
-                Presencial
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-                  filtroResumo === "presencial"
-                    ? "bg-white/20 text-white"
-                    : "bg-muted-foreground/20 text-muted-foreground"
-                }`}>
-                  {totalPresencial}
-                </span>
-              </button>
-            </div>
+            {/* Filtro de segmento — botões ocultos quando segmentoForcado (só faz sentido para admin geral) */}
+            {!segmentoFixo && (
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-muted border border-border">
+                {(["todos", "ead", "presencial"] as const).map(seg => (
+                  <button
+                    key={seg}
+                    onClick={() => setFiltroResumo(seg)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      filtroResumo === seg
+                        ? seg === "ead" ? "bg-blue-600 text-white shadow-sm"
+                          : seg === "presencial" ? "bg-emerald-600 text-white shadow-sm"
+                          : "bg-background text-foreground shadow-sm border border-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {seg === "todos" ? "Todos" : seg === "ead" ? "EAD" : "Presencial"}
+                    <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+                      filtroResumo === seg && seg !== "todos"
+                        ? "bg-white/20 text-white"
+                        : "bg-muted-foreground/20 text-muted-foreground"
+                    }`}>
+                      {seg === "todos" ? totalTodos : seg === "ead" ? totalEAD : totalPresencial}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </CardHeader>
 
@@ -492,18 +580,14 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {professoresComVinculo.map(prof => {
                 const todosVps = vinculosPorProfessor(prof.id);
-
-                // ✅ Mostra apenas os vínculos do segmento filtrado no card
                 const vps = filtroResumo === "todos"
                   ? todosVps
                   : todosVps.filter(v => v.segmento === filtroResumo);
-
                 const segmentos = [...new Set(todosVps.map(v => v.segmento).filter(Boolean))];
 
                 return (
                   <Card key={prof.id} className="border border-border">
                     <CardContent className="p-4">
-                      {/* Header do card */}
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-foreground text-sm truncate">{prof.nome}</h4>
@@ -524,11 +608,10 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
                         </Button>
                       </div>
 
-                      {/* Lista de vínculos filtrados */}
                       <div className="space-y-1.5 max-h-40 overflow-y-auto">
                         {vps.length === 0 ? (
                           <p className="text-xs text-muted-foreground italic">
-                            Sem vínculos {filtroResumo === "ead" ? "EAD" : "Presencial"} para este professor.
+                            Sem vínculos {filtroResumo === "ead" ? "EAD" : "Presencial"}.
                           </p>
                         ) : vps.map(v => (
                           <div key={v.id}
@@ -536,8 +619,8 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
                             <div className="flex items-center gap-1.5 min-w-0">
                               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                                 v.segmento === "ead" ? "bg-blue-500"
-                                : v.segmento === "presencial" ? "bg-emerald-500"
-                                : "bg-primary"
+                                  : v.segmento === "presencial" ? "bg-emerald-500"
+                                  : "bg-primary"
                               }`} />
                               <span className="truncate">
                                 {v.disciplinaNome}
@@ -546,7 +629,7 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
                               </span>
                             </div>
                             <button onClick={() => removerVinculo(v.id)}
-                              className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive transition-opacity shrink-0"
+                              className="opacity-0 group-hover:opacity-100 text-destructive transition-opacity shrink-0"
                               title="Remover vínculo">
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -554,7 +637,6 @@ export function GestaoVinculos({ onVoltar }: GestaoVinculosProps) {
                         ))}
                       </div>
 
-                      {/* Footer */}
                       <div className="mt-3 pt-2 border-t border-border flex items-center justify-between">
                         <Badge variant="secondary" className="text-xs">
                           {vps.length} de {todosVps.length} vínculo(s)

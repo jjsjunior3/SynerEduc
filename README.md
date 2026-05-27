@@ -1,317 +1,231 @@
-# 🎓 AVA Conexão EAD Maranhense
+# SynerEduc — Repositório Privado
 
-**Plataforma completa de Ambiente Virtual de Aprendizagem (AVA)** desenvolvida para gestão escolar de educação a distância, atendendo alunos, professores, coordenadores e administradores.
+Plataforma de gestão escolar em produção no **Colégio Conexão Maranhense**, São Luís/MA.  
+Stack: **React 18 + TypeScript + Vite + Supabase + Tailwind CSS v4**
 
-![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?logo=supabase&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-6.3-646CFF?logo=vite&logoColor=white)
-![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.x-06B6D4?logo=tailwindcss&logoColor=white)
+> ⚠️ Este repositório contém código em produção com dados reais de alunos.  
+> Toda alteração deve ser feita em branch separada — **nunca commitar direto na `main`**.
 
 ---
 
-## 📋 Sobre o Projeto
+## Pré-requisitos
 
-O AVA Conexão é um sistema de gestão escolar completo que cobre todo o ciclo acadêmico — desde o lançamento de notas e frequência até comunicados, atividades com correção e feedback, relatórios pedagógicos e controle de agenda.
-
-### Funcionalidades Principais
-
-- **5 perfis de acesso** com dashboards personalizados
-- **Sistema de notas** com AV1, AV2, recuperação e cálculo automático de média
-- **Controle de frequência** com relatórios e alertas
-- **Atividades** com upload de arquivos, correção e feedback do professor
-- **Comunicados** com anexos (imagem/PDF), filtros por destinatário
-- **Agenda do professor** com supervisão da coordenação
-- **Boletim escolar** com impressão em PDF
-- **Fórum de discussão** por disciplina
-- **Aulas ao vivo** com agendamento
-- **Tema dark/light** em toda a plataforma
-- **Notificações em tempo real** via Supabase Realtime
+- Node.js 18+
+- npm ou yarn
+- Acesso ao projeto no Supabase (solicitar ao responsável)
 
 ---
 
-## 🏗 Arquitetura
+## Configuração local
 
-```
-Frontend (React + Vite)
-    ↕ REST API + Realtime WebSocket
-Backend (Supabase)
-    ├── PostgreSQL (banco de dados)
-    ├── Auth (autenticação)
-    ├── Storage (arquivos/imagens)
-    └── Realtime (notificações)
+### 1. Clonar o repositório
+
+```bash
+git clone https://github.com/jjsjunior3/Ava_ConexaoEAD.git
+cd Ava_ConexaoEAD
 ```
 
+### 2. Instalar dependências
+
+```bash
+npm install
+```
+
+### 3. Configurar variáveis de ambiente
+
+Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
+
+```env
+VITE_SUPABASE_URL=sua_url_aqui
+VITE_SUPABASE_ANON_KEY=sua_chave_aqui
+```
+
+> As credenciais do Supabase devem ser solicitadas ao responsável do projeto.  
+> Nunca commitar o arquivo `.env` — ele já está no `.gitignore`.
+
+### 4. Rodar localmente
+
+```bash
+npm run dev
+```
+
+Acesse: `http://localhost:5173`
+
 ---
 
-## 🔒 Acesso e Privacidade
-
-Este é um **projeto privado em produção** utilizado pelo Colégio Conexão EAD Maranhense com dados reais de alunos, professores e funcionários. O código-fonte e banco de dados não são disponibilizados publicamente em conformidade com a **LGPD (Lei Geral de Proteção de Dados)**.
-
-Demonstrações do sistema, arquitetura e funcionalidades podem ser apresentadas sob demanda em entrevistas ou reuniões técnicas.
-
-> 📫 **Contato para demonstração:** [jrsantosdev1@gmail.com]
-
----
-
-## 👥 Perfis de Acesso
-
-| Perfil | Funcionalidades |
-|--------|----------------|
-| **Aluno** | Visualiza notas, frequência, média geral, entrega atividades, vê feedback, comunicados |
-| **Professor** | Lança notas, cria atividades, corrige trabalhos, gerencia agenda, lança frequência |
-| **Coordenador** | Supervisiona agendas, emite boletins, envia comunicados, relatórios pedagógicos |
-| **Conteudista** | Gerencia materiais pedagógicos (PDFs, vídeos) por disciplina e bimestre |
-| **Administrador** | Gerencia usuários, vínculos professor-disciplina-série, configurações |
-
----
-
-## 📁 Estrutura do Projeto
+## Estrutura do projeto
 
 ```
-src/
-├── components/          # ~60 componentes React
-│   ├── ui/              # Biblioteca base (shadcn/ui + Radix)
-│   ├── Dashboard*.tsx   # 5 dashboards por perfil
-│   ├── Boletim*.tsx     # Sistema de notas
-│   ├── Atividades*.tsx  # Atividades e entregas
-│   └── ...
-├── contexts/            # AuthContext, ThemeContext
-├── config/              # Configurações da escola
-├── supabase/            # Cliente e migrações
-├── types/               # Tipos TypeScript
-└── App.tsx              # Componente raiz
+Ava_ConexaoEAD/
+├── public/
+│   └── logo-colegio-conexao.png   # Logo da escola — usada nos PDFs
+├── src/
+│   ├── components/                # Todos os componentes React
+│   ├── contexts/                  # AuthContext, ThemeContext
+│   ├── hooks/                     # useSegmento, usePresence, etc.
+│   ├── supabase/
+│   │   └── supabaseClient.ts      # Cliente único do Supabase
+│   ├── types/                     # Tipos TypeScript globais
+│   ├── utils/                     # Funções utilitárias (cálculo de notas, datas)
+│   └── App.tsx                    # Navegação principal via useState
+├── .env                           # Variáveis de ambiente (não commitar)
+├── vite.config.ts
+└── package.json
 ```
 
 ---
 
-## 🗄 Banco de Dados
+## Regras críticas do projeto
 
-**15+ tabelas** no PostgreSQL via Supabase, incluindo: `users`, `notas`, `frequencia_diaria`, `atividades`, `atividades_alunos`, `comunicados`, `agenda_professor`, `disciplinas`, `series`, `turmas`, e mais.
+Leia antes de codar qualquer coisa.
 
-**5 Storage Buckets** para arquivos: comunicados, avatars, entregas de atividades, enunciados e materiais pedagógicos.
+### Navegação
+```
+Sem React Router. Toda navegação é via useState(currentView) no App.tsx.
+Nunca instalar react-router-dom.
+```
+
+### Supabase
+```typescript
+// Sempre importar o cliente existente — nunca criar um segundo
+import { supabase } from '../supabase/supabaseClient';
+
+// fichas_matricula.segmento tem inconsistências de case
+// SEMPRE usar .ilike(), nunca .eq()
+.ilike('segmento', 'presencial')
+
+// DELETE silencioso — RLS pode bloquear sem retornar erro
+// Sempre checar count após delete
+const { count } = await supabase.from('tabela').delete().eq('id', id);
+if (count === 0) toast.error('Não foi possível excluir.');
+```
+
+### Datas — bug UTC-3
+```typescript
+// CORRETO — sempre com horário meio-dia
+const data = new Date(ano, mes - 1, dia, 12, 0, 0);
+
+// ERRADO — pode retornar o dia anterior no Brasil
+const data = new Date('2026-05-22');
+```
+
+### Dark mode
+```
+Sempre variáveis CSS: bg-background, text-foreground, border-border
+Nunca: bg-white, text-black, #ffffff hardcoded
+```
+
+### PDFs
+```
+Boletins e documentos → window.print() via HTML
+Relatórios multi-página → jsPDF
+Nunca misturar os dois no mesmo componente
+```
+
+### Notificações
+```typescript
+import { toast } from 'sonner';
+toast.success('Mensagem de sucesso');
+toast.error('Mensagem de erro');
+// Nunca usar alert()
+```
 
 ---
 
-## 🛣 Roadmap
+## Segmentos de ensino
 
-- [x] MVP com 5 perfis de acesso
-- [x] Sistema de notas com recuperação
-- [x] Atividades com correção e feedback
-- [x] Comunicados com anexos
-- [ ] Responsividade mobile completa
-- [ ] Módulo financeiro (gestor/secretaria)
-- [ ] Portal do responsável (pais)
-- [ ] Controle de estoque
-- [ ] Suporte multi-segmento (EAD + Presencial)
-- [ ] IA para histórico escolar
-- [ ] Virada de ano letivo
+O sistema tem dois segmentos isolados. Cada usuário pertence a um deles.
 
----
+```
+EAD        → banco: 'ead'
+Presencial → banco: 'presencial'
+```
 
-## 🛠 Stack Tecnológica
+O isolamento é garantido por RLS no Supabase e pelo hook `useSegmento` no frontend.  
+Um usuário de um segmento **não consegue ver dados do outro** — nem via interface nem via API.
 
-| Tecnologia | Uso |
-|-----------|-----|
-| React 18 + TypeScript | Frontend SPA |
-| Vite 6 (SWC) | Build tool |
-| Tailwind CSS | Estilização |
-| Radix UI + shadcn/ui | Componentes acessíveis |
-| Supabase | Backend (DB, Auth, Storage, Realtime) |
-| Recharts | Gráficos e visualizações |
-| jsPDF | Geração de relatórios em PDF |
-| Sonner | Notificações toast |
-| Lucide React | Ícones |
+```typescript
+// Hook disponível em qualquer componente
+import { useSegmento } from '../hooks/useSegmento';
+
+const { segmento, isEAD, isPresencial } = useSegmento();
+```
 
 ---
 
-## 📄 Licença
+## Fluxo de trabalho
 
-Projeto privado — Colégio Conexão EAD Maranhense.
+### Criar uma nova feature
+
+```bash
+# 1. Sempre partir da main atualizada
+git checkout main
+git pull
+
+# 2. Criar branch com nome descritivo
+git checkout -b feature/nome-da-feature
+
+# 3. Desenvolver e testar localmente
+
+# 4. Commitar com mensagem clara
+git add .
+git commit -m "feat: descrição do que foi feito"
+
+# 5. Enviar para o repositório
+git push origin feature/nome-da-feature
+```
+
+### Padrão de commit messages
+
+```
+feat: nova funcionalidade
+fix: correção de bug
+docs: alteração em documentação
+refactor: refatoração sem mudança de comportamento
+style: ajuste visual sem mudança de lógica
+```
+
+### Antes de qualquer alteração em produção
+
+- [ ] Testar localmente com dados reais do `.env`
+- [ ] Verificar que não quebrou nenhum outro perfil de acesso
+- [ ] Conferir dark mode
+- [ ] Confirmar que PDFs ainda funcionam se o componente foi alterado
 
 ---
 
-*Desenvolvido com 18 anos de experiência em gestão escolar.*🏫 AVA – Colégio Conexão
-Documentação Técnica do Banco de Dados (Supabase)
-Este documento descreve a modelagem de dados do Ambiente Virtual de Aprendizagem (AVA) do Colégio Conexão.
-Contém explicações das tabelas, relacionamentos e usuários envolvidos no sistema.
+## Perfis de acesso para teste local
 
-🧩 Visão Geral
-O banco é estruturado para abranger 5 perfis principais:
+| Perfil | Como testar |
+|--------|-------------|
+| `administrador` | Login com usuário administrador |
+| `admin_presencial` | Login com usuário admin_presencial |
+| `coordenador` | Testar nos dois segmentos (EAD e Presencial) |
+| `professor` | Testar nos dois segmentos |
+| `aluno` | Testar nos dois segmentos |
+| `secretaria` | Login com usuário secretaria |
+| `financeiro` | Login com usuário financeiro |
 
-Perfil	Função principal
-Aluno	Consome conteúdo, envia atividades e visualiza notas.
-Professor	Atribui e corrige atividades, publica materiais, gerencia chamadas e notas.
-Coordenador	Supervisiona turmas, notas, boletins e comunicados.
-Professor Conteudista	Produz e disponibiliza materiais PDF de estudo para alunos e professores.
-Administrador	Gerencia usuários, vínculos, permissões e estrutura escolar.
-⚙️ Estrutura Geral do Banco
-O banco foi criado no Supabase (PostgreSQL) e segue as boas práticas de normalização.
-Todas as tabelas possuem campos de auditoria, como id (uuid) e criado_em (timestamp).
+---
 
-📚 Tabelas Principais
-1️⃣ Users
-Armazena todos os usuários de todos os perfis.
-Cada tipo de usuário é identificado por tipo_user.
+## Documentação interna
 
-Campos principais
+| Documento | Descrição |
+|-----------|-----------|
+| `README.md` | Este arquivo |
+| `docs/SKILLS.md` | Regras da stack — ler antes de codar |
+| `docs/PRD.md` | Requisitos de produto |
+| `docs/SPEC.md` | Especificação técnica das features |
 
-nome_completo, email, usuario_login, senha
-tipo_user → (‘aluno’, ‘professor’, ‘coordenador’, ‘conteudista’, ‘admin’)
-ativo → ativa/desativa o login.
-2️⃣ Turmas
-Define as séries e grupos de alunos.
+> Os arquivos em `docs/` estão sendo criados progressivamente.
 
-Campos
+---
 
-nome → Ex: “5º Ano A”, “3ª Série B”
-ano_letivo
-Relação:
-Uma turma tem muitos alunos e muitas disciplinas.
-3️⃣ Disciplinas
-Lista as matérias de cada turma.
+## Contato
 
-Principais campos
+**José João Santos Júnior** — responsável pelo projeto  
+Dúvidas sobre regras de negócio ou acesso ao Supabase: falar diretamente com o responsável.
 
-nome e descricao
-turma_id → FK para turmas.id
-Exemplo: Matemática (3ª Série), História (5º Ano)
-4️⃣ Professor Disciplinas
-Relaciona quais professores ministram quais disciplinas.
+---
 
-Usado por:
-
-Painel do professor (consultar suas turmas e matérias).
-Painel do coordenador (visualizar responsáveis de cada disciplina).
-5️⃣ Matrículas
-Associa alunos às turmas.
-Um aluno pertence a uma ou mais turmas (dependendo do nível escolar).
-
-Campos
-
-aluno_id → FK para users.id
-turma_id → FK para turmas.id
-6️⃣ Materiais
-Tabela de upload de conteúdos em PDF (apostilas, exercícios, gabaritos).
-
-Campos
-
-bimestre (1 – 4)
-tipo (‘aluno’ ou ‘professor’)
-arquivo_url (link do Supabase Storage)
-enviado_por → normalmente o professor conteudista
-Exemplo de uso
-sql
-Copiar
-
-SELECT titulo, arquivo_url
-FROM materiais
-WHERE disciplina_id = 'uuid_matematica'
-  AND turma_id = 'uuid_3serie'
-  AND bimestre = 2
-  AND tipo = 'aluno';
-7️⃣ Atividades e Entregas
-Define as tarefas criadas pelos professores e as respostas dos alunos.
-
-Tabelas envolvidas
-
-atividades → descrição do exercício, valor, prazo.
-entregas → upload do aluno, status e nota.
-Relacionamento
-
-Uma atividade tem várias entregas, uma por aluno.
-
-8️⃣ Notas Avaliadas (Boletim)
-Registra AV1, AV2, média e recuperação de cada bimestre.
-
-Campo	Descrição
-av1 e av2	notas das duas avaliações bimestrais
-recuperacao	nota substitutiva (se média < 7)
-media_final_bimestre	recalculada automaticamente
-aprovado_bimestre	booleano de aprovação
-
-Exportar
-
-Copiar
-Exemplo de consulta
-
-sql
-Copiar
-
-SELECT disciplina_id, bimestre, media_final_bimestre
-FROM notas_avaliacoes
-WHERE aluno_id = 'uuid_aluno';
-9️⃣ Mural de Comunicados
-Permite o envio de comunicados gerais, por turma ou individuais.
-
-Campos
-
-destino_tipo → (‘todos’, ‘turma’, ‘usuario’)
-destino_id → identifica o alvo específico
-remetente_id → autor (admin, professor ou coordenador)
-🔟 Chat e Mensagens Privadas
-chat_mensagens → conversa coletiva por turma.
-mensagens_privadas → comunicações diretas aluno ↔ professor.
-Alunos não trocam mensagens privadas entre si, apenas com professores.
-
-11️⃣ Diário de Frequência
-Controle diário de presença dos alunos.
-
-Preenchido pelos professores; visualizado por coordenadores e administradores.
-
-Campos
-
-data_aula
-presenca (TRUE/FALSE)
-observacao (motivo da falta, notas, etc.)
-12️⃣ Arquivos Enviados pelo Professor
-Armazena uploads enviados por professores para toda a turma ou individualmente.
-
-Pode incluir devolutivas de atividades, correções e comunicados extras.
-
-Campos
-
-professor_id, turma_id, disciplina_id
-aluno_id (nulo se for envio coletivo)
-arquivo_url e descricao
-13️⃣ Log de Ações do Administrador
-Audita todas as operações administrativas (criação, exclusão, reset de senhas, etc.).
-
-Campos
-
-acao → tipo da operação
-alvo_usuario_id → alvo da ação
-detalhes → JSON com dados adicionais
-data_execucao
-🧮 Views (Relatórios)
-Para facilitar consultas e relatórios o banco possui:
-
-View	Uso
-vw_alunos_por_turma	Lista alunos agrupados por turma
-vw_professores_disciplinas	Liga professor ↔ disciplina ↔ turma
-vw_disciplinas_sem_material	Mostra quais disciplinas ainda faltam material PDF em cada bimestre
-
-Exportar
-
-Copiar
-🔒 Políticas de Segurança (RLS)
-Todas as tabelas possuem Row Level Security ativada, garantindo:
-
-Perfil	Acesso permitido
-Aluno	Somente dados da sua matrícula, atividades e notas próprias.
-Professor	Somente turmas e disciplinas vinculadas.
-Coordenador	Leitura global + edição de notas e comunicados.
-Conteudista	Pode enviar e excluir materiais PDFs.
-Administrador	Controle total (CRUD geral e logs).
-
-Exportar
-
-Copiar
-🔗 Diagrama Relacional
-O diagrama visual completo do banco está no arquivo:
-
-colegio-conexao.dbmlcolegio-conexao.dbml](./colegio-conexao
-
-Visualize interativamente:
-
-👉 dbdiagram.io
+*SynerEduc — Sistema de Gestão Escolar © 2026*

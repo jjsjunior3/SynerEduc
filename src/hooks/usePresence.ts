@@ -3,67 +3,71 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { Usuario } from '../types/auth';
 
+const HEARTBEAT_INTERVAL = 30_000; // 30 segundos
+const SESSAO_TIMEOUT_MIN = 2;      // considera offline após 2min sem heartbeat
+
 export function usePresence(usuario: Usuario | null) {
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const iniciandoRef = useRef(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const registradoRef = useRef(false);
+
+  const registrarSessao = async () => {
+    if (!usuario?.id) return;
+    await supabase.from('sessoes_ativas').upsert({
+      usuario_id: usuario.id,
+      nome:       usuario.nome     || 'Usuário',
+      tipo:       usuario.tipo     || 'aluno',
+      segmento:   usuario.segmento || 'ead',
+      last_seen:  new Date().toISOString(),
+      entrou_em:  registradoRef.current ? undefined : new Date().toISOString(),
+    }, { onConflict: 'usuario_id' });
+    registradoRef.current = true;
+  };
+
+  const removerSessao = async () => {
+    if (!usuario?.id) return;
+    await supabase.from('sessoes_ativas').delete().eq('usuario_id', usuario.id);
+    registradoRef.current = false;
+  };
 
   useEffect(() => {
     if (!usuario?.id) return;
 
-    // Evita criar canal duplicado (StrictMode monta 2x em dev)
-    if (channelRef.current || iniciandoRef.current) return;
-    iniciandoRef.current = true;
+    // Registra imediatamente
+    registrarSessao();
 
-    const iniciar = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { iniciandoRef.current = false; return; }
+    // Heartbeat a cada 30s
+    intervalRef.current = setInterval(registrarSessao, HEARTBEAT_INTERVAL);
 
-        // Se já foi criado enquanto aguardava getUser, sai
-        if (channelRef.current) { iniciandoRef.current = false; return; }
-
-        const canal = supabase.channel('presenca_global', {
-          config: {
-            presence: { key: user.id },
-          },
-        });
-
-        canal.subscribe(async (status) => {
-          console.log('[usePresence] status:', status);
-          if (status === 'SUBSCRIBED') {
-            try {
-              await canal.track({
-                nome:      usuario.nome     || 'Usuário',
-                tipo:      usuario.tipo     || 'aluno',
-                segmento:  usuario.segmento || 'ead',
-                entrou_em: new Date().toISOString(),
-              });
-              console.log('[usePresence] track enviado');
-            } catch (e) {
-              console.warn('[usePresence] erro no track:', e);
-            }
-          }
-          if (status === 'CHANNEL_ERROR') {
-            console.warn('[usePresence] CHANNEL_ERROR — verifique RLS policies do Realtime');
-          }
-        });
-
-        channelRef.current = canal;
-        iniciandoRef.current = false;
-      } catch (e) {
-        console.warn('[usePresence] erro ao criar canal:', e);
-        iniciandoRef.current = false;
-      }
+    // Remove ao fechar a aba/janela
+    const handleUnload = () => {
+      removerSessao();
     };
-
-    iniciar();
+    window.addEventListener('beforeunload', handleUnload);
 
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      iniciandoRef.current = false;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      window.removeEventListener('beforeunload', handleUnload);
+      removerSessao();
     };
   }, [usuario?.id]);
+}
+
+// ── Exporta função auxiliar para o dashboard admin ──
+export async function contarOnline(): Promise<number> {
+  const limite = new Date(Date.now() - SESSAO_TIMEOUT_MIN * 60_000).toISOString();
+  const { count } = await supabase
+    .from('sessoes_ativas')
+    .select('*', { count: 'exact', head: true })
+    .gte('last_seen', limite);
+  return count ?? 0;
+}
+
+export async function listarOnline() {
+  const limite = new Date(Date.now() - SESSAO_TIMEOUT_MIN * 60_000).toISOString();
+  const { data } = await supabase
+    .from('sessoes_ativas')
+    .select('usuario_id, nome, tipo, segmento, entrou_em')
+    .gte('last_seen', limite)
+    .order('entrou_em', { ascending: false });
+  return data ?? [];
 }

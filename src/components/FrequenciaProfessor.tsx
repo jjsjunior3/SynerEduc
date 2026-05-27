@@ -243,51 +243,62 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
 
     setSalvando(true);
     try {
-      // Monta todos os registros para upsert
-      const registros: any[] = [];
-
       for (const aluno of listaAlunos) {
         for (const aula of aluno.aulas) {
-          const reg: any = {
-            aluno_id:     aluno.aluno_id,
+          const payload = {
+            aluno_id:      aluno.aluno_id,
             disciplina_id: disciplina.id,
-            turma_id:     turmaIdReal,
-            data_aula:    dataFrequencia,
-            numero_aula:  aula.numero_aula,
-            status:       aula.status,
-            // Campo legado — compatibilidade com código antigo
-            presente:     aula.status === 'presente' || aula.status === 'atrasado',
-            observacao:   aula.observacao || null,
-            professor_id: usuario?.id ?? null,
+            turma_id:      turmaIdReal,
+            data_aula:     dataFrequencia,
+            numero_aula:   aula.numero_aula,
+            status:        aula.status,
+            presente:      aula.status === 'presente' || aula.status === 'atrasado',
+            observacao:    aula.observacao || null,
+            professor_id:  usuario?.id ?? null,
           };
-          if (aula.db_id) reg.id = aula.db_id;
-          registros.push(reg);
+
+          if (aula.db_id) {
+            // ── Registro existente → UPDATE ──
+            const { error } = await supabase
+              .from('frequencia_diaria')
+              .update({
+                status:       payload.status,
+                presente:     payload.presente,
+                observacao:   payload.observacao,
+                professor_id: payload.professor_id,
+              })
+              .eq('id', aula.db_id);
+            if (error) throw error;
+          } else {
+            // ── Registro novo → verifica se já existe antes de inserir ──
+            const { data: existente } = await supabase
+              .from('frequencia_diaria')
+              .select('id')
+              .eq('aluno_id', aluno.aluno_id)
+              .eq('disciplina_id', disciplina.id)
+              .eq('data_aula', dataFrequencia)
+              .eq('numero_aula', aula.numero_aula)
+              .maybeSingle();
+
+            if (existente?.id) {
+              const { error } = await supabase
+                .from('frequencia_diaria')
+                .update({
+                  status:       payload.status,
+                  presente:     payload.presente,
+                  observacao:   payload.observacao,
+                  professor_id: payload.professor_id,
+                })
+                .eq('id', existente.id);
+              if (error) throw error;
+            } else {
+              const { error } = await supabase
+                .from('frequencia_diaria')
+                .insert(payload);
+              if (error) throw error;
+            }
+          }
         }
-      }
-
-      // Registros COM id → update individual (evita conflito de UNIQUE antigo)
-      const comId    = registros.filter(r => r.id);
-      const semId    = registros.filter(r => !r.id);
-
-      // Updates
-      for (const r of comId) {
-        const { error } = await supabase
-          .from('frequencia_diaria').update({
-            status: r.status, presente: r.presente,
-            observacao: r.observacao, professor_id: r.professor_id,
-          }).eq('id', r.id);
-        if (error) throw error;
-      }
-
-      // Inserts novos — usa o índice parcial novo (numero_aula IS NOT NULL)
-      if (semId.length) {
-        const { error } = await supabase
-          .from('frequencia_diaria')
-          .upsert(semId, {
-            onConflict: 'aluno_id, disciplina_id, data_aula, numero_aula',
-            ignoreDuplicates: false,
-          });
-        if (error) throw error;
       }
 
       toast.success(`Frequência de ${formatarData(dataFrequencia)} salva!`);

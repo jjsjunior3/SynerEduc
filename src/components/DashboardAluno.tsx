@@ -74,7 +74,7 @@ interface ComunicadoData {
 
 function formatarData(dataISO: string) {
   try {
-    return new Date(dataISO).toLocaleDateString("pt-BR");
+    return new Date(dataISO + 'T12:00:00').toLocaleDateString("pt-BR");
   } catch {
     return dataISO;
   }
@@ -547,7 +547,7 @@ export default function DashboardAluno() {
         <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-8 md:p-10 overflow-hidden">
           <div className="relative z-10">
             <h1 className="text-3xl font-bold mb-2">
-              Olá, {usuario?.nome?.split(" ")[0]}! 👋
+              Olá, {usuario?.nome?.split(" ").filter(Boolean).slice(0, 2).join(" ")}! 👋
             </h1>
             <p className="text-blue-100 text-lg max-w-xl">
               Aqui você acompanha suas aulas, atividades e notas.

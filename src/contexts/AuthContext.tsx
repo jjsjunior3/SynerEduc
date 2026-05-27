@@ -53,13 +53,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
-        console.error("❌ Erro ao buscar perfil:", error);
         setLoading(false);
         return;
       }
 
       if (data) {
-        console.log("✅ Perfil carregado:", data);
         setUsuario({
           id: user.id,
           email: user.email || data.email || "",
@@ -75,8 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           updated_at: data.updated_at || undefined,
         });
       }
-    } catch (error) {
-      console.error("💥 Erro fatal ao buscar perfil:", error);
+    } catch {
+      // silencioso — setLoading(false) já é chamado no finally
     } finally {
       setLoading(false);
     }
@@ -84,7 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("🔍 Verificando sessão inicial...", session ? "Sessão ativa" : "Sem sessão");
       setSession(session);
       if (session?.user) {
         buscarPerfil(session.user);
@@ -94,7 +91,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("🔄 Mudança de autenticação:", _event);
       setSession(session);
       if (session?.user) {
         buscarPerfil(session.user);
@@ -109,21 +105,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const atualizarPerfil = useCallback((dadosAtualizados: Partial<UsuarioPerfil>) => {
     setUsuario(prev => prev ? { ...prev, ...dadosAtualizados } : null);
-    console.log("✅ Perfil atualizado no contexto:", dadosAtualizados);
   }, []);
 
   const logout = useCallback(async () => {
     try {
-      console.log("🚪 Iniciando logout...");
-      const { error } = await supabase.auth.signOut();
-      if (error) console.error("❌ Erro no signOut:", error);
+      await supabase.auth.signOut();
       setUsuario(null);
       setSession(null);
       localStorage.clear();
-      console.log("✅ Logout concluído! Redirecionando...");
       window.location.href = "/";
-    } catch (error) {
-      console.error("💥 Erro fatal no logout:", error);
+    } catch {
       window.location.href = "/";
     }
   }, []);

@@ -125,11 +125,11 @@ export function EstatisticasConteudista({
       {/* Header com controles */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Estatísticas em Tempo Real</h2>
-          <p className="text-gray-600">Acompanhe o desempenho do seu conteúdo</p>
+          <h2 className="text-2xl font-bold text-foreground">Estatísticas em Tempo Real</h2>
+          <p className="text-muted-foreground">Acompanhe o desempenho do seu conteúdo</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted-foreground">
             Atualizado {tempoDecorrido}
           </div>
           <Button onClick={handleAtualizar} size="sm" variant="outline">
@@ -220,7 +220,7 @@ export function EstatisticasConteudista({
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {metricas.map((metrica, index) => (
-              <div key={index} className="p-4 border border-gray-200 rounded-lg">
+              <div key={index} className="p-4 border border-border rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <div className={`w-8 h-8 ${metrica.cor} rounded-lg flex items-center justify-center`}>
                     <metrica.icone className="w-4 h-4 text-white" />
@@ -230,9 +230,9 @@ export function EstatisticasConteudista({
                   </div>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-gray-900">{metrica.valor}</p>
-                  <p className="text-sm font-medium text-gray-700">{metrica.nome}</p>
-                  <p className="text-xs text-gray-500">{metrica.descricao}</p>
+                  <p className="text-lg font-bold text-foreground">{metrica.valor}</p>
+                  <p className="text-sm font-medium text-foreground">{metrica.nome}</p>
+                  <p className="text-xs text-muted-foreground">{metrica.descricao}</p>
                 </div>
               </div>
             ))}
@@ -250,38 +250,38 @@ export function EstatisticasConteudista({
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+            <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg">
               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-foreground">
                   {estatisticas.visualizacoesSemana} novos downloads esta semana
                 </p>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-muted-foreground">
                   Crescimento de {(estatisticas.crescimentoSemanal * 100).toFixed(1)}% comparado à semana anterior
                 </p>
               </div>
             </div>
-            
-            <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+
+            <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-950/40 rounded-lg">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-foreground">
                   {estatisticas.conteudosPublicados} conteúdos publicados
                 </p>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-muted-foreground">
                   Taxa de publicação de {percentualPublicado.toFixed(1)}% - {eficienciaPublicacao}
                 </p>
               </div>
             </div>
 
             {estatisticas.pendentesRevisao > 0 && (
-              <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
+              <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-950/40 rounded-lg">
                 <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-foreground">
                     {estatisticas.pendentesRevisao} conteúdos aguardando revisão
                   </p>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-muted-foreground">
                     Verifique os materiais que precisam de aprovação
                   </p>
                 </div>

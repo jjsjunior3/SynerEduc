@@ -213,31 +213,32 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
 
   // ── Impressão ─────────────────────────────────────────────────────────────
   const handleImprimir = () => {
-    const anoLetivo  = new Date().getFullYear();
+    const anoLetivo   = new Date().getFullYear();
     const dataEmissao = new Date().toLocaleDateString('pt-BR');
-
+ 
     const colsBim    = isPresencial
       ? '<th>AV1</th><th>AV2</th><th>AV3</th><th>REC</th><th>MÉD</th>'
       : '<th>AV1</th><th>AV2</th><th>REC</th><th>MÉD</th>';
     const colSpanBim = isPresencial ? 5 : 4;
-
+ 
     const celNota = (v: number | null, bold = false) =>
       v !== null
         ? `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;${bold ? 'font-weight:700;' : ''}">${v.toFixed(1)}</td>`
         : `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>`;
-
+ 
     const celRec = (v: number | null) =>
       v !== null && v > 0
         ? `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">${v.toFixed(1)}</td>`
         : `<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;color:#999">-</td>`;
-
+ 
     const linhasBimestre = (b: NotaBimestre) => isPresencial
       ? `${celNota(b.av1)}${celNota(b.av2)}${celNota(b.av3)}${celRec(b.rec)}${celNota(b.med, true)}`
       : `${celNota(b.av1)}${celNota(b.av2)}${celRec(b.rec)}${celNota(b.med, true)}`;
-
+ 
+    // ✅ Critérios atualizados: ≥ 7 Aprovado, < 7 Recuperação, < 5 Reprovado
     const corSituacao = (s: NotaDisciplina['situacao']) =>
       s === 'Aprovado' ? '#15803d' : s === 'Reprovado' ? '#dc2626' : s === 'Cursando' ? '#2563eb' : '#ca8a04';
-
+ 
     const linhasTabela = notasBoletim.map(nota => `
       <tr>
         <td style="border:1px solid #ccc;padding:4px 8px;font-weight:600">${nota.disciplina_nome}</td>
@@ -256,11 +257,11 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
           ${nota.situacao}
         </td>
       </tr>`).join('');
-
+ 
     const legendaMed = isPresencial
       ? '<li>MÉD: Média do Bimestre (AV1 + AV2 + AV3) ÷ 3</li>'
       : '<li>MÉD: Média do Bimestre (AV1 + AV2) ÷ 2</li>';
-
+ 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -270,8 +271,24 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:Arial,sans-serif;font-size:11px;color:#000;background:#fff;padding:20px}
     @page{size:landscape;margin:12mm}
+ 
+    /* ── Marca d'água ── */
+    .watermark{
+      position:fixed;
+      top:50%;left:50%;
+      transform:translate(-50%,-50%);
+      opacity:0.06;
+      z-index:0;
+      pointer-events:none;
+    }
+    .watermark img{width:420px;height:420px;object-fit:contain}
+ 
+    /* ── Conteúdo acima da marca d'água ── */
+    .content{position:relative;z-index:1}
+ 
     .header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #1d4ed8;padding-bottom:12px;margin-bottom:14px}
-    .header-logo{width:56px;height:56px;border-radius:50%;background:#1d4ed8;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:18px;flex-shrink:0}
+    .header-logo{width:60px;height:60px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+    .header-logo img{width:60px;height:60px;object-fit:contain;border-radius:6px}
     .header-text h1{font-size:18px;font-weight:800;color:#1d4ed8}
     .header-text p{font-size:11px;color:#555;margin-top:2px}
     .titulo{text-align:center;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
@@ -290,65 +307,85 @@ export default function Boletim({ usuario, turma }: BoletimProps) {
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="header-logo">CE</div>
-    <div class="header-text">
-      <h1>Colégio Conexão EAD</h1>
-      <p>Sistema de Gestão Escolar — Boletim Oficial${isPresencial ? ' · Segmento Presencial' : ''}</p>
+ 
+  <!-- ✅ Marca d'água centralizada -->
+  <div class="watermark">
+    <img src="/logo-colegio-conexao.png" alt="marca dagua" />
+  </div>
+ 
+  <div class="content">
+    <div class="header">
+      <!-- ✅ Logo real da escola -->
+      <div class="header-logo">
+        <img src="/logo-colegio-conexao.png" alt="Logo Colégio Conexão Maranhense" />
+      </div>
+      <div class="header-text">
+        <!-- ✅ Nome correto da escola -->
+        <h1>Colégio Conexão Maranhense</h1>
+        <!-- ✅ Sistema SynerEduc -->
+        <p>Sistema SynerEduc${isPresencial ? ' · Segmento Presencial' : ''}</p>
+      </div>
+    </div>
+ 
+    <div class="titulo">Boletim Escolar — ${anoLetivo}</div>
+ 
+    <div class="info-aluno">
+      <div>Nome: <span>${usuario?.nome}</span></div>
+      <div>Série: <span>${turma?.serieNome}</span></div>
+      <div>Ano Letivo: <span>${anoLetivo}</span></div>
+      <div>Data de Emissão: <span>${dataEmissao}</span></div>
+    </div>
+ 
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2" class="disciplina-header" style="width:13%">Disciplina</th>
+          <th colspan="${colSpanBim}" class="bim-1">1º Bimestre</th>
+          <th colspan="${colSpanBim}" class="bim-2">2º Bimestre</th>
+          <th colspan="${colSpanBim}" class="bim-3">3º Bimestre</th>
+          <th colspan="${colSpanBim}" class="bim-4">4º Bimestre</th>
+          <th rowspan="2">Pts Total</th>
+          <th rowspan="2">Média Final</th>
+          <th rowspan="2">Recup Final</th>
+          <th rowspan="2">Situação</th>
+        </tr>
+        <tr>${colsBim}${colsBim}${colsBim}${colsBim}</tr>
+      </thead>
+      <tbody>${linhasTabela}</tbody>
+    </table>
+ 
+    <div class="legenda">
+      <div>
+        <strong>Legenda:</strong>
+        <ul>
+          <li>AV1/AV2${isPresencial ? '/AV3' : ''}: Avaliações</li>
+          <li>REC: Recuperação do Bimestre</li>
+          ${legendaMed}
+          <li>Pts Total: Soma das médias dos 4 bimestres</li>
+          <li>Média Final: Pts Total ÷ 4 (somente após os 4 bimestres)</li>
+        </ul>
+      </div>
+      <div>
+        <!-- ✅ Critérios atualizados -->
+        <strong>Critérios de Aprovação:</strong>
+        <ul>
+          <li>✅ Média Final ≥ 7.0: Aprovado</li>
+          <li>⚠️ Média Final &lt; 7.0: Recuperação</li>
+          <li>❌ Média Final &lt; 5.0 (após REC): Reprovado</li>
+          <li>📘 Sem os 4 bimestres: Cursando</li>
+        </ul>
+      </div>
+    </div>
+ 
+    <div class="assinaturas">
+      <div class="assinatura"><div class="linha">Coordenação Pedagógica</div></div>
+      <div class="assinatura"><div class="linha">Direção Escolar</div></div>
     </div>
   </div>
-  <div class="titulo">Boletim Escolar — ${anoLetivo}</div>
-  <div class="info-aluno">
-    <div>Nome: <span>${usuario?.nome}</span></div>
-    <div>Série: <span>${turma?.serieNome}</span></div>
-    <div>Ano Letivo: <span>${anoLetivo}</span></div>
-    <div>Data de Emissão: <span>${dataEmissao}</span></div>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th rowspan="2" class="disciplina-header" style="width:13%">Disciplina</th>
-        <th colspan="${colSpanBim}" class="bim-1">1º Bimestre</th>
-        <th colspan="${colSpanBim}" class="bim-2">2º Bimestre</th>
-        <th colspan="${colSpanBim}" class="bim-3">3º Bimestre</th>
-        <th colspan="${colSpanBim}" class="bim-4">4º Bimestre</th>
-        <th rowspan="2">Pts Total</th>
-        <th rowspan="2">Média Final</th>
-        <th rowspan="2">Recup Final</th>
-        <th rowspan="2">Situação</th>
-      </tr>
-      <tr>${colsBim}${colsBim}${colsBim}${colsBim}</tr>
-    </thead>
-    <tbody>${linhasTabela}</tbody>
-  </table>
-  <div class="legenda">
-    <div>
-      <strong>Legenda:</strong>
-      <ul>
-        <li>AV1/AV2${isPresencial ? '/AV3' : ''}: Avaliações</li>
-        <li>REC: Recuperação do Bimestre</li>
-        ${legendaMed}
-        <li>Pts Total: Soma das médias dos 4 bimestres</li>
-        <li>Média Final: Pts Total ÷ 4 (somente após os 4 bimestres)</li>
-      </ul>
-    </div>
-    <div>
-      <strong>Critérios de Aprovação:</strong>
-      <ul>
-        <li>✅ Média Final ≥ 7.0: Aprovado</li>
-        <li>⚠️ Média Final entre 5.0 e 6.9: Recuperação</li>
-        <li>❌ Média Final &lt; 5.0: Reprovado</li>
-        <li>📘 Sem os 4 bimestres: Cursando</li>
-      </ul>
-    </div>
-  </div>
-  <div class="assinaturas">
-    <div class="assinatura"><div class="linha">Coordenação Pedagógica</div></div>
-    <div class="assinatura"><div class="linha">Direção Escolar</div></div>
-  </div>
+ 
 </body>
 </html>`;
-
+ 
     const janela = window.open('', '_blank', 'width=1200,height=700');
     if (!janela) return;
     janela.document.write(html);

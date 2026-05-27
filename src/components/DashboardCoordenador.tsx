@@ -21,7 +21,7 @@ const RelatorioTurma     = lazy(() => import('./RelatorioTurma'));
 const FrequenciaAlunos   = lazy(() => import('./FrequenciaAluno'));
 const EnviarComunicado   = lazy(() => import('./EnviarComunicado'));
 const ForumCoordenador   = lazy(() => import('./ForumCoordenador'));
-const AgendaProfessores  = lazy(() => import('./AgendaProfessores'));
+const AgendaCoordenador  = lazy(() => import('./AgendaCoordenador')); // ← ALTERADO
 const GestaoHorarios     = lazy(() => import('./GestaoHorarios'));
 const BoletimCoordenador = lazy(() => import('./BoletimCoordenador'));
 
@@ -70,8 +70,8 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
     },
     {
       id: 'agenda', title: 'Agenda dos Professores',
-      description: 'Visualizar agendas de todos os professores',
-      icon: Calendar, bg: '#fce7f3', iconColor: '#db2777',
+      description: 'Acompanhar, rastrear e configurar grade horária',
+      icon: Calendar, bg: '#fce7f3', iconColor: '#db2777', // ← descrição atualizada
     },
     {
       id: 'horarios', title: 'Gestão de Horários',
@@ -103,7 +103,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
       case 'relatorio':     return <RelatorioTurma onVoltar={() => setViewAtual('dashboard')} />;
       case 'frequencia':    return <FrequenciaAlunos onVoltar={() => setViewAtual('dashboard')} />;
       case 'comunicado':    return <EnviarComunicado onVoltar={() => setViewAtual('dashboard')} />;
-      case 'agenda':        return <AgendaProfessores onVoltar={() => setViewAtual('dashboard')} />;
+      case 'agenda':        return <AgendaCoordenador onVoltar={() => setViewAtual('dashboard')} />; // ← ALTERADO
       case 'horarios':      return <GestaoHorarios onVoltar={() => setViewAtual('dashboard')} />;
       case 'forum':         return <ForumCoordenador onVoltar={() => setViewAtual('dashboard')} />;
       case 'boletim_aluno': return <BoletimCoordenador onVoltar={() => setViewAtual('dashboard')} />;
@@ -120,7 +120,6 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
         <SchoolHeader subtitle="Painel do Coordenador" />
 
         <div className="flex items-center gap-3">
-
           <div className="relative">
             <Button variant="ghost" size="icon" onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}>
               <Bell className="w-5 h-5 text-muted-foreground" />
@@ -246,12 +245,12 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
                   className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 border border-border bg-card"
                 >
                   <CardContent className="p-4 sm:p-8 text-center space-y-2 sm:space-y-4">
-                  <div
-                    className="w-10 h-10 sm:w-14 sm:h-14 mx-auto rounded-full flex items-center justify-center shadow-sm"
-                    style={{ backgroundColor: item.bg }}
-                  >
-                    <Icon className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: item.iconColor }} />
-                  </div>
+                    <div
+                      className="w-10 h-10 sm:w-14 sm:h-14 mx-auto rounded-full flex items-center justify-center shadow-sm"
+                      style={{ backgroundColor: item.bg }}
+                    >
+                      <Icon className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: item.iconColor }} />
+                    </div>
                     <div>
                       <CardTitle className="font-semibold text-foreground text-xs sm:text-sm mb-0.5 sm:mb-1">
                         {item.title}

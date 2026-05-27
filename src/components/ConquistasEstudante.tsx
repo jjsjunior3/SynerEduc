@@ -20,6 +20,7 @@ import {
   Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface Conquista {
   id: string;
@@ -37,15 +38,15 @@ interface ConquistasEstudanteProps {
   bimestresCompletos: number;
   tempoEstudo: number;
   disciplinasCompletas: number;
-  darkMode?: boolean;
 }
 
-export function ConquistasEstudante({ 
-  bimestresCompletos, 
-  tempoEstudo, 
+export function ConquistasEstudante({
+  bimestresCompletos,
+  tempoEstudo,
   disciplinasCompletas,
-  darkMode = false 
 }: ConquistasEstudanteProps) {
+  const { theme } = useTheme();
+  const darkMode = theme === 'dark';
   const [conquistasDesbloqueadas, setConquistasDesbloqueadas] = useState<string[]>([]);
   const [showNewConquista, setShowNewConquista] = useState<Conquista | null>(null);
 

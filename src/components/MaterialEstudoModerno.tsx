@@ -354,13 +354,11 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
           sequenciaDias={0}
           bimestresCompletos={bimestresCompletos}
           tempoMedioSemanal={0}
-          darkMode={darkMode}
         />
         <ConquistasEstudante
           bimestresCompletos={bimestresCompletos}
           tempoEstudo={0}
           disciplinasCompletas={Math.floor(progressoGeral / 100)}
-          darkMode={darkMode}
         />
       </div>
 

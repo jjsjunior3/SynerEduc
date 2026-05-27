@@ -1,13 +1,10 @@
 // src/utils/versaoApp.ts
 //
-// ⚠️  IMPORTANTE: Incremente VERSAO_ATUAL a cada deploy para forçar
-//     atualização nos navegadores dos usuários.
-//
 // Exemplos de incremento:
 //   '1.0.2' → '1.0.3' (correção de bug)
 //   '1.0.3' → '1.1.0' (nova funcionalidade)
 
-const VERSAO_ATUAL = '1.4.0';
+const VERSAO_ATUAL = '1.5.3';
 const CHAVE_VERSAO = 'ava_versao';
 
 export function verificarVersao(): void {
@@ -40,7 +37,7 @@ export function verificarVersao(): void {
       }
 
       // 6) Reload forçado — ignora cache do browser
-      window.location.reload();
+      window.location.replace(window.location.pathname + '?v=' + VERSAO_ATUAL);
     }
   } catch (err) {
     console.warn('[versaoApp] Não foi possível verificar a versão:', err);

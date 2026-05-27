@@ -103,13 +103,6 @@ function mesAtual() {
   return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function parseTipoObs(raw: string | null): { tipo: TipoPagamento; obs: string } {
-  const m = (raw ?? '').match(/^tipo:(\w+)\|?(.*)/s);
-  return {
-    tipo: (m?.[1] ?? 'mensalidade') as TipoPagamento,
-    obs:  m?.[2]?.trim() ?? (raw ?? ''),
-  };
-}
 
 // ─── Autocomplete ─────────────────────────────────────────
 function AutocompleteAluno({ alunos, value, onSelect }: {
@@ -223,7 +216,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
       const to   = from + POR_PAGINA - 1;
       let q = supabase
         .from('financeiro_mensalidades')
-        .select(`id, aluno_id, valor, vencimento, status, pago_em, observacao, segmento,
+        .select(`id, aluno_id, tipo, valor, vencimento, status, pago_em, observacao, segmento,
           users!financeiro_mensalidades_aluno_id_fkey (nome, serie)`, { count: 'exact' })
         .eq('status', 'pago')
         .eq('segmento', segmentoGestor)
@@ -237,22 +230,21 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
           .gte('pago_em', `${ano}-${mes}-01T00:00:00`)
           .lte('pago_em', `${ano}-${mes}-${String(fimDia).padStart(2,'0')}T23:59:59`);
       }
-      if (filtroTipo !== 'todos') q = q.like('observacao', `tipo:${filtroTipo}|%`);
+      if (filtroTipo !== 'todos') q = q.eq('tipo', filtroTipo);
 
       const { data, count, error } = await q;
       if (error) throw error;
 
-      let rows: EntradaCaixa[] = (data ?? []).map((r: any) => {
-        const { tipo, obs } = parseTipoObs(r.observacao);
-        return {
-          id: r.id, aluno_id: r.aluno_id,
-          aluno_nome:  r.users?.nome  ?? '—',
-          aluno_serie: r.users?.serie ?? null,
-          valor:       Number(r.valor),
-          data_entrada: r.pago_em ?? r.vencimento,
-          tipo, observacao: obs || null, segmento: r.segmento,
-        };
-      });
+      let rows: EntradaCaixa[] = (data ?? []).map((r: any) => ({
+        id: r.id, aluno_id: r.aluno_id,
+        aluno_nome:   r.users?.nome  ?? '—',
+        aluno_serie:  r.users?.serie ?? null,
+        valor:        Number(r.valor),
+        data_entrada: r.pago_em ?? r.vencimento,
+        tipo:         (r.tipo ?? 'mensalidade') as TipoPagamento,
+        observacao:   r.observacao || null,
+        segmento:     r.segmento,
+      }));
 
       if (busca.trim()) rows = rows.filter(r => r.aluno_nome.toLowerCase().includes(busca.toLowerCase()));
       setEntradas(rows);
@@ -269,14 +261,14 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
     const [ano, mes] = filtroMes.split('-');
     const fimDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
     const { data } = await supabase
-      .from('financeiro_mensalidades').select('valor, observacao').eq('status', 'pago').eq('segmento', segmentoGestor)
+      .from('financeiro_mensalidades').select('valor, tipo').eq('status', 'pago').eq('segmento', segmentoGestor)
       .gte('pago_em', `${ano}-${mes}-01T00:00:00`)
       .lte('pago_em', `${ano}-${mes}-${String(fimDia).padStart(2,'0')}T23:59:59`);
     const rows = data ?? [];
     setTotalMes(rows.reduce((s, r) => s + Number(r.valor), 0));
     setQtdMes(rows.length);
-    setTotalMensalidade(rows.filter(r => !r.observacao || r.observacao.startsWith('tipo:mensalidade')).reduce((s, r) => s + Number(r.valor), 0));
-    setTotalAcordo(rows.filter(r => r.observacao?.startsWith('tipo:acordo')).reduce((s, r) => s + Number(r.valor), 0));
+    setTotalMensalidade(rows.filter(r => !r.tipo || r.tipo === 'mensalidade').reduce((s, r) => s + Number(r.valor), 0));
+    setTotalAcordo(rows.filter(r => r.tipo === 'acordo').reduce((s, r) => s + Number(r.valor), 0));
   }, [filtroMes, versao]);
 
   useEffect(() => { carregarResumo(); }, [carregarResumo]);
@@ -310,15 +302,15 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
     if (!form.data_entrada) { toast.error('Informe a data de entrada'); return; }
     setSalvando(true);
     try {
-      const obsFormatada = `tipo:${form.tipo}|${form.observacao}`.trimEnd();
       const payload = {
         aluno_id:   form.aluno_id,
         valor:      parseFloat(form.valor.replace(',', '.')),
         vencimento: form.data_entrada,
         status:     'pago',
         pago_em:    `${form.data_entrada}T12:00:00`,
-        segmento:   segmentoGestor,  // sempre salva no segmento do gestor logado
-        observacao: obsFormatada,
+        segmento:   segmentoGestor,
+        tipo:       form.tipo,
+        observacao: form.observacao.trim() || null,
       };
       if (editando) {
         const { error } = await supabase.from('financeiro_mensalidades').update(payload).eq('id', editando.id);
@@ -362,7 +354,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
 
     const { data, error } = await supabase
       .from('financeiro_mensalidades')
-      .select(`id, valor, pago_em, observacao,
+      .select(`id, tipo, valor, pago_em, observacao,
         users!financeiro_mensalidades_aluno_id_fkey (nome, serie)`)
       .eq('status', 'pago')
       .eq('segmento', segmentoGestor)
@@ -375,16 +367,14 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
     const mesNome = new Date(parseInt(ano), parseInt(mes) - 1, 1)
       .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-    const rows = (data ?? []).map((r: any) => {
-      const { tipo, obs } = parseTipoObs(r.observacao);
-      return {
-        nome:  r.users?.nome  ?? '—',
-        serie: r.users?.serie ?? '—',
-        tipo, obs,
-        valor: Number(r.valor),
-        data:  formatDate(r.pago_em ?? ''),
-      };
-    });
+    const rows = (data ?? []).map((r: any) => ({
+      nome:  r.users?.nome  ?? '—',
+      serie: r.users?.serie ?? '—',
+      tipo:  (r.tipo ?? 'mensalidade') as TipoPagamento,
+      obs:   r.observacao ?? '',
+      valor: Number(r.valor),
+      data:  formatDate(r.pago_em ?? ''),
+    }));
 
     const totalGeral = rows.reduce((s, r) => s + r.valor, 0);
     const totalPorTipo = TIPOS_PAGAMENTO.map(t => ({

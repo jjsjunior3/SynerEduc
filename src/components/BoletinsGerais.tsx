@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useSegmento } from '../hooks/useSegmento';
-import { calcularNota } from '../utils/calculoNotas';
 
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -47,21 +46,21 @@ interface NotaEmEdicao {
 export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
   const { segmento, isPresencial } = useSegmento();
 
-  const [carregando, setCarregando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [series, setSeries] = useState<string[]>([]);
-  const [filtroSerie, setFiltroSerie] = useState('todas');
+  const [carregando, setCarregando]         = useState(false);
+  const [erro, setErro]                     = useState<string | null>(null);
+  const [series, setSeries]                 = useState<string[]>([]);
+  const [filtroSerie, setFiltroSerie]       = useState('todas');
   const [filtroBimestre, setFiltroBimestre] = useState('todos');
-  const [busca, setBusca] = useState('');
+  const [busca, setBusca]                   = useState('');
   const [filtrosAplicados, setFiltrosAplicados] = useState(false);
-  const [alunos, setAlunos] = useState<Aluno[]>([]);
-  const [notas, setNotas] = useState<Nota[]>([]);
+  const [alunos, setAlunos]                 = useState<Aluno[]>([]);
+  const [notas, setNotas]                   = useState<Nota[]>([]);
   const [disciplinasPorSerie, setDisciplinasPorSerie] = useState<Record<string, Disciplina[]>>({});
   const [alunosExpandidos, setAlunosExpandidos] = useState<Set<string>>(new Set());
-  const [notaEmEdicao, setNotaEmEdicao] = useState<NotaEmEdicao | null>(null);
-  const [salvandoNota, setSalvandoNota] = useState(false);
+  const [notaEmEdicao, setNotaEmEdicao]     = useState<NotaEmEdicao | null>(null);
+  const [salvandoNota, setSalvandoNota]     = useState(false);
 
-  // Carregar séries filtradas pelo segmento do coordenador
+  // ─── Carregar séries do segmento ─────────────────────────────────────────
   useEffect(() => {
     async function carregarSeries() {
       try {
@@ -78,17 +77,66 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     carregarSeries();
   }, [segmento]);
 
+  // ─── Cálculo de média — regras por segmento ───────────────────────────────
+  /**
+   * EAD:
+   *   Média = (AV1 + AV2) / 2
+   *   REC substitui a menor nota entre AV1/AV2 se REC > menor → recalcula
+   *
+   * Presencial:
+   *   Média = (AV1 + AV2 + AV3) / 3
+   *   REC substitui a média diretamente se REC > média
+   */
+  const calcularMedia = (nota: {
+    av1: number | null; av2: number | null;
+    av3: number | null; rec: number | null;
+  }): number => {
+    if (isPresencial) {
+      const av1 = nota.av1 ?? 0;
+      const av2 = nota.av2 ?? 0;
+      const av3 = nota.av3 ?? 0;
+      const media = (av1 + av2 + av3) / 3;
+      // REC substitui a média diretamente
+      if (nota.rec !== null && nota.rec > media) {
+        return Math.round(nota.rec * 100) / 100;
+      }
+      return Math.round(media * 100) / 100;
+    } else {
+      const av1 = nota.av1 ?? 0;
+      const av2 = nota.av2 ?? 0;
+      // REC substitui a menor nota entre AV1/AV2
+      if (nota.rec !== null) {
+        const menor = Math.min(av1, av2);
+        if (nota.rec > menor) {
+          const maior = Math.max(av1, av2);
+          return Math.round(((maior + nota.rec) / 2) * 100) / 100;
+        }
+      }
+      return Math.round(((av1 + av2) / 2) * 100) / 100;
+    }
+  };
+
+  /**
+   * Situação do bimestre.
+   * Presencial: exige AV3 para não ser Pendente.
+   * Aprovação: média >= 7.0 (igual para ambos os segmentos).
+   */
+  const calcularSituacao = (nota: NotaDisciplinaView): 'Aprovado' | 'Recuperação' | 'Pendente' => {
+    if (nota.av1 === null && nota.av2 === null) return 'Pendente';
+    if (isPresencial && nota.av3 === null) return 'Pendente';
+    return calcularMedia(nota) >= 7 ? 'Aprovado' : 'Recuperação';
+  };
+
+  // ─── Aplicar filtros ──────────────────────────────────────────────────────
   async function aplicarFiltros() {
     setCarregando(true); setErro(null); setFiltrosAplicados(true); setAlunosExpandidos(new Set());
     try {
-      // Filtra alunos pelo segmento do coordenador
       let queryAlunos = supabase
         .from('users')
         .select('id, nome, email, serie')
         .eq('tipo', 'aluno')
         .eq('segmento', segmento)
         .order('nome');
-
       if (filtroSerie !== 'todas') queryAlunos = queryAlunos.eq('serie', filtroSerie);
       const { data: alunosData, error: alunosError } = await queryAlunos;
       if (alunosError) throw alunosError;
@@ -128,7 +176,8 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
 
       const discPorSerieFinal: Record<string, Disciplina[]> = {};
       Object.keys(discPorSerieMap).forEach(serieNome => {
-        discPorSerieFinal[serieNome] = Array.from(discPorSerieMap[serieNome].values()).sort((a, b) => a.nome.localeCompare(b.nome));
+        discPorSerieFinal[serieNome] = Array.from(discPorSerieMap[serieNome].values())
+          .sort((a, b) => a.nome.localeCompare(b.nome));
       });
       setDisciplinasPorSerie(discPorSerieFinal);
 
@@ -153,6 +202,7 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     } finally { setCarregando(false); }
   }
 
+  // ─── Montar boletins ──────────────────────────────────────────────────────
   const boletins: BoletimAlunoView[] = useMemo(() => {
     if (!alunos.length) return [];
     const map = new Map<string, BoletimAlunoView>();
@@ -176,7 +226,8 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       map.set(key, boletim);
 
       const notasAlunoMap = new Map<string, Nota>();
-      notas.filter(n => n.user_id === aluno.id && n.bimestre === bimestreNumero)
+      notas
+        .filter(n => n.user_id === aluno.id && n.bimestre === bimestreNumero)
         .forEach(n => { if (n.disciplina_id) notasAlunoMap.set(n.disciplina_id, n); });
 
       const disciplinasDaSerie = disciplinasPorSerie[aluno.serie] || [];
@@ -199,24 +250,12 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       }
     }
 
-    return Array.from(map.values()).sort((a, b) => a.nomeAluno.localeCompare(b.nomeAluno, 'pt-BR', { sensitivity: 'base' }));
+    return Array.from(map.values()).sort((a, b) =>
+      a.nomeAluno.localeCompare(b.nomeAluno, 'pt-BR', { sensitivity: 'base' })
+    );
   }, [alunos, notas, filtroBimestre, disciplinasPorSerie]);
 
-  // Cálculo via utilitário centralizado
-  const calcularMedia = (nota: { av1: number | null; av2: number | null; av3: number | null; rec: number | null }) => {
-    const resultado = calcularNota(
-      { av1: nota.av1, av2: nota.av2, av3: nota.av3, recuperacao: nota.rec },
-      segmento
-    );
-    return resultado.mediaFinal ?? 0;
-  };
-
-  const calcularSituacao = (nota: NotaDisciplinaView): 'Aprovado' | 'Recuperação' | 'Pendente' => {
-    if (nota.av1 === null && nota.av2 === null && nota.rec === null) return 'Pendente';
-    if (isPresencial && nota.av3 === null) return 'Pendente';
-    return calcularMedia(nota) >= 7 ? 'Aprovado' : 'Recuperação';
-  };
-
+  // ─── Helpers visuais ──────────────────────────────────────────────────────
   const getSituacaoStyle = (situacao: string) => {
     if (situacao === 'Aprovado')    return { bg: '#dcfce7', text: '#14532d', border: '#86efac' };
     if (situacao === 'Recuperação') return { bg: '#fef9c3', text: '#713f12', border: '#fde047' };
@@ -236,6 +275,7 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     return novo;
   });
 
+  // ─── Edição de nota ───────────────────────────────────────────────────────
   function abrirEdicaoNota(boletim: BoletimAlunoView, nota: NotaDisciplinaView) {
     const registro = notas.find(n =>
       n.user_id === boletim.alunoId &&
@@ -263,14 +303,21 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     setSalvandoNota(true);
     try {
       const { alunoId, disciplinaId, bimestre, av1, av2, av3, rec, notaRegistroId } = notaEmEdicao;
+
+      // ✅ Usa a função local que aplica a regra correta por segmento
       const mediaCalculada = calcularMedia({ av1, av2, av3, rec });
+
       const payload: any = {
-        user_id: alunoId, disciplina_id: disciplinaId, bimestre,
-        av1, av2,
-        av3: isPresencial ? av3 : null,
-        recuperacao: rec,
-        media: mediaCalculada,
-        media_final: mediaCalculada,
+        user_id:       alunoId,
+        disciplina_id: disciplinaId,
+        bimestre,
+        av1,
+        av2,
+        // AV3 só salva para presencial
+        av3:           isPresencial ? (av3 ?? null) : null,
+        recuperacao:   rec,
+        media:         mediaCalculada,
+        media_final:   mediaCalculada,
         segmento,
       };
 
@@ -296,11 +343,11 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     finally { setSalvandoNota(false); }
   }
 
-  // Linha de nota para uso na tabela — condicional por segmento
   const notaEmEdicaoPreview = notaEmEdicao
     ? { av1: notaEmEdicao.av1, av2: notaEmEdicao.av2, av3: notaEmEdicao.av3, rec: notaEmEdicao.rec }
     : null;
 
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
 
@@ -323,7 +370,8 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
               <Label className="text-muted-foreground text-xs">Buscar Aluno</Label>
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="     Nome ou email..." className="pl-9" />
+                <Input value={busca} onChange={e => setBusca(e.target.value)}
+                  placeholder="Nome ou email..." className="pl-9" />
               </div>
             </div>
             <div className="space-y-2">
@@ -351,7 +399,8 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
             </div>
           </div>
           <div className="mt-5 flex pt-4 justify-end">
-            <Button onClick={aplicarFiltros} disabled={carregando} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 px-8">
+            <Button onClick={aplicarFiltros} disabled={carregando}
+              className="bg-blue-600 hover:bg-blue-700 text-white gap-2 px-8">
               {carregando
                 ? <><Loader2 className="w-4 h-4 animate-spin" />Processando...</>
                 : <><Search className="w-4 h-4" />Aplicar Filtros</>}
@@ -391,10 +440,15 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
         <div className="space-y-4">
           {boletins.map(boletim => {
             const expandido = alunosExpandidos.has(boletim.id);
-            const comNota = boletim.notas.filter(n => n.av1 !== null || n.av2 !== null || n.rec !== null).length;
+            const comNota = boletim.notas.filter(n =>
+              n.av1 !== null || n.av2 !== null || n.rec !== null
+            ).length;
 
             return (
-              <Card key={boletim.id} className={`overflow-hidden transition-all ${expandido ? 'border-blue-400 dark:border-blue-700 shadow-md' : 'hover:shadow-md'}`}>
+              <Card key={boletim.id}
+                className={`overflow-hidden transition-all ${expandido
+                  ? 'border-blue-400 dark:border-blue-700 shadow-md'
+                  : 'hover:shadow-md'}`}>
                 <CardHeader
                   className={`cursor-pointer transition-colors ${expandido ? 'bg-muted/40' : 'hover:bg-muted/20'}`}
                   onClick={() => toggleAluno(boletim.id)}
@@ -461,11 +515,12 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                               </thead>
                               <tbody className="divide-y divide-border">
                                 {boletim.notas.map(nota => {
-                                  const media = calcularMedia(nota);
+                                  const media    = calcularMedia(nota);
                                   const situacao = calcularSituacao(nota);
-                                  const estilo = getSituacaoStyle(situacao);
+                                  const estilo   = getSituacaoStyle(situacao);
                                   return (
-                                    <tr key={nota.disciplinaId} className="hover:bg-muted/30 transition-colors group">
+                                    <tr key={nota.disciplinaId}
+                                      className="hover:bg-muted/30 transition-colors group">
                                       <td className="py-3 px-4 font-medium text-foreground">{nota.disciplinaNome}</td>
                                       <td className="py-3 px-4 text-center text-muted-foreground">
                                         {nota.av1 !== null ? nota.av1.toFixed(1) : <span className="opacity-40">—</span>}
@@ -485,14 +540,12 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                                       </td>
                                       <td className="py-3 px-4 text-center">
                                         <span className={`font-bold text-base ${getMediaColor(media, situacao)}`}>
-                                          {media.toFixed(1)}
+                                          {situacao === 'Pendente' ? '—' : media.toFixed(1)}
                                         </span>
                                       </td>
                                       <td className="py-3 px-4 text-center">
-                                        <span
-                                          className="text-xs font-semibold px-3 py-1.5 rounded-full border"
-                                          style={{ backgroundColor: estilo.bg, color: estilo.text, borderColor: estilo.border }}
-                                        >
+                                        <span className="text-xs font-semibold px-3 py-1.5 rounded-full border"
+                                          style={{ backgroundColor: estilo.bg, color: estilo.text, borderColor: estilo.border }}>
                                           {situacao}
                                         </span>
                                       </td>
@@ -511,14 +564,15 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                             </table>
                           </div>
 
+                          {/* Legenda da regra de cálculo */}
                           <div className="flex items-start gap-2 p-3 rounded-lg text-xs"
                             style={{ backgroundColor: '#dbeafe', color: '#1e3a8a' }}>
                             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                             <span>
-                              <strong>Regra:</strong>{' '}
+                              <strong>Regra de cálculo:</strong>{' '}
                               {isPresencial
-                                ? 'Média = (AV1 + AV2 + AV3) / 3. Se houver REC maior que a média, ela substitui. Aprovação ≥ 7,0.'
-                                : 'Média = (AV1 + AV2) / 2. Se houver REC maior que a menor nota, ela a substitui. Aprovação ≥ 7,0.'}
+                                ? 'Presencial — Média = (AV1 + AV2 + AV3) ÷ 3. A REC substitui a média diretamente se for maior. Aprovação ≥ 7,0.'
+                                : 'EAD — Média = (AV1 + AV2) ÷ 2. A REC substitui a menor nota entre AV1/AV2 se for maior, recalculando a média. Aprovação ≥ 7,0.'}
                             </span>
                           </div>
                         </div>
@@ -544,32 +598,41 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
               <Edit className="w-5 h-5 text-blue-600" /> Lançamento de Notas
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Valores permitidos: 0.0 a 10.0
+              Valores permitidos: 0,0 a 10,0
             </DialogDescription>
           </DialogHeader>
 
           {notaEmEdicao && (
             <div className="space-y-5">
+              {/* Info do aluno */}
               <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-lg border border-border">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                   {notaEmEdicao.nomeAluno.substring(0, 2).toUpperCase()}
                 </div>
                 <div>
                   <p className="font-semibold text-foreground text-sm">{notaEmEdicao.nomeAluno}</p>
-                  <p className="text-xs text-muted-foreground">{notaEmEdicao.disciplinaNome} • {notaEmEdicao.bimestre}º Bimestre</p>
+                  <p className="text-xs text-muted-foreground">
+                    {notaEmEdicao.disciplinaNome} • {notaEmEdicao.bimestre}º Bimestre
+                    {isPresencial && ' • Presencial'}
+                  </p>
                 </div>
               </div>
 
-              {/* Campos condicionais por segmento */}
+              {/* Campos de nota — condicionais por segmento */}
               <div className={`grid gap-4 ${isPresencial ? 'grid-cols-4' : 'grid-cols-3'}`}>
                 {(['av1', 'av2', ...(isPresencial ? ['av3'] : []), 'rec'] as const).map(campo => (
                   <div key={campo} className="space-y-2">
-                    <Label htmlFor={campo} className={`font-semibold text-sm ${campo === 'rec' ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'}`}>
+                    <Label htmlFor={campo}
+                      className={`font-semibold text-sm ${campo === 'rec'
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-foreground'}`}>
                       {campo === 'rec' ? 'REC' : campo.toUpperCase()}
                     </Label>
                     <Input
                       id={campo} type="number" min={0} max={10} step={0.1}
-                      value={notaEmEdicao[campo as keyof NotaEmEdicao] !== null ? String(notaEmEdicao[campo as keyof NotaEmEdicao]) : ''}
+                      value={notaEmEdicao[campo as keyof NotaEmEdicao] !== null
+                        ? String(notaEmEdicao[campo as keyof NotaEmEdicao])
+                        : ''}
                       onChange={e => handleChangeNota(campo as 'av1' | 'av2' | 'av3' | 'rec', e.target.value)}
                       placeholder="—"
                       className="text-center text-lg font-semibold"
@@ -578,16 +641,22 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                 ))}
               </div>
 
-              {/* Preview */}
+              {/* Preview da média com a regra correta */}
               {notaEmEdicaoPreview && (
                 <div className="p-4 bg-muted/40 rounded-lg border border-border">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Projeção</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Projeção — regra {isPresencial ? 'Presencial' : 'EAD'}
+                  </p>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Média Final</p>
                       <span className={`text-3xl font-bold ${getMediaColor(
                         calcularMedia(notaEmEdicaoPreview),
-                        calcularSituacao({ disciplinaId: notaEmEdicao.disciplinaId, disciplinaNome: notaEmEdicao.disciplinaNome, ...notaEmEdicaoPreview })
+                        calcularSituacao({
+                          disciplinaId: notaEmEdicao.disciplinaId,
+                          disciplinaNome: notaEmEdicao.disciplinaNome,
+                          ...notaEmEdicaoPreview,
+                        })
                       )}`}>
                         {calcularMedia(notaEmEdicaoPreview).toFixed(1)}
                       </span>
@@ -595,7 +664,11 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground mb-2">Situação</p>
                       {(() => {
-                        const sit = calcularSituacao({ disciplinaId: notaEmEdicao.disciplinaId, disciplinaNome: notaEmEdicao.disciplinaNome, ...notaEmEdicaoPreview });
+                        const sit = calcularSituacao({
+                          disciplinaId: notaEmEdicao.disciplinaId,
+                          disciplinaNome: notaEmEdicao.disciplinaNome,
+                          ...notaEmEdicaoPreview,
+                        });
                         const estilo = getSituacaoStyle(sit);
                         return (
                           <span className="text-sm font-semibold px-3 py-1 rounded-full border"
@@ -606,14 +679,22 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                       })()}
                     </div>
                   </div>
+                  {/* Dica da regra aplicada */}
+                  <p className="text-xs text-muted-foreground mt-3">
+                    {isPresencial
+                      ? 'REC substitui a média diretamente se for maior.'
+                      : 'REC substitui a menor nota entre AV1/AV2 se for maior.'}
+                  </p>
                 </div>
               )}
 
               <div className="flex gap-3 pt-1 border-t border-border">
-                <Button variant="outline" className="flex-1" onClick={() => setNotaEmEdicao(null)} disabled={salvandoNota}>
+                <Button variant="outline" className="flex-1"
+                  onClick={() => setNotaEmEdicao(null)} disabled={salvandoNota}>
                   Cancelar
                 </Button>
-                <Button onClick={salvarNota} disabled={salvandoNota} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                <Button onClick={salvarNota} disabled={salvandoNota}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white gap-2">
                   {salvandoNota
                     ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
                     : <><Save className="w-4 h-4" />Salvar Notas</>}

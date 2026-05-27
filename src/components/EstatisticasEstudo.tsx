@@ -16,6 +16,7 @@ import {
   Star
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface EstatisticasEstudoProps {
   tempoEstudoHoje: number;
@@ -23,17 +24,17 @@ interface EstatisticasEstudoProps {
   sequenciaDias: number;
   bimestresCompletos: number;
   tempoMedioSemanal: number;
-  darkMode?: boolean;
 }
 
 export function EstatisticasEstudo({
   tempoEstudoHoje,
-  metaDiariaMinutos = 60, // 1 hora por dia
+  metaDiariaMinutos = 60,
   sequenciaDias,
   bimestresCompletos,
   tempoMedioSemanal,
-  darkMode = false
 }: EstatisticasEstudoProps) {
+  const { theme } = useTheme();
+  const darkMode = theme === 'dark';
   const [timeUpdater, setTimeUpdater] = useState(0);
 
   // Atualizar a cada minuto para manter o tempo real
