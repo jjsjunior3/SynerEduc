@@ -19,7 +19,7 @@ Antes de abrir o Claude para implementar algo:
 
 | ID | Componente | Descrição | Issue |
 |---|---|---|---|
-| BUG-001 | `usePresence.ts:44` | `sendBeacon` sem autenticação — usuário fica "online" 2min após fechar o browser | — |
+| ~~BUG-001~~ | ~~`usePresence.ts`~~ | ~~`sendBeacon` sem autenticação~~ — já corrigido antes desta sessão | ✅ #6 |
 | ~~BUG-002~~ | ~~`DashboardAluno.tsx`~~ | ~~Datas exibidas com 1 dia a menos no Brasil (UTC-3)~~ | ✅ #2 |
 | BUG-003 | `EnviarComunicado.tsx:222,253` | `window.confirm()` em vez de `AlertDialog` | — |
 | BUG-004 | `AgendaProfessor.tsx:156`, `AgendaProfessores.tsx:200` | `window.confirm()` em vez de `AlertDialog` | — |
@@ -63,6 +63,7 @@ Antes de abrir o Claude para implementar algo:
 | BUG-015 | `console.log` de debug expondo dados em produção | #3 | `03106af6` |
 | BUG-005/006/007/010/013 | 7 componentes abandonados deletados (RelatorioConteudo, EstatisticasConteudista, MaterialEstudoModerno, ConquistasEstudante, EstatisticasEstudo, UploadConteudoPDF, AdvancedUploadComponent) | #4 | — |
 | BUG-014 | AgendaCoordenador "Configurar Grade" não é duplicação — design documentado | #5 | — |
+| BUG-001 | `sendBeacon` sem autenticação — já estava corrigido antes desta sessão | #6 | — |
 
 ---
 
@@ -77,10 +78,10 @@ Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 - [x] ~~**BUG-015**~~ — ~~Remover `console.log` de debug~~ ✅ #3
 - [x] ~~**BUG-005/006/007/010/013**~~ — ~~Remover componentes abandonados~~ ✅ #4
 - [x] ~~**BUG-014**~~ — ~~Documentar design de AgendaCoordenador~~ ✅ #5
-- [ ] **BUG-001** — Remover `sendBeacon` quebrado do `usePresence` (5 min)
+- [x] ~~**BUG-001**~~ — ~~sendBeacon sem autenticação~~ — já estava corrigido ✅ #6
 - [ ] **BUG-003 + BUG-004** — Substituir todos os `window.confirm` por `AlertDialog` (30 min)
 
-> **Progresso Fase 1:** 5/7 concluídos · Restante: ~35 min · Risco: zero
+> **Progresso Fase 1:** 6/7 concluídos · Restante: ~30 min · Risco: zero
 
 ---
 
