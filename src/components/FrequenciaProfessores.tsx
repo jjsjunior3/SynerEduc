@@ -8,7 +8,7 @@ import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import {
   ArrowLeft, Save, Loader2, Users, FileText, Plus, X, Clock,
-  CheckCircle, Edit2, ClipboardList, ChevronDown, ChevronUp,
+  CheckCircle, Edit2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../supabase/supabaseClient';
@@ -39,48 +39,15 @@ interface RegistroFrequencia {
   db_id?: string;
 }
 
-interface CargaHoraria {
-  professor_id: string;
-  professor_nome: string;
-  segmento: string;
-  seg_fund: number; seg_medio: number;
-  ter_fund: number; ter_medio: number;
-  qua_fund: number; qua_medio: number;
-  qui_fund: number; qui_medio: number;
-  sex_fund: number; sex_medio: number;
-  db_id?: string;
-  editando: boolean;
-  salvo: boolean;
-}
-
 const STATUS_CONFIG: Record<StatusPresenca, { label: string; badge: string }> = {
   presente:          { label: 'Presente',      badge: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' },
   ausente:           { label: 'Ausente',        badge: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' },
   falta_justificada: { label: 'F. Justificada', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
 };
 
-const DIAS = ['seg', 'ter', 'qua', 'qui', 'sex'] as const;
-const DIA_LABELS: Record<string, string> = {
-  seg: 'Segunda', ter: 'Terça', qua: 'Quarta', qui: 'Quinta', sex: 'Sexta'
-};
-
 function getDiaSemana(data: Date): string {
   const dias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   return dias[data.getDay()];
-}
-
-function getDiaKey(data: Date): string {
-  const keys = ['', 'seg', 'ter', 'qua', 'qui', 'sex', ''];
-  return keys[data.getDay()] || '';
-}
-
-function getSegundaFeira(data: Date): Date {
-  const d = new Date(data);
-  d.setHours(12, 0, 0, 0); // meio-dia evita qualquer problema de timezone
-  const diaSemana = d.getDay(); // 0=Dom, 1=Seg... 6=Sab
-  const diff = diaSemana === 0 ? -6 : 1 - diaSemana;
-  d.setDate(d.getDate() + diff);
-  return d;
 }
 
 function dataParaISO(data: Date): string {
@@ -103,12 +70,9 @@ export default function FrequenciaProfessores({
   const [segmento, setSegmento] = useState<'todos' | 'ead' | 'presencial'>(
     segmentoForcado ?? 'todos'
   );
-  const [registros, setRegistros]     = useState<RegistroFrequencia[]>([]);
-  const [cargas, setCargas]           = useState<CargaHoraria[]>([]);
-  const [carregando, setCarregando]   = useState(false);
-  const [todosProf, setTodosProf]     = useState<{ id: string; nome: string; segmento: string }[]>([]);
-  const [mostrarCarga, setMostrarCarga] = useState(false);
-  const [salvandoCarga, setSalvandoCarga] = useState(false);
+  const [registros, setRegistros]   = useState<RegistroFrequencia[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [todosProf, setTodosProf]   = useState<{ id: string; nome: string; segmento: string }[]>([]);
 
   // Extras
   const [extraProfId, setExtraProfId]     = useState('');
@@ -124,9 +88,7 @@ export default function FrequenciaProfessores({
   const [gerandoPDF, setGerandoPDF] = useState(false);
 
   const diaSemana     = getDiaSemana(dataSelecionada);
-  const diaKey        = getDiaKey(dataSelecionada);
   const ehFimDeSemana = diaSemana === 'Sábado' || diaSemana === 'Domingo';
-  const semanaInicio  = dataParaISO(getSegundaFeira(dataSelecionada));
 
   // ── Totais ──
   const totais = useMemo(() => ({
@@ -139,7 +101,7 @@ export default function FrequenciaProfessores({
   const registrosNormais = registros.filter(r => !r.extra);
   const registrosExtras  = registros.filter(r => r.extra);
 
-  // ── Carrega todos os professores ──
+  // ── Carrega todos os professores (usado na lista de extras) ──
   useEffect(() => {
     let q = supabase.from('users').select('id, nome, segmento')
       .in('tipo', ['professor', 'professor_conteudista'])
@@ -150,127 +112,90 @@ export default function FrequenciaProfessores({
     }))));
   }, [segmentoForcado]);
 
-  // ── Carrega carga horária da semana ──
-  const carregarCarga = useCallback(async () => {
-    // Busca professores ativos do segmento
-    let qProf = supabase.from('users').select('id, nome, segmento')
-      .in('tipo', ['professor', 'professor_conteudista'])
-      .eq('status', 'ativo').order('nome');
-
-    if (segmentoForcado)           qProf = qProf.eq('segmento', segmentoForcado);
-    else if (segmento !== 'todos') qProf = qProf.eq('segmento', segmento);
-
-    const { data: profs } = await qProf;
-
-    // Busca registros da semana atual
-    const { data: registrosSemana } = await supabase
-      .from('registro_hora_aula')
-      .select('*')
-      .eq('semana_inicio', semanaInicio);
-
-    const registrosPorProf: Record<string, any> = {};
-    (registrosSemana || []).forEach((r: any) => { registrosPorProf[r.professor_id] = r; });
-
-    // Se não houver registro, busca semana anterior para copiar
-    let semanaAnterior: Record<string, any> = {};
-    if (!registrosSemana?.length) {
-      const segundaAnterior = new Date(getSegundaFeira(dataSelecionada));
-      segundaAnterior.setDate(segundaAnterior.getDate() - 7);
-      const { data: anterior } = await supabase
-        .from('registro_hora_aula')
-        .select('*')
-        .eq('semana_inicio', dataParaISO(segundaAnterior));
-      (anterior || []).forEach((r: any) => { semanaAnterior[r.professor_id] = r; });
-    }
-
-    const novasCargas: CargaHoraria[] = (profs || []).map((p: any) => {
-      const reg = registrosPorProf[p.id] || semanaAnterior[p.id];
-      return {
-        professor_id:   p.id,
-        professor_nome: p.nome,
-        segmento:       p.segmento,
-        seg_fund:  reg?.seg_fund  ?? 0, seg_medio: reg?.seg_medio ?? 0,
-        ter_fund:  reg?.ter_fund  ?? 0, ter_medio: reg?.ter_medio ?? 0,
-        qua_fund:  reg?.qua_fund  ?? 0, qua_medio: reg?.qua_medio ?? 0,
-        qui_fund:  reg?.qui_fund  ?? 0, qui_medio: reg?.qui_medio ?? 0,
-        sex_fund:  reg?.sex_fund  ?? 0, sex_medio: reg?.sex_medio ?? 0,
-        db_id:     registrosPorProf[p.id]?.id,
-        editando:  false,
-        salvo:     !!registrosPorProf[p.id],
-      };
-    });
-
-    setCargas(novasCargas);
-  }, [semanaInicio, segmento, segmentoForcado, dataSelecionada]);
-
-  // ── Carrega frequência do dia ──
+  // ── Carrega frequência do dia usando grade_horaria como fonte permanente ──
   const carregarFrequencia = useCallback(async () => {
-    if (ehFimDeSemana || !diaKey) { setRegistros([]); return; }
+    if (ehFimDeSemana) { setRegistros([]); return; }
     setCarregando(true);
     try {
       const dataISO = dataParaISO(dataSelecionada);
 
-      // Busca carga horária da semana
-      let qCarga = supabase
-        .from('registro_hora_aula')
-        .select('*')
-        .eq('semana_inicio', semanaInicio);
+      // 1. Busca grade do dia filtrando por segmento
+      //    Cada linha = 1 aula (1 ordem na grade)
+      //    nivel da série determina se é aula fundamental ou médio
+      let qGrade = supabase
+        .from('grade_horaria')
+        .select(`
+          professor_id,
+          series!inner(id, nivel),
+          professor:users!grade_horaria_professor_id_fkey(id, nome, segmento)
+        `)
+        .eq('dia_semana', diaSemana);
 
-      if (segmentoForcado)           qCarga = qCarga.eq('segmento', segmentoForcado);
-      else if (segmento !== 'todos') qCarga = qCarga.eq('segmento', segmento);
+      if (segmentoForcado)           qGrade = qGrade.eq('segmento', segmentoForcado);
+      else if (segmento !== 'todos') qGrade = qGrade.eq('segmento', segmento);
 
-      const { data: cargasSemana } = await qCarga;
+      const { data: gradeHoje, error: erroGrade } = await qGrade;
+      if (erroGrade) throw erroGrade;
 
-      if (!cargasSemana?.length) {
-        setRegistros([]);
-        setCarregando(false);
-        return;
-      }
+      // 2. Agrupa por professor contando aulas fund/médio
+      const profMap = new Map<string, {
+        professor_id:   string;
+        professor_nome: string;
+        segmento:       string;
+        aulas_fund:     number;
+        aulas_medio:    number;
+      }>();
 
-      // Filtra professores que têm aula hoje
-      const profComAulaHoje = cargasSemana.filter((c: any) => {
-        const fund  = c[`${diaKey}_fund`]  ?? 0;
-        const medio = c[`${diaKey}_medio`] ?? 0;
-        return (fund + medio) > 0;
-      });
+      (gradeHoje || []).forEach((row: any) => {
+        const profId = row.professor_id;
+        const nivel  = row.series?.nivel ?? 'fundamental';
+        const prof   = row.professor;
 
-      if (!profComAulaHoje.length) {
-        setRegistros([]);
-        setCarregando(false);
-        return;
-      }
+        if (!profMap.has(profId)) {
+          profMap.set(profId, {
+            professor_id:   profId,
+            professor_nome: prof?.nome ?? '—',
+            segmento:       prof?.segmento ?? '',
+            aulas_fund:     0,
+            aulas_medio:    0,
+          });
+        }
 
-      // Busca nomes dos professores
-      const profIds = profComAulaHoje.map((c: any) => c.professor_id);
-      const { data: professores } = await supabase
-        .from('users').select('id, nome, segmento').in('id', profIds);
-
-      const profPorId: Record<string, any> = {};
-      (professores || []).forEach((p: any) => { profPorId[p.id] = p; });
-
-      // Busca vínculos para mostrar disciplinas
-      const { data: vinculos } = await supabase
-        .from('professores_disciplinas_series')
-        .select('professor_id, disciplina_id')
-        .in('professor_id', profIds);
-
-      const discIds = [...new Set((vinculos || []).map((v: any) => v.disciplina_id))];
-      const { data: disciplinas } = await supabase
-        .from('disciplinas').select('id, nome').in('id', discIds);
-
-      const discNomePorId: Record<string, string> = {};
-      (disciplinas || []).forEach((d: any) => { discNomePorId[d.id] = d.nome; });
-
-      const discPorProf: Record<string, string[]> = {};
-      (vinculos || []).forEach((v: any) => {
-        if (!discPorProf[v.professor_id]) discPorProf[v.professor_id] = [];
-        const nome = discNomePorId[v.disciplina_id];
-        if (nome && !discPorProf[v.professor_id].includes(nome)) {
-          discPorProf[v.professor_id].push(nome);
+        const entry = profMap.get(profId)!;
+        if (nivel === 'medio') {
+          entry.aulas_medio++;
+        } else {
+          entry.aulas_fund++;
         }
       });
 
-      // Busca frequências já salvas do dia
+      // 3. Disciplinas dos professores para exibição
+      const profIds = Array.from(profMap.keys());
+      let discPorProf: Record<string, string[]> = {};
+
+      if (profIds.length > 0) {
+        const { data: vinculos } = await supabase
+          .from('professores_disciplinas_series')
+          .select('professor_id, disciplina_id')
+          .in('professor_id', profIds);
+
+        const discIds = [...new Set((vinculos || []).map((v: any) => v.disciplina_id))];
+        const { data: disciplinas } = await supabase
+          .from('disciplinas').select('id, nome').in('id', discIds);
+
+        const discNomePorId: Record<string, string> = {};
+        (disciplinas || []).forEach((d: any) => { discNomePorId[d.id] = d.nome; });
+
+        (vinculos || []).forEach((v: any) => {
+          if (!discPorProf[v.professor_id]) discPorProf[v.professor_id] = [];
+          const nome = discNomePorId[v.disciplina_id];
+          if (nome && !discPorProf[v.professor_id].includes(nome)) {
+            discPorProf[v.professor_id].push(nome);
+          }
+        });
+      }
+
+      // 4. Frequências já salvas do dia (evita perder lançamentos anteriores)
       let qFreq = supabase
         .from('frequencia_professor')
         .select('*').eq('data', dataISO).eq('extra', false);
@@ -279,26 +204,22 @@ export default function FrequenciaProfessores({
       else if (segmento !== 'todos') qFreq = qFreq.eq('segmento', segmento);
 
       const { data: freqSalvas } = await qFreq;
-
       const freqPorProf: Record<string, any> = {};
       (freqSalvas || []).forEach((f: any) => { freqPorProf[f.professor_id] = f; });
 
-      // Monta registros
-      const novos: RegistroFrequencia[] = profComAulaHoje.map((c: any) => {
-        const prof  = profPorId[c.professor_id];
-        const salvo = freqPorProf[c.professor_id];
-        const fund  = c[`${diaKey}_fund`]  ?? 0;
-        const medio = c[`${diaKey}_medio`] ?? 0;
+      // 5. Monta lista mesclando grade + frequência salva
+      const novos: RegistroFrequencia[] = Array.from(profMap.values()).map(p => {
+        const salvo = freqPorProf[p.professor_id];
         return {
-          professor_id:         c.professor_id,
-          professor_nome:       prof?.nome ?? '—',
-          segmento:             prof?.segmento ?? c.segmento,
+          professor_id:         p.professor_id,
+          professor_nome:       p.professor_nome,
+          segmento:             p.segmento,
           presente:             salvo?.presente ?? 'presente',
-          aulas_fund:           salvo?.aulas_fund  ?? fund,
-          aulas_medio:          salvo?.aulas_medio ?? medio,
-          aulas_fund_original:  fund,
-          aulas_medio_original: medio,
-          disciplinas:          discPorProf[c.professor_id] ?? [],
+          aulas_fund:           salvo?.aulas_fund  ?? p.aulas_fund,
+          aulas_medio:          salvo?.aulas_medio ?? p.aulas_medio,
+          aulas_fund_original:  p.aulas_fund,
+          aulas_medio_original: p.aulas_medio,
+          disciplinas:          discPorProf[p.professor_id] ?? [],
           observacao:           salvo?.observacao ?? '',
           extra:                false,
           editando:             false,
@@ -307,14 +228,16 @@ export default function FrequenciaProfessores({
         };
       });
 
-      // Extras já salvos
+      // 6. Extras já salvos do dia
       const { data: extras } = await supabase
         .from('frequencia_professor')
         .select('*').eq('data', dataISO).eq('extra', true);
 
       const extrasRegistros: RegistroFrequencia[] = (extras || []).map((e: any) => ({
         professor_id:         e.professor_id,
-        professor_nome:       profPorId[e.professor_id]?.nome ?? 'Professor',
+        professor_nome:       profMap.get(e.professor_id)?.professor_nome
+                              ?? todosProf.find(p => p.id === e.professor_id)?.nome
+                              ?? 'Professor',
         segmento:             e.segmento,
         presente:             e.presente,
         aulas_fund:           e.aulas_fund,
@@ -335,10 +258,9 @@ export default function FrequenciaProfessores({
     } finally {
       setCarregando(false);
     }
-  }, [dataSelecionada, diaKey, semanaInicio, ehFimDeSemana, segmento, segmentoForcado]);
+  }, [dataSelecionada, diaSemana, ehFimDeSemana, segmento, segmentoForcado, todosProf]);
 
   useEffect(() => { carregarFrequencia(); }, [carregarFrequencia]);
-  useEffect(() => { if (mostrarCarga) carregarCarga(); }, [mostrarCarga, carregarCarga]);
 
   // ── Atualiza campo de um registro ──
   const atualizarRegistro = (profId: string, campo: keyof RegistroFrequencia, valor: any) => {
@@ -396,7 +318,7 @@ export default function FrequenciaProfessores({
     }
   };
 
-  // ── Adicionar extra ──
+  // ── Adicionar professor extra / substituto ──
   const adicionarExtra = async () => {
     if (!extraProfId) { toast.error('Selecione um professor'); return; }
     if (extraFund === 0 && extraMedio === 0) { toast.error('Informe a quantidade de aulas'); return; }
@@ -444,51 +366,7 @@ export default function FrequenciaProfessores({
     toast.success('Removido!');
   };
 
-  // ── Carga horária: atualizar campo ──
-  const atualizarCarga = (profId: string, campo: keyof CargaHoraria, valor: number) => {
-    setCargas(prev => prev.map(c =>
-      c.professor_id === profId ? { ...c, [campo]: valor, salvo: false } : c
-    ));
-  };
-
-  // ── Salvar carga horária por linha ──
-  const salvarCargaLinha = async (profId: string) => {
-    const c = cargas.find(x => x.professor_id === profId);
-    if (!c) return;
-
-    const payload = {
-      professor_id:  profId,
-      semana_inicio: semanaInicio,
-      segmento:      c.segmento,
-      seg_fund:  c.seg_fund,  seg_medio: c.seg_medio,
-      ter_fund:  c.ter_fund,  ter_medio: c.ter_medio,
-      qua_fund:  c.qua_fund,  qua_medio: c.qua_medio,
-      qui_fund:  c.qui_fund,  qui_medio: c.qui_medio,
-      sex_fund:  c.sex_fund,  sex_medio: c.sex_medio,
-      editado_em:  new Date().toISOString(),
-      editado_por: usuario?.id ?? null,
-    };
-
-    try {
-      if (c.db_id) {
-        await supabase.from('registro_hora_aula').update(payload).eq('id', c.db_id);
-      } else {
-        const { data: inserted } = await supabase
-          .from('registro_hora_aula').insert(payload).select('id').single();
-        setCargas(prev => prev.map(x =>
-          x.professor_id === profId ? { ...x, db_id: inserted?.id } : x
-        ));
-      }
-      setCargas(prev => prev.map(x =>
-        x.professor_id === profId ? { ...x, salvo: true, editando: false } : x
-      ));
-      toast.success('Carga horária salva!');
-    } catch (err: any) {
-      toast.error(`Erro: ${err.message}`);
-    }
-  };
-
-  // ── Gerar PDF ──
+  // ── Gerar PDF mensal ──
   const gerarPDF = async () => {
     setGerandoPDF(true);
     try {
@@ -658,8 +536,7 @@ export default function FrequenciaProfessores({
                 value={dataParaISO(dataSelecionada)}
                 onChange={e => {
                   const [y, m, d] = e.target.value.split('-').map(Number);
-                  const data = new Date(y, m - 1, d, 12, 0, 0); // mês é 0-indexed
-                  setDataSelecionada(data);
+                  setDataSelecionada(new Date(y, m - 1, d, 12, 0, 0));
                 }}
                 className="h-9 px-3 rounded-lg border border-border bg-background text-foreground text-sm"
               />
@@ -730,9 +607,9 @@ export default function FrequenciaProfessores({
             {registrosNormais.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
                 <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p>Nenhum professor com aulas neste dia.</p>
+                <p>Nenhum professor com aulas na grade para {diaSemana}.</p>
                 <p className="text-sm mt-1 text-amber-600 dark:text-amber-400">
-                  ⚠️ Preencha o Registro de Carga Horária Semanal primeiro.
+                  Configure a grade horária em "Agenda dos Professores → Configurar Grade".
                 </p>
               </div>
             ) : (
@@ -820,7 +697,7 @@ export default function FrequenciaProfessores({
                                 <Button size="sm"
                                   className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white gap-1 cursor-default"
                                   onClick={() => {}}>
-                                  <CheckCircle className="w-3 h-3" /> Enviado
+                                  <CheckCircle className="w-3 h-3" /> Salvo
                                 </Button>
                                 <Button size="sm" variant="outline"
                                   className="h-7 px-2 text-xs gap-1"
@@ -849,7 +726,7 @@ export default function FrequenciaProfessores({
         </Card>
       )}
 
-      {/* Professores extras */}
+      {/* Professores extras / substitutos */}
       {!ehFimDeSemana && (
         <Card className="border-border">
           <CardHeader className="border-b border-border pb-4">
@@ -942,7 +819,7 @@ export default function FrequenciaProfessores({
                             <Badge className={`text-xs ${r.salvo
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
                               : 'bg-muted text-muted-foreground'}`}>
-                              {r.salvo ? '✅ Enviado' : 'Pendente'}
+                              {r.salvo ? '✅ Salvo' : 'Pendente'}
                             </Badge>
                             <Button variant="ghost" size="sm"
                               onClick={() => removerExtra(r.professor_id, r.db_id)}
@@ -960,124 +837,6 @@ export default function FrequenciaProfessores({
           </CardContent>
         </Card>
       )}
-
-      {/* Registro de Carga Horária Semanal */}
-      <Card className="border-border">
-        <CardHeader
-          className="border-b border-border pb-4 cursor-pointer"
-          onClick={() => setMostrarCarga(!mostrarCarga)}>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base text-foreground flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-primary" />
-              Registro de Carga Horária Semanal
-              <Badge variant="outline" className="text-xs ml-1">
-                Semana de {formatarData(getSegundaFeira(dataSelecionada))}
-              </Badge>
-            </CardTitle>
-            {mostrarCarga
-              ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-              : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-          </div>
-        </CardHeader>
-
-        {mostrarCarga && (
-          <CardContent className="p-0">
-            {cargas.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                Carregando professores...
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="py-3 px-4 text-left font-medium text-muted-foreground min-w-[180px]">
-                        Professor
-                      </th>
-                      {DIAS.map(d => (
-                        <th key={d} className="py-3 px-2 text-center font-medium text-muted-foreground min-w-[110px]">
-                          {DIA_LABELS[d]}
-                          <div className="flex justify-center gap-1 mt-1">
-                            <span className="text-[10px] text-violet-500">Fund</span>
-                            <span className="text-[10px] text-orange-500">Méd</span>
-                          </div>
-                        </th>
-                      ))}
-                      <th className="py-3 px-4 text-center font-medium text-muted-foreground w-28">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cargas.map(c => (
-                      <tr key={c.professor_id}
-                        className={`border-b border-border last:border-0 transition-colors ${
-                          c.salvo && !c.editando
-                            ? 'bg-green-50/30 dark:bg-green-900/5'
-                            : 'hover:bg-muted/20'
-                        }`}>
-                        <td className="py-2 px-4">
-                          <div className="font-medium text-foreground text-sm">{c.professor_nome}</div>
-                          <div className="text-xs text-muted-foreground capitalize">{c.segmento}</div>
-                        </td>
-                        {DIAS.map(d => (
-                          <td key={d} className="py-2 px-2 border-l border-border">
-                            <div className="flex gap-1 justify-center">
-                              <Input
-                                type="number" min={0} max={10}
-                                value={(c as any)[`${d}_fund`]}
-                                disabled={c.salvo && !c.editando}
-                                onChange={e => atualizarCarga(c.professor_id, `${d}_fund` as any, Number(e.target.value))}
-                                className="h-7 w-12 text-center text-xs p-1 disabled:opacity-40
-                                  border-violet-300 dark:border-violet-700 focus:ring-violet-400"
-                                title="Fundamental"
-                              />
-                              <Input
-                                type="number" min={0} max={10}
-                                value={(c as any)[`${d}_medio`]}
-                                disabled={c.salvo && !c.editando}
-                                onChange={e => atualizarCarga(c.professor_id, `${d}_medio` as any, Number(e.target.value))}
-                                className="h-7 w-12 text-center text-xs p-1 disabled:opacity-40
-                                  border-orange-300 dark:border-orange-700 focus:ring-orange-400"
-                                title="Médio"
-                              />
-                            </div>
-                          </td>
-                        ))}
-                        <td className="py-2 px-4">
-                          <div className="flex items-center justify-center gap-1">
-                            {c.salvo && !c.editando ? (
-                              <>
-                                <Button size="sm"
-                                  className="h-7 px-2 text-xs bg-green-600 text-white gap-1 cursor-default">
-                                  <CheckCircle className="w-3 h-3" /> Salvo
-                                </Button>
-                                <Button size="sm" variant="outline"
-                                  className="h-7 px-2 text-xs"
-                                  onClick={() => setCargas(prev => prev.map(x =>
-                                    x.professor_id === c.professor_id
-                                      ? { ...x, editando: true, salvo: false } : x
-                                  ))}>
-                                  <Edit2 className="w-3 h-3" />
-                                </Button>
-                              </>
-                            ) : (
-                              <Button size="sm"
-                                className="h-7 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1"
-                                onClick={() => salvarCargaLinha(c.professor_id)}>
-                                <Save className="w-3 h-3" /> Salvar
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        )}
-      </Card>
 
       {/* Modal PDF */}
       {modalPDF && (

@@ -38,6 +38,7 @@ interface AgendaEvento {
   observacao: string | null;
   data_aula: string;
   horario: string | null;
+  criado_em: string | null;
   prazo_entrega: string | null;
   status: StatusAgenda;
   serie: string;
@@ -108,20 +109,23 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
   useEffect(() => {
     async function carregarFiltros() {
       try {
+        // Séries EAD têm segmento='fundamental', presencial têm segmento='presencial'
+        const qSeries = supabase.from('series').select('nome').eq('ativa', true).order('nome');
+        const seriesQuery = segmento === 'presencial'
+          ? qSeries.eq('segmento', 'presencial')
+          : qSeries.neq('segmento', 'presencial');
+
         const [{ data: profs }, { data: disc }, { data: seriesData }] = await Promise.all([
           // Professores do segmento
           supabase.from('users').select('id, nome')
             .eq('tipo', 'professor')
-            .eq('segmento', segmento)           // ← filtro por segmento
+            .eq('segmento', segmento)
             .order('nome'),
           // Disciplinas do segmento
           supabase.from('disciplinas').select('id, nome')
-            .eq('segmento', segmento)           // ← filtro por segmento
+            .eq('segmento', segmento)
             .order('nome'),
-          // Séries do segmento
-          supabase.from('series').select('nome')
-            .eq('segmento', segmento)           // ← filtro por segmento
-            .order('nome'),
+          seriesQuery,
         ]);
 
         setProfessores([
@@ -150,7 +154,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       try {
         let query = supabase.from('agenda_professor').select(`
           id, titulo_unidade, conteudo_sala, atividade_casa, observacao,
-          data_aula, horario, prazo_entrega, status, serie, turma,
+          data_aula, horario, criado_em, prazo_entrega, status, serie, turma,
           editado_por, enviado_em,
           professor:professor_id(id, nome),
           disciplina:disciplina_id(id, nome)
@@ -185,6 +189,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           observacao: item.observacao ?? null,
           data_aula: String(item.data_aula),
           horario: item.horario ? String(item.horario) : null,
+          criado_em: item.criado_em ? String(item.criado_em) : null,
           prazo_entrega: item.prazo_entrega ? String(item.prazo_entrega) : null,
           status: (item.status ?? 'pendente') as StatusAgenda,
           serie: String(item.serie ?? ''),
@@ -463,7 +468,11 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                     <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-3 flex-shrink-0">
                       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <Clock className="w-3.5 h-3.5" />
-                        <span>{evento.horario || 'Horário não informado'}</span>
+                        <span>
+                          {evento.criado_em
+                            ? `Lançado às ${new Date(evento.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                            : 'Horário não informado'}
+                        </span>
                       </div>
                       {evento.prazo_entrega && (
                         <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
@@ -516,7 +525,8 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
                           { label: 'Professor', value: `Prof. ${eventoSelecionado.professor_nome}` },
                           { label: 'Disciplina', value: eventoSelecionado.disciplina_nome },
                           { label: 'Data', value: formatarDataExtenso(new Date(eventoSelecionado.data_aula)) },
-                          { label: 'Horário', value: eventoSelecionado.horario || 'Não informado' },
+                          { label: 'Lançado às', value: eventoSelecionado.criado_em ? new Date(eventoSelecionado.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Não informado' },
+                          { label: 'Enviado às', value: eventoSelecionado.enviado_em ? new Date(eventoSelecionado.enviado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Não enviado' },
                           { label: 'Série', value: eventoSelecionado.serie },
                           { label: 'Turma', value: eventoSelecionado.turma || 'Não informada' },
                         ].map(item => (
