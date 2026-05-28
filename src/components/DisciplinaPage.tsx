@@ -7,16 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 
 import {
-  BookOpen, FileText, Video, MessageSquare,
+  BookOpen, FileText, Video,
   FileText as FileTextIcon, Loader2,
 } from "lucide-react";
 
 import { AtividadesAluno } from "./AtividadesAluno";
 import { AulasAoVivo } from "./AulasAoVivo";
-import { Forum } from "./Forum";
 import { PDFViewerModerno, ConteudoPdf } from "./PDFViewerModerno";
 
-type Aba = "conteudo" | "atividades" | "aulaVivo" | "forum";
+type Aba = "conteudo" | "atividades" | "aulaVivo";
 
 interface DisciplinaData {
   id: string;
@@ -63,7 +62,6 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
     { id: "conteudo"   as Aba, label: "Conteúdo",      shortLabel: "Conteúdo",   icon: BookOpen,      apenasEAD: true  },
     { id: "atividades" as Aba, label: "Atividades",    shortLabel: "Atividades", icon: FileText,      apenasEAD: false },
     { id: "aulaVivo"   as Aba, label: "Aulas ao Vivo", shortLabel: "Aulas",      icon: Video,         apenasEAD: true  },
-    { id: "forum"      as Aba, label: "Fórum",         shortLabel: "Fórum",      icon: MessageSquare, apenasEAD: true  },
   ];
 
   // Oculta abas EAD-only quando segmento é presencial
@@ -235,14 +233,6 @@ export function DisciplinaPage({ disciplina, turma, usuario }: DisciplinaPagePro
           />
         )}
 
-        {/* Aba Fórum — apenas EAD */}
-        {abaAtiva === "forum" && !isPresencial && (
-          <Forum
-            disciplina={disciplina}
-            serie={{ id: turma.serieId, nome: turma.serieNome }}
-            turma={{ id: turma.id, nome: turma.nome }}
-          />
-        )}
       </div>
     </div>
   );

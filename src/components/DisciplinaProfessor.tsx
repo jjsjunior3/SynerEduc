@@ -6,12 +6,11 @@ import { useSegmento } from "../hooks/useSegmento";
 
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { Loader2, BookOpen, FileText, Video, MessageSquare, Calendar as CalendarIcon, FileText as FileTextIcon } from "lucide-react";
+import { Loader2, BookOpen, FileText, Video, Calendar as CalendarIcon, FileText as FileTextIcon } from "lucide-react";
 
 import { PDFViewerProfessor } from "./PDFViewerProfessor";
 import { AtividadesProfessor } from "./AtividadesProfessor";
 import { FrequenciaProfessor } from "./FrequenciaProfessor";
-import { ForumProfessor } from "./ForumProfessor";
 import { AulasAoVivoProfessor } from "./AulasAoVivoProfessor";
 
 interface ConteudoPdf {
@@ -27,7 +26,7 @@ interface ConteudoPdf {
   created_at: string;
 }
 
-type Aba = "conteudo" | "atividades" | "frequencia" | "aulaVivo" | "forum";
+type Aba = "conteudo" | "atividades" | "frequencia" | "aulaVivo";
 
 interface DisciplinaProfessorProps {
   disciplina: { id: string; nome: string; cor: string };
@@ -62,7 +61,6 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
     { id: "atividades" as Aba,  label: "Atividades",   shortLabel: "Atividades", icon: FileText,      apenasEAD: false },
     { id: "frequencia" as Aba,  label: "Frequência",   shortLabel: "Frequência", icon: CalendarIcon,  apenasEAD: false },
     { id: "aulaVivo" as Aba,    label: "Aulas ao Vivo",shortLabel: "Aulas",      icon: Video,         apenasEAD: true  },
-    { id: "forum" as Aba,       label: "Fórum",        shortLabel: "Fórum",      icon: MessageSquare, apenasEAD: true  },
   ];
 
   // Oculta abas EAD-only quando segmento é presencial
@@ -254,10 +252,6 @@ export function DisciplinaProfessor({ disciplina, serie, turma, onVoltar }: Disc
           <AulasAoVivoProfessor disciplina={disciplina} serie={serie} />
         )}
 
-        {/* Aba Fórum — apenas EAD */}
-        {abaAtiva === "forum" && !isPresencial && (
-          <ForumProfessor disciplina={disciplina} serie={serie} />
-        )}
       </div>
     </div>
   );

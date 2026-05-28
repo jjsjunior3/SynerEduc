@@ -20,7 +20,6 @@ import { GerenciadorUsuarios } from "./GerenciadorUsuariosFixed";
 import { GestaoConteudoPDF } from "./GestaoConteudoPDF";
 import FrequenciaProfessores from "./FrequenciaProfessores";
 import ComunicadosPage from "./ComunicadosPage";
-import { Forum } from "./Forum";
 import { GestaoVinculos } from "./GestaoVinculos";
 import { supabase } from "../supabase/supabaseClient";
 import { useTheme } from "../contexts/ThemeContext";
@@ -55,7 +54,7 @@ interface Metricas {
 
 type ViewType =
   | "dashboard" | "cadastrar-usuario" | "gestao" | "relatorios"
-  | "admin-usuarios" | "gestao-conteudo" | "comunicados" | "forum"
+  | "admin-usuarios" | "gestao-conteudo" | "comunicados"
   | "gestao-vinculos" | "frequencia-professores";
 
 const tipoLabel: Record<string, string> = {
@@ -210,7 +209,6 @@ export function DashboardAdministrador({
     { id: "gestao-conteudo",        title: "Gestão de Conteúdo",      description: "Materiais e biblioteca",        icon: <Book        className="w-5 h-5" />, gradient: "from-teal-500/10    to-teal-600/5    dark:from-teal-500/20    dark:to-teal-900/10",    iconBg: "bg-teal-500" },
     { id: "relatorios",             title: "Relatórios",              description: "Gerar relatórios",              icon: <FileText    className="w-5 h-5" />, gradient: "from-orange-500/10  to-orange-600/5  dark:from-orange-500/20  dark:to-orange-900/10",  iconBg: "bg-orange-500" },
     { id: "comunicados",            title: "Comunicados",             description: "Enviar comunicados",            icon: <MessageSquare className="w-5 h-5" />, gradient: "from-cyan-500/10  to-cyan-600/5    dark:from-cyan-500/20    dark:to-cyan-900/10",    iconBg: "bg-cyan-500" },
-    { id: "forum",                  title: "Fórum Geral",             description: "Moderar discussões",            icon: <MessageSquare className="w-5 h-5" />, gradient: "from-purple-500/10 to-purple-600/5  dark:from-purple-500/20  dark:to-purple-900/10",  iconBg: "bg-purple-500" },
     { id: "gestao-vinculos",        title: "Gestão de Vínculos",      description: "Professores e disciplinas",     icon: <Link2       className="w-5 h-5" />, gradient: "from-slate-500/10   to-slate-600/5   dark:from-slate-500/20   dark:to-slate-900/10",   iconBg: "bg-slate-500" },
     { id: "frequencia-professores", title: "Frequência Professores",  description: "Controle diário de presença",   icon: <UserCheck   className="w-5 h-5" />, gradient: "from-rose-500/10    to-rose-600/5    dark:from-rose-500/20    dark:to-rose-900/10",    iconBg: "bg-rose-500" },
   ];
@@ -289,7 +287,6 @@ export function DashboardAdministrador({
             {viewAtual === "admin-usuarios"         && <GerenciadorUsuarios     onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "gestao-conteudo"        && <GestaoConteudoPDF       onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "comunicados"            && <ComunicadosPage         onVoltar={() => setViewAtual("dashboard")} />}
-            {viewAtual === "forum"                  && <Forum                   onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "gestao-vinculos"        && <GestaoVinculos          onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "frequencia-professores" && <FrequenciaProfessores   onVoltar={() => setViewAtual("dashboard")} usuario={usuario} />}
           </>

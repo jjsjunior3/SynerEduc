@@ -130,9 +130,12 @@ export function AtividadesAluno({
           let statusAtividade: Atividade["status"] = "pendente";
 
           if (sub) {
-            statusAtividade = "enviado";
-            if (sub.nota !== null && sub.nota !== undefined) {
+            // Usa o status salvo pelo professor como fonte primária de verdade.
+            // O professor sempre salva status='corrigido' ao corrigir (mesmo sem nota).
+            if (sub.status === 'corrigido' || (sub.nota !== null && sub.nota !== undefined)) {
               statusAtividade = "corrigido";
+            } else {
+              statusAtividade = "enviado";
             }
           } else if (agora > dataEntregaAtividade) {
             statusAtividade = "atrasado";
@@ -393,8 +396,10 @@ export function AtividadesAluno({
 
             <div className="space-y-5">
               {atividadesCorrigidas.map((atividade) => {
+                // O professor usa escala 0–10; pontuacao no banco não é preenchida
+                // pelo formulário de criação e cai em 100 por padrão. Fixamos em 10.
                 const notaColors = atividade.submissao?.nota !== undefined
-                  ? getNotaColor(atividade.submissao.nota, atividade.pontuacao)
+                  ? getNotaColor(atividade.submissao.nota, 10)
                   : null;
 
                 return (
@@ -424,9 +429,7 @@ export function AtividadesAluno({
                             <p className={`text-2xl font-bold ${notaColors.text}`}>
                               {atividade.submissao.nota}
                             </p>
-                            <p className="text-[10px] text-muted-foreground">
-                              de {atividade.pontuacao}
-                            </p>
+                            <p className="text-[10px] text-muted-foreground">de 10</p>
                           </div>
                         )}
                       </div>
@@ -547,10 +550,6 @@ export function AtividadesAluno({
                             <div className="flex items-center gap-1">
                               <Calendar className="w-4 h-4" />
                               <span>Entrega: {data} às {hora}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Target className="w-4 h-4" />
-                              <span>{atividade.pontuacao} pontos</span>
                             </div>
                           </div>
 
@@ -772,7 +771,7 @@ export function AtividadesAluno({
                 const dataEnvio = formatarDataHora(atividade.submissao!.data_entrega);
                 const dataEntrega = formatarDataHora(atividade.data_entrega);
                 const notaColors = atividade.submissao?.nota !== undefined
-                  ? getNotaColor(atividade.submissao.nota, atividade.pontuacao)
+                  ? getNotaColor(atividade.submissao.nota, 10)
                   : null;
 
                 return (
@@ -791,7 +790,7 @@ export function AtividadesAluno({
                             <div className={`${notaColors.bg} ${notaColors.border} border rounded-xl px-3 py-2 text-center flex-shrink-0`}>
                               <p className={`text-xl font-bold ${notaColors.text}`}>
                                 {atividade.submissao.nota}
-                                <span className="text-xs font-normal text-muted-foreground">/{atividade.pontuacao}</span>
+                                <span className="text-xs font-normal text-muted-foreground">/10</span>
                               </p>
                             </div>
                           )}
