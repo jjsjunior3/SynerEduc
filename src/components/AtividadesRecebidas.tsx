@@ -289,8 +289,10 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
 
       toast.success('Correção salva com sucesso!');
       setModalCorrecao({ aberto: false, submissao: null, feedback: '', nota: '', salvando: false });
-    } catch {
-      toast.error('Erro ao salvar correção.');
+    } catch (err: any) {
+      const msg = err?.message || err?.details || 'Erro ao salvar correção.';
+      toast.error(`Erro: ${msg}`);
+      console.error('[salvarCorrecao]', err);
       setModalCorrecao((p) => ({ ...p, salvando: false }));
     }
   };

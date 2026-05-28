@@ -144,6 +144,7 @@ export function AgendaProfessor({ disciplina, serie, turma, onVoltar }: AgendaPr
         turma: nomeTurma && nomeTurma !== 'Única' ? nomeTurma : null,
         data_aula: hoje(),
         segmento,                           // ← salva segmento no payload
+        status: 'pendente',                 // ← aguarda aprovação da coordenação
       };
 
       const { error } = modoEdicao

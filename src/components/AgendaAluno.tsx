@@ -110,6 +110,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
         .eq("serie", serie.nome)
         .eq("segmento", segmento)                              // ← filtro por segmento
         .eq("data_aula", dataFiltro)
+        .eq("status", "enviado")                               // ← só exibe agendas aprovadas pela coordenação
         .in("disciplina_id", disciplinasDoAluno.map(d => d.id));
 
       if (disciplinaFiltro !== 'todas') {
