@@ -105,10 +105,9 @@ export default function App() {
         setUser(novo);
         localStorage.setItem("ava_user", JSON.stringify(novo));
       },
-      onDisciplinaClick: (disciplina: any) =>
-        console.log("Disciplina selecionada:", disciplina),
-      onBoletimClick:    () => console.log("Boletim clicado"),
-      onComunicadosClick:() => console.log("Comunicados clicado"),
+      onDisciplinaClick: (_disciplina: any) => {},
+      onBoletimClick:    () => {},
+      onComunicadosClick:() => {},
     };
 
     try {

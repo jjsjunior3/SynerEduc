@@ -89,7 +89,6 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
             .maybeSingle();
 
           if (data) {
-            console.log("ID da série resolvido:", data.id);
             setSerieIdResolvido(data.id);
           } else {
             console.error("Não foi possível encontrar o ID para a série:", serieNome);

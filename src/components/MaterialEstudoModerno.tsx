@@ -81,7 +81,6 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
     setError(null);
 
     try {
-      console.log("Buscando materiais para:", disciplina.nome, "Série:", usuario?.serie);
 
       // CORREÇÃO:
       // 1. Trocamos 'arquivo_url' por 'url' (conforme seu print)
@@ -113,10 +112,6 @@ export function MaterialEstudoModerno({ disciplina, onVoltar }: Props) {
       }));
 
       setBimestres(mapped);
-
-      if (mapped.length === 0) {
-        console.log("Nenhum material encontrado. Verifique se o nome da disciplina no banco é exatamente:", disciplina.nome);
-      }
 
     } catch (err: any) {
       console.error("Erro ao carregar materiais:", err.message);
