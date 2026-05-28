@@ -9,6 +9,7 @@ import { Badge } from './ui/badge';
 import { MessageSquare, Send, Plus, Reply, Clock, Loader2, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 
@@ -43,6 +44,7 @@ export function ForumProfessor({ disciplina, serie }: ForumProfessorProps) {
   const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [respostaAberta, setRespostaAberta] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   // Estados para formulários
   const [novoTopico, setNovoTopico] = useState({ titulo: '', conteudo: '' });
@@ -168,17 +170,8 @@ export function ForumProfessor({ disciplina, serie }: ForumProfessorProps) {
   // ========================================
   // EXCLUIR TÓPICO (Apenas Professor/Admin)
   // ========================================
-  const handleExcluirTopico = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este tópico?')) return;
-    try {
-      const { error } = await supabase.from('forum_topicos').delete().eq('id', id);
-      if (error) throw error;
-      toast.success('Tópico excluído.');
-      carregarTopicos();
-    } catch (error) {
-      console.error('Erro ao excluir:', error);
-      toast.error('Erro ao excluir tópico.');
-    }
+  const handleExcluirTopico = (id: string) => {
+    setConfirmId(id);
   };
 
   // ========================================
@@ -407,6 +400,38 @@ export function ForumProfessor({ disciplina, serie }: ForumProfessorProps) {
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!confirmId} onOpenChange={() => setConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir este tópico?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground px-1">
+            As respostas também serão removidas. Esta ação não pode ser desfeita.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmId) return;
+                try {
+                  const { error } = await supabase.from('forum_topicos').delete().eq('id', confirmId);
+                  if (error) throw error;
+                  toast.success('Tópico excluído.');
+                  carregarTopicos();
+                } catch (error) {
+                  console.error('Erro ao excluir:', error);
+                  toast.error('Erro ao excluir tópico.');
+                }
+                setConfirmId(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

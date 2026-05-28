@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Loader2, Plus, Calendar, Video, Trash2, Edit, ExternalLink } from "lucide-react";
@@ -39,6 +40,7 @@ export function AgendamentoAulasVivo({ disciplinaId, nomeDisciplina, turmaId }: 
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<AulaVivo | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const [form, setForm] = useState<Partial<AulaVivo>>({
     titulo: "",
@@ -122,15 +124,8 @@ export function AgendamentoAulasVivo({ disciplinaId, nomeDisciplina, turmaId }: 
   }
 
   // --------------------------- EXCLUIR --------------------------
-  async function excluirAula(id: string) {
-    if (!confirm("Tem certeza que deseja cancelar esta aula?")) return;
-
-    const { error } = await supabase.from("aulas_ao_vivo").delete().eq("id", id);
-    if (error) toast.error("Erro ao excluir aula");
-    else {
-      toast.success("Aula removida");
-      carregarAulas();
-    }
+  function excluirAula(id: string) {
+    setConfirmId(id);
   }
 
   function abrirModalEdicao(aula: AulaVivo) {
@@ -324,6 +319,33 @@ export function AgendamentoAulasVivo({ disciplinaId, nomeDisciplina, turmaId }: 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmId} onOpenChange={() => setConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta aula?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground px-1">Esta ação não pode ser desfeita.</p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmId) return;
+                const { error } = await supabase.from("aulas_ao_vivo").delete().eq("id", confirmId);
+                if (error) toast.error("Erro ao excluir aula");
+                else {
+                  toast.success("Aula removida");
+                  carregarAulas();
+                }
+                setConfirmId(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Cancelar Aula
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

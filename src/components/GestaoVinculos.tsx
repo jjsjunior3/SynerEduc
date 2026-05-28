@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 import {
   UserPlus, Trash2, Search, Link2, Users, GraduationCap,
   BookOpen, AlertCircle, Check, ArrowLeft, XCircle, Lock,
@@ -64,6 +65,8 @@ export function GestaoVinculos({ onVoltar, segmentoForcado }: GestaoVinculosProp
   const [filtro, setFiltro]             = useState("");
   const [mostrarLista, setMostrarLista] = useState(false);
   const [carregando, setCarregando]     = useState(false);
+  const [confirmVinculo, setConfirmVinculo] = useState<string | null>(null);
+  const [confirmTodos, setConfirmTodos]     = useState<{ id: string; nome: string } | null>(null);
 
   const [filtroResumo, setFiltroResumo] = useState<"todos" | "ead" | "presencial">(
     segmentoFixo ?? "todos"
@@ -235,26 +238,12 @@ export function GestaoVinculos({ onVoltar, segmentoForcado }: GestaoVinculosProp
     } catch { toast.error("Erro ao criar vínculo"); }
   };
 
-  const removerVinculo = async (id: string) => {
-    if (!confirm("Deseja realmente excluir este vínculo?")) return;
-    try {
-      const { error } = await supabase.from("professores_disciplinas_series").delete().eq("id", id);
-      if (error) throw error;
-      setVinculos(prev => prev.filter(v => v.id !== id));
-      toast.success("Vínculo removido!");
-    } catch { toast.error("Erro ao remover vínculo"); }
+  const removerVinculo = (id: string) => {
+    setConfirmVinculo(id);
   };
 
-  const removerTodosVinculosDoProfessor = async (professorId: string, professorNome: string) => {
-    if (!confirm(`Deseja desvincular ${professorNome} de TODAS as disciplinas e séries?`)) return;
-    try {
-      let query = supabase.from("professores_disciplinas_series").delete().eq("professor_id", professorId);
-      if (segmentoFixo) query = query.eq("segmento", segmentoFixo);
-      const { error } = await query;
-      if (error) throw error;
-      setVinculos(prev => prev.filter(v => v.professorId !== professorId));
-      toast.success(`Todos os vínculos de ${professorNome} removidos!`);
-    } catch { toast.error("Erro ao remover vínculos"); }
+  const removerTodosVinculosDoProfessor = (professorId: string, professorNome: string) => {
+    setConfirmTodos({ id: professorId, nome: professorNome });
   };
 
   // ─── Dados do resumo ─────────────────────────────────────────────────────────
@@ -655,6 +644,66 @@ export function GestaoVinculos({ onVoltar, segmentoForcado }: GestaoVinculosProp
           )}
         </CardContent>
       </Card>
+
+      {/* Confirmação — remover vínculo individual */}
+      <AlertDialog open={!!confirmVinculo} onOpenChange={() => setConfirmVinculo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover este vínculo?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground px-1">Esta ação não pode ser desfeita.</p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmVinculo) return;
+                try {
+                  const { error } = await supabase.from("professores_disciplinas_series").delete().eq("id", confirmVinculo);
+                  if (error) throw error;
+                  setVinculos(prev => prev.filter(v => v.id !== confirmVinculo));
+                  toast.success("Vínculo removido!");
+                } catch { toast.error("Erro ao remover vínculo"); }
+                setConfirmVinculo(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmação — remover TODOS os vínculos do professor */}
+      <AlertDialog open={!!confirmTodos} onOpenChange={() => setConfirmTodos(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular {confirmTodos?.nome}?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground px-1">
+            Todos os vínculos deste professor serão removidos. Esta ação não pode ser desfeita.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmTodos) return;
+                try {
+                  let query = supabase.from("professores_disciplinas_series").delete().eq("professor_id", confirmTodos.id);
+                  if (segmentoFixo) query = query.eq("segmento", segmentoFixo);
+                  const { error } = await query;
+                  if (error) throw error;
+                  setVinculos(prev => prev.filter(v => v.professorId !== confirmTodos.id));
+                  toast.success(`Todos os vínculos de ${confirmTodos.nome} removidos!`);
+                } catch { toast.error("Erro ao remover vínculos"); }
+                setConfirmTodos(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Desvincular Tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

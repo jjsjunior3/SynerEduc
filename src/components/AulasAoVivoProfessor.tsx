@@ -9,6 +9,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge'; // ✅ ADICIONADO AQUI
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { 
   Video, 
@@ -52,6 +53,7 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
   const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   // Estado para o ID resolvido (UUID)
   const [serieIdResolvido, setSerieIdResolvido] = useState<string | null>(null);
@@ -186,22 +188,8 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
   // =========================================================
   // 4. EXCLUIR AULA
   // =========================================================
-  const handleExcluir = async (id: string) => {
-    if (!confirm("Tem certeza que deseja cancelar esta aula?")) return;
-
-    try {
-      const { error } = await supabase
-        .from('aulas_ao_vivo')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success("Aula cancelada.");
-      setAulas(prev => prev.filter(a => a.id !== id));
-    } catch (error) {
-      toast.error("Erro ao excluir aula.");
-    }
+  const handleExcluir = (id: string) => {
+    setConfirmId(id);
   };
 
   const formatarDataExibicao = (isoString: string) => {
@@ -367,6 +355,38 @@ export function AulasAoVivoProfessor({ disciplina, serie }: AulasAoVivoProfessor
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!confirmId} onOpenChange={() => setConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta aula?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground px-1">Esta ação não pode ser desfeita.</p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmId) return;
+                try {
+                  const { error } = await supabase
+                    .from('aulas_ao_vivo')
+                    .delete()
+                    .eq('id', confirmId);
+                  if (error) throw error;
+                  toast.success("Aula cancelada.");
+                  setAulas(prev => prev.filter(a => a.id !== confirmId));
+                } catch {
+                  toast.error("Erro ao excluir aula.");
+                }
+                setConfirmId(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Cancelar Aula
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

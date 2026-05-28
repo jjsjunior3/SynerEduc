@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogTrigger, DialogDescription,
 } from './ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { toast } from 'sonner';
 
@@ -42,6 +43,7 @@ export function AtividadesProfessor({ disciplina, serie }: AtividadesProfessorPr
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Atividade | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [loadingAtividades, setLoadingAtividades] = useState(true);
 
   const [novaAtividade, setNovaAtividade] = useState({
@@ -168,14 +170,8 @@ export function AtividadesProfessor({ disciplina, serie }: AtividadesProfessorPr
     setModalAberto(true);
   }
 
-  async function handleExcluir(id: string) {
-    if (!confirm('Excluir esta atividade?')) return;
-    try {
-      const { error } = await supabase.from('atividades').delete().eq('id', id);
-      if (error) throw error;
-      toast.success('Atividade removida!');
-      await carregarAtividades();
-    } catch { toast.error('Erro ao excluir'); }
+  function handleExcluir(id: string) {
+    setConfirmId(id);
   }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -435,6 +431,33 @@ export function AtividadesProfessor({ disciplina, serie }: AtividadesProfessorPr
           })}
         </div>
       )}
+
+      <AlertDialog open={!!confirmId} onOpenChange={() => setConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta atividade?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground px-1">Esta ação não pode ser desfeita.</p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmId) return;
+                try {
+                  const { error } = await supabase.from('atividades').delete().eq('id', confirmId);
+                  if (error) throw error;
+                  toast.success('Atividade removida!');
+                  await carregarAtividades();
+                } catch { toast.error('Erro ao excluir'); }
+                setConfirmId(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

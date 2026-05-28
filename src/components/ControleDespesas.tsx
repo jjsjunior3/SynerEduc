@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader,
   DialogTitle, DialogDescription,
 } from './ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import {
   ArrowLeft, Plus, TrendingDown, CheckCircle,
   Clock, Loader2, Edit, Save, X, RefreshCw,
@@ -112,6 +113,7 @@ export function ControleDespesas({ onVoltar }: ControleDespesasProps) {
   const [filtroCateg, setFiltroCateg]   = useState('todas');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [versao, setVersao]             = useState(0);
+  const [confirmId, setConfirmId]       = useState<string | null>(null);
 
   // Totais
   const totalGeral   = despesas.reduce((s, d) => s + d.valor_total, 0);
@@ -232,19 +234,8 @@ export function ControleDespesas({ onVoltar }: ControleDespesasProps) {
   }
 
   // ── Excluir ──────────────────────────────────────────
-  async function excluir(id: string) {
-    if (!confirm('Confirma a exclusão desta despesa?')) return;
-    try {
-      const { error } = await supabase
-        .from('financeiro_despesas')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-      toast.success('Despesa removida!');
-      setVersao(v => v + 1);
-    } catch (e: any) {
-      toast.error('Erro: ' + e.message);
-    }
+  function excluir(id: string) {
+    setConfirmId(id);
   }
 
   // ─── Render ───────────────────────────────────────────
@@ -532,6 +523,38 @@ export function ControleDespesas({ onVoltar }: ControleDespesasProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmId} onOpenChange={() => setConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta despesa?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground px-1">Esta ação não pode ser desfeita.</p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmId) return;
+                try {
+                  const { error } = await supabase
+                    .from('financeiro_despesas')
+                    .delete()
+                    .eq('id', confirmId);
+                  if (error) throw error;
+                  toast.success('Despesa removida!');
+                  setVersao(v => v + 1);
+                } catch (e: any) {
+                  toast.error('Erro: ' + e.message);
+                }
+                setConfirmId(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
