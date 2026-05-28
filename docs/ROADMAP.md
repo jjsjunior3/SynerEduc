@@ -34,13 +34,13 @@ Antes de abrir o Claude para implementar algo:
 | ~~BUG-008~~ | ~~múltiplos~~ | ~~Nome "Colégio Conexão EAD Maranhense" errado em 8 componentes~~ | ✅ #1 |
 | BUG-009 | `ControlePagamentos.tsx` | Tipo de pagamento embutido no campo `observacao` — dados estruturados misturados com texto | — |
 | ~~BUG-010~~ | ~~`UploadConteudoPDF.tsx`~~ | ~~Séries hardcoded — componente abandonado~~ | ✅ #4 |
-| BUG-011 | `GestaoEscola.tsx:363` | DELETE de série sem `count` check — turmas órfãs se o primeiro delete falhar silenciosamente | — |
+| ~~BUG-011~~ | ~~`GestaoEscola.tsx:363`~~ | ~~DELETE de série sem `count` check — turmas órfãs~~ | ✅ #8 |
 
 ### 🟢 Melhorias / Baixo impacto
 
 | ID | Componente | Descrição | Issue |
 |---|---|---|---|
-| BUG-012 | `FloatingHelpButton.tsx` | Importa `AcessoRapidoCorrecoes` que não consta no glob de componentes | — |
+| ~~BUG-012~~ | ~~`FloatingHelpButton.tsx`~~ | ~~Componente abandonado — importava `AcessoRapidoCorrecoes` inexistente~~ | ✅ #4-padrão |
 | ~~BUG-013~~ | ~~`AdvancedUploadComponent.tsx`~~ | ~~Arquivo utilitário abandonado~~ | ✅ #4 |
 | ~~BUG-014~~ | ~~`AgendaCoordenador.tsx`~~ | ~~Não é duplicação — design intencional. Ver comentário no arquivo.~~ | ✅ #5 |
 | ~~BUG-015~~ | ~~`App.tsx`, `AulasAoVivoProfessor`, `MaterialEstudoModerno`~~ | ~~`console.log` de debug expondo dados em produção~~ | ✅ #3 |
@@ -65,6 +65,8 @@ Antes de abrir o Claude para implementar algo:
 | BUG-014 | AgendaCoordenador "Configurar Grade" não é duplicação — design documentado | #5 | — |
 | BUG-001 | `sendBeacon` sem autenticação — já estava corrigido antes desta sessão | #6 | — |
 | BUG-003/004 | 7 `confirm()` → `AlertDialog` em 6 componentes | #7 | `3e7b6fe2` |
+| BUG-011 | count check no DELETE série→turmas em `GestaoEscola` | #8 | `c8821464` |
+| BUG-012 | `FloatingHelpButton` — componente abandonado deletado | — | `45f2fcad` |
 
 ---
 
@@ -92,8 +94,8 @@ Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 - [ ] **Resumo do dia no dashboard do professor** — Cards rápidos: aulas hoje, faltas lançadas, agenda pendente
 - [ ] **Dashboard do aluno — frequência** — Mini card mostrando % de presença no mês atual
 - [ ] **Atividades — contador de entregas pendentes** — Badge no menu do professor mostrando quantas atividades aguardam correção
-- [ ] **BUG-010** — Séries dinâmicas em `UploadConteudoPDF` (carregar do banco)
-- [ ] **BUG-005** — `RelatorioConteudo` com dados reais da tabela `pdfs_conteudista`
+- [x] ~~**BUG-010**~~ — ~~Séries dinâmicas em `UploadConteudoPDF`~~ — componente deletado em #4 ✅
+- [x] ~~**BUG-005**~~ — ~~`RelatorioConteudo` com dados reais~~ — componente deletado em #4 ✅
 
 ---
 
