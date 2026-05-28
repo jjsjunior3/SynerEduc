@@ -67,6 +67,7 @@ Antes de abrir o Claude para implementar algo:
 | BUG-003/004 | 7 `confirm()` → `AlertDialog` em 6 componentes | #7 | `3e7b6fe2` |
 | BUG-011 | count check no DELETE série→turmas em `GestaoEscola` | #8 | `c8821464` |
 | BUG-012 | `FloatingHelpButton` — componente abandonado deletado | — | `45f2fcad` |
+| — | `AdminUsuariosSimple` — componente abandonado deletado (auditoria segmento) | — | `e6a71161` |
 
 ---
 
@@ -113,14 +114,30 @@ Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 
 ## Segmentos com risco de vazamento (auditoria)
 
-Componentes que **ainda precisam de auditoria de segmento** (identificados no ANALISE_COMPLETA):
+Auditoria concluída em 2026-05-28. Nenhum vazamento EAD ↔ Presencial confirmado.
 
-| Componente | Tabela | Risco | Status |
-|---|---|---|---|
-| `AdminUsuariosSimple` | `users` | 🟡 Lista usuários de ambos os segmentos | Não auditado |
-| `Forum` / `ForumProfessor` | `forum_topicos` | 🟡 Fórum pode ser cross-segment | Não auditado |
-| `FrequenciaProfessores` | `frequencia_professor` | 🟡 Pode exibir professores do outro segmento | Não auditado |
-| `GestaoHorarios` | `grade_horaria` | 🟡 Verificar filtro de segmento | Não auditado |
+| Componente | Resultado | Observação |
+|---|---|---|
+| ~~`AdminUsuariosSimple`~~ | ✅ Deletado | Componente órfão — nunca chegou a nenhum usuário |
+| `Forum` | ✅ Sem risco | Placeholder puro, sem queries |
+| `ForumProfessor` | ✅ Sem risco | Filtra por `disciplina_id` (já é segmento-específico) |
+| `FrequenciaProfessores` | ✅ Sem risco | `segmentoForcado` aplicado em todas as queries |
+| `GestaoHorarios` | ✅ Sem risco | Usa `useSegmento()` hook corretamente |
+
+### ⚠️ Tech debt encontrado na auditoria
+
+**`GestaoHorarios.tsx` — migration SQL pendente (TODO de Julho/2025)**
+
+A tabela `series` ainda usa `segmento = 'fundamental'` para representar EAD (legado).
+O componente contorna isso com `segmentoBanco`, mas a migration nunca foi rodada:
+
+```sql
+UPDATE series SET segmento = 'ead' WHERE segmento = 'fundamental';
+```
+
+Impacto: filtros funcionam via workaround, mas o valor no banco está semanticamente errado.
+Risco: baixo (workaround ativo), mas pode causar confusão em queries futuras.
+**Ação:** rodar a migration SQL diretamente no Supabase e remover o `segmentoBanco` do código.
 
 ---
 
