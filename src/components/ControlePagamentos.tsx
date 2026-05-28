@@ -433,7 +433,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
         <div>
           <div style="font-size:18px;font-weight:800;color:#1d4ed8">Relatório de Caixa</div>
           <div style="font-size:11px;color:#6b7280;margin-top:3px;text-transform:capitalize">
-            Colégio Conexão EAD Maranhense &nbsp;·&nbsp; ${mesNome}
+            Colégio Conexão Maranhense &nbsp;·&nbsp; ${mesNome}
           </div>
         </div>
         <div style="text-align:right;font-size:10px;color:#9ca3af">

@@ -233,7 +233,7 @@ export function DashboardAdministrador({
           <div className="flex items-center gap-3">
             <img src={logoEscola} alt="Logo" className="w-10 h-10 object-contain" />
             <div>
-              <h1 className="font-semibold text-foreground text-sm leading-tight">Colégio Conexão EAD Maranhense</h1>
+              <h1 className="font-semibold text-foreground text-sm leading-tight">Colégio Conexão Maranhense</h1>
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                 <Shield className="w-3 h-3" /> Painel Administrativo
               </p>

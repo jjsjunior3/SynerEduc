@@ -64,7 +64,7 @@ export default function SiteInstitucional({ onAccessPortal }: SiteInstitucionalP
     e.preventDefault();
     const numeroWhatsApp = '5598983532145';
     const mensagemWhatsApp =
-      `Olá, gostaria de solicitar uma matrícula para o Colégio Conexão EAD Maranhense com os seguintes dados:%0A%0A` +
+      `Olá, gostaria de solicitar uma matrícula para o Colégio Conexão Maranhense com os seguintes dados:%0A%0A` +
       `*Nome do Aluno:* ${formularioData.nomeAluno}%0A` +
       `*Série Pretendida:* ${formularioData.serie}%0A` +
       `*Turno:* ${formularioData.turno}%0A` +
@@ -332,7 +332,7 @@ export default function SiteInstitucional({ onAccessPortal }: SiteInstitucionalP
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 text-center text-gray-400 text-sm">
-            <p>&copy; 2026 Colégio Conexão EAD Maranhense. Todos os direitos reservados.</p>
+            <p>&copy; 2026 Colégio Conexão Maranhense. Todos os direitos reservados.</p>
           </div>
         </div>
       </footer>

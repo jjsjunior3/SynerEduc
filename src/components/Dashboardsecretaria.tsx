@@ -665,7 +665,7 @@ export default function DashboardSecretaria() {
               <img src={logoEscola} alt="Colégio Conexão" className="w-10 h-10 object-contain" />
               <div>
                 <h1 className="font-semibold text-foreground text-base">
-                  Colégio Conexão EAD Maranhense
+                  Colégio Conexão Maranhense
                 </h1>
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   Painel — Secretaria

@@ -164,7 +164,7 @@ export default function DashboardConteudista({
             </div>
             <div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
-                AVA Conexão EAD
+                Portal Conexão
               </h1>
               <p className="text-xs text-gray-600">Portal Conteudista</p>
             </div>
