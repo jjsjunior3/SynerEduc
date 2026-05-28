@@ -132,6 +132,44 @@ toast.error('Mensagem de erro');
 
 ---
 
+## Fluxos de negócio críticos
+
+### Agenda (Professor → Coordenador → Aluno)
+```
+1. Professor lança agenda  →  status: 'pendente'
+2. Coordenador revisa      →  status: 'enviado'  (ou exclui)
+3. Aluno visualiza         →  só agendas com status: 'enviado'
+```
+
+### Frequência por aula
+```
+Cada aula do dia é registrada separadamente.
+Professor com 3 aulas faz 3 registros distintos — nunca agrupados.
+Status: 'presente' | 'ausente' | 'atrasado' | 'evadido'
+```
+
+### Desempenho (boletim / gráficos)
+```
+Durante o ano letivo → usar faixas de desempenho:
+  Bom      ≥ 7,0
+  Atenção  5,0 – 6,9
+  Em Risco < 5,0
+
+Label "Reprovado" só após todos os 4 bimestres serem lançados.
+```
+
+### Isolamento de segmento
+```
+Coordenador EAD      → vê APENAS dados do segmento 'ead'
+Coordenador Presencial → vê APENAS dados do segmento 'presencial'
+Administrador / Gestor → vê ambos os segmentos
+
+Filtro obrigatório em todas as queries: .eq('segmento', segmento)
+Exceção fichas_matricula: .ilike('segmento', `%${segmento}%`)
+```
+
+---
+
 ## Segmentos de ensino
 
 O sistema tem dois segmentos isolados. Cada usuário pertence a um deles.
@@ -212,12 +250,12 @@ style: ajuste visual sem mudança de lógica
 
 | Documento | Descrição |
 |-----------|-----------|
-| `README.md` | Este arquivo |
-| `docs/SKILLS.md` | Regras da stack — ler antes de codar |
-| `docs/PRD.md` | Requisitos de produto |
-| `docs/SPEC.md` | Especificação técnica das features |
-
-> Os arquivos em `docs/` estão sendo criados progressivamente.
+| [`docs/PRD.md`](docs/PRD.md) | Requisitos de produto — o "porquê" da plataforma |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Backlog priorizado — bugs e próximas features |
+| [`docs/ANALISE_COMPLETA.md`](docs/ANALISE_COMPLETA.md) | Mapa técnico de todos os 57 componentes + 15 bugs |
+| [`docs/SKILLS_SUPABASE.md`](docs/SKILLS_SUPABASE.md) | Padrões de uso do Supabase neste projeto |
+| [`docs/SKILLS_REACT.md`](docs/SKILLS_REACT.md) | Convenções de React/TypeScript |
+| [`docs/SKILLS_PATTERNS.md`](docs/SKILLS_PATTERNS.md) | Padrões gerais (dark mode, PDF, toast, segmento) |
 
 ---
 
