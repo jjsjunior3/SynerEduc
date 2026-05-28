@@ -21,8 +21,8 @@ Antes de abrir o Claude para implementar algo:
 |---|---|---|---|
 | ~~BUG-001~~ | ~~`usePresence.ts`~~ | ~~`sendBeacon` sem autenticação~~ — já corrigido antes desta sessão | ✅ #6 |
 | ~~BUG-002~~ | ~~`DashboardAluno.tsx`~~ | ~~Datas exibidas com 1 dia a menos no Brasil (UTC-3)~~ | ✅ #2 |
-| BUG-003 | `EnviarComunicado.tsx:222,253` | `window.confirm()` em vez de `AlertDialog` | — |
-| BUG-004 | `AgendaProfessor.tsx:156`, `AgendaProfessores.tsx:200` | `window.confirm()` em vez de `AlertDialog` | — |
+| ~~BUG-003~~ | ~~`EnviarComunicado.tsx:222,253`~~ | ~~`window.confirm()` em vez de `AlertDialog`~~ | ✅ #7 |
+| ~~BUG-004~~ | ~~`AgendaProfessor.tsx:156`, `AgendaProfessores.tsx:200`~~ | ~~`window.confirm()` em vez de `AlertDialog`~~ | ✅ #7 |
 
 ### 🟡 Importantes
 
@@ -64,6 +64,7 @@ Antes de abrir o Claude para implementar algo:
 | BUG-005/006/007/010/013 | 7 componentes abandonados deletados (RelatorioConteudo, EstatisticasConteudista, MaterialEstudoModerno, ConquistasEstudante, EstatisticasEstudo, UploadConteudoPDF, AdvancedUploadComponent) | #4 | — |
 | BUG-014 | AgendaCoordenador "Configurar Grade" não é duplicação — design documentado | #5 | — |
 | BUG-001 | `sendBeacon` sem autenticação — já estava corrigido antes desta sessão | #6 | — |
+| BUG-003/004 | 7 `confirm()` → `AlertDialog` em 6 componentes | #7 | `3e7b6fe2` |
 
 ---
 
@@ -79,9 +80,9 @@ Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 - [x] ~~**BUG-005/006/007/010/013**~~ — ~~Remover componentes abandonados~~ ✅ #4
 - [x] ~~**BUG-014**~~ — ~~Documentar design de AgendaCoordenador~~ ✅ #5
 - [x] ~~**BUG-001**~~ — ~~sendBeacon sem autenticação~~ — já estava corrigido ✅ #6
-- [ ] **BUG-003 + BUG-004** — Substituir todos os `window.confirm` por `AlertDialog` (30 min)
+- [x] ~~**BUG-003 + BUG-004**~~ — ~~Substituir todos os `window.confirm` por `AlertDialog`~~ ✅ #7
 
-> **Progresso Fase 1:** 6/7 concluídos · Restante: ~30 min · Risco: zero
+> **Progresso Fase 1:** 7/7 concluídos ✅ · Fase 1 completa!
 
 ---
 
