@@ -1,5 +1,5 @@
 # ROADMAP — Portal Conexão AVA
-> Backlog priorizado · Atualizado em: 2026-05-28  
+> Backlog priorizado · Atualizado em: 2026-05-28 · Última revisão: 2026-05-28  
 > Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · 🚫 Descartado
 
 ---
@@ -20,7 +20,7 @@ Antes de abrir o Claude para implementar algo:
 | ID | Componente | Descrição | Issue |
 |---|---|---|---|
 | BUG-001 | `usePresence.ts:44` | `sendBeacon` sem autenticação — usuário fica "online" 2min após fechar o browser | — |
-| BUG-002 | `DashboardAluno.tsx:77` | `new Date(dataISO)` sem `T12:00:00` — datas exibidas com 1 dia a menos no Brasil | — |
+| ~~BUG-002~~ | ~~`DashboardAluno.tsx`~~ | ~~Datas exibidas com 1 dia a menos no Brasil (UTC-3)~~ | ✅ #2 |
 | BUG-003 | `EnviarComunicado.tsx:222,253` | `window.confirm()` em vez de `AlertDialog` | — |
 | BUG-004 | `AgendaProfessor.tsx:156`, `AgendaProfessores.tsx:200` | `window.confirm()` em vez de `AlertDialog` | — |
 
@@ -31,7 +31,7 @@ Antes de abrir o Claude para implementar algo:
 | BUG-005 | `RelatorioConteudo.tsx` | Dados 100% mockados — "247 conteúdos", "89 videoaulas" são inventados | — |
 | BUG-006 | `EstatisticasConteudista.tsx` | `text-gray-900` hardcoded — texto invisível em dark mode | — |
 | BUG-007 | `ConquistasEstudante.tsx`, `EstatisticasEstudo.tsx` | Prop `darkMode: boolean` em vez de `useTheme()` — dark mode inconsistente | — |
-| BUG-008 | `school.ts` | `SCHOOL_CONFIG.name = 'Colégio Conexão EAD'` — nome errado (deve ser "Colégio Conexão Maranhense") | — |
+| ~~BUG-008~~ | ~~múltiplos~~ | ~~Nome "Colégio Conexão EAD Maranhense" errado em 8 componentes~~ | ✅ #1 |
 | BUG-009 | `ControlePagamentos.tsx` | Tipo de pagamento embutido no campo `observacao` — dados estruturados misturados com texto | — |
 | BUG-010 | `UploadConteudoPDF.tsx` | Lista de séries hardcoded — não reflete mudanças feitas via `GestaoEscola` | — |
 | BUG-011 | `GestaoEscola.tsx:363` | DELETE de série sem `count` check — turmas órfãs se o primeiro delete falhar silenciosamente | — |
@@ -43,21 +43,24 @@ Antes de abrir o Claude para implementar algo:
 | BUG-012 | `FloatingHelpButton.tsx` | Importa `AcessoRapidoCorrecoes` que não consta no glob de componentes | — |
 | BUG-013 | `AdvancedUploadComponent.tsx` | Arquivo utilitário na pasta `components/` — não exporta JSX | — |
 | BUG-014 | `AgendaCoordenador.tsx` | Aba "Configurar Grade" duplica funcionalidade de `GestaoHorarios` | — |
-| BUG-015 | `AuthContext.tsx:63,87,96,100` | `console.log` com dados do usuário em produção | — |
+| ~~BUG-015~~ | ~~`App.tsx`, `AulasAoVivoProfessor`, `MaterialEstudoModerno`~~ | ~~`console.log` de debug expondo dados em produção~~ | ✅ #3 |
 
 ---
 
 ## Bugs já corrigidos ✅
 
-| ID | Descrição | Commit |
-|---|---|---|
-| — | `notas_length_placeholder` undefined em `DashboardCoordenador` | sessão anterior |
-| — | `status: 'corrigido'` faltando no CHECK constraint de `atividades_alunos` | sessão anterior (SQL) |
-| — | Coordenador EAD via filtro `.neq()` incluía dados Presencial | `e7f20f16` |
-| — | `Desempenho Geral` contava registros de notas em vez de alunos únicos | `214d5dfb` |
-| — | Labels "Reprovados" substituídas por faixas de desempenho | `6cf65ff0` |
-| — | Agenda chegava ao aluno sem aprovação do coordenador | `a4c651f0` |
-| — | `FrequenciaProfessor` agrupava aulas — refatorado para aula independente | `9d80ce2c` |
+| ID | Descrição | Issue | Commit |
+|---|---|---|---|
+| — | `notas_length_placeholder` undefined em `DashboardCoordenador` | — | sessão anterior |
+| — | `status: 'corrigido'` faltando no CHECK constraint de `atividades_alunos` | — | SQL direto |
+| — | Coordenador EAD via filtro `.neq()` incluía dados Presencial | — | `e7f20f16` |
+| — | `Desempenho Geral` contava registros de notas em vez de alunos únicos | — | `214d5dfb` |
+| — | Labels "Reprovados" substituídas por faixas de desempenho | — | `6cf65ff0` |
+| — | Agenda chegava ao aluno sem aprovação do coordenador | — | `a4c651f0` |
+| — | `FrequenciaProfessor` agrupava aulas — refatorado para aula independente | — | `9d80ce2c` |
+| BUG-008 | Nome "Colégio Conexão EAD Maranhense" errado em 8 componentes | #1 | `e339bc85` |
+| BUG-002 | Datas com 1 dia a menos em 3 componentes (bug UTC-3) | #2 | `51986a06` |
+| BUG-015 | `console.log` de debug expondo dados em produção | #3 | `03106af6` |
 
 ---
 
@@ -67,15 +70,15 @@ Antes de abrir o Claude para implementar algo:
 
 Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 
-- [ ] **BUG-002** — Fix UTC-3 em `DashboardAluno` (10 min)
+- [x] ~~**BUG-008**~~ — ~~Corrigir nome da escola~~ ✅ #1
+- [x] ~~**BUG-002**~~ — ~~Fix UTC-3 em datas~~ ✅ #2
+- [x] ~~**BUG-015**~~ — ~~Remover `console.log` de debug~~ ✅ #3
 - [ ] **BUG-001** — Remover `sendBeacon` quebrado do `usePresence` (5 min)
 - [ ] **BUG-003 + BUG-004** — Substituir todos os `window.confirm` por `AlertDialog` (30 min)
 - [ ] **BUG-006** — Dark mode em `EstatisticasConteudista` (10 min)
 - [ ] **BUG-007** — Migrar prop `darkMode` para `useTheme()` (20 min)
-- [ ] **BUG-008** — Corrigir nome da escola em `school.ts` (5 min)
-- [ ] **BUG-015** — Remover `console.log` do `AuthContext` (5 min)
 
-> **Estimativa total Fase 1:** ~1,5 hora · Risco: zero (apenas correções)
+> **Progresso Fase 1:** 3/7 concluídos · Restante: ~1 hora · Risco: zero
 
 ---
 
