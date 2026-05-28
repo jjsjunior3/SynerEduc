@@ -107,16 +107,18 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
       const diaHoje   = diasPtBR[new Date().getDay()];
       const h7d       = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      // 1. Alunos do segmento
-      let aQ = supabase.from('users').select('id, serie').eq('tipo', 'aluno');
-      aQ = segmento === 'presencial' ? aQ.eq('segmento', 'presencial') : aQ.neq('segmento', 'presencial');
-      const { data: alunos } = await aQ;
+      // 1. Alunos do segmento — usa .eq estrito igual ao padrão do sistema
+      const { data: alunos } = await supabase
+        .from('users').select('id, serie')
+        .eq('tipo', 'aluno')
+        .eq('segmento', segmento);
       const alunoIds = (alunos || []).map((a: any) => a.id);
 
       // 2. Professores do segmento
-      let pQ = supabase.from('users').select('id').eq('tipo', 'professor');
-      pQ = segmento === 'presencial' ? pQ.eq('segmento', 'presencial') : pQ.neq('segmento', 'presencial');
-      const { data: profs } = await pQ;
+      const { data: profs } = await supabase
+        .from('users').select('id')
+        .eq('tipo', 'professor')
+        .eq('segmento', segmento);
       const profIds = (profs || []).map((p: any) => p.id);
 
       // 3. Queries paralelas
