@@ -188,11 +188,24 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
       });
       const alunosEmRisco = Array.from(freqPA.values()).filter(v => v.t >= 5 && v.p / v.t < 0.75).length;
 
-      // ── Notas / desempenho ──
-      const aprovados   = notas.filter((n: any) => n.media >= 7).length;
-      const recuperacao = notas.filter((n: any) => n.media >= 5 && n.media < 7).length;
-      const reprovados  = notas.filter((n: any) => n.media > 0 && n.media < 5).length;
-      const txAprovacao = notas.length > 0 ? Math.round((aprovados / notas.length) * 100) : 0;
+      // ── Notas / desempenho — agrupa por aluno único, não por registro ──
+      // Cada aluno pode ter várias notas (bimestre × disciplina); calcular média geral por aluno
+      const notasPorAluno = new Map<string, number[]>();
+      notas.forEach((n: any) => {
+        if (!notasPorAluno.has(n.user_id)) notasPorAluno.set(n.user_id, []);
+        notasPorAluno.get(n.user_id)!.push(Number(n.media));
+      });
+
+      let aprovados = 0, recuperacao = 0, reprovados = 0;
+      notasPorAluno.forEach((medias) => {
+        const media = medias.reduce((a, b) => a + b, 0) / medias.length;
+        if (media >= 7)      aprovados++;
+        else if (media >= 5) recuperacao++;
+        else                 reprovados++;
+      });
+      const txAprovacao = notasPorAluno.size > 0
+        ? Math.round((aprovados / notasPorAluno.size) * 100)
+        : 0;
 
       // ── Frequência por série (gráfico) ──
       const alunoSerieMap = new Map((alunos || []).map((a: any) => [a.id, a.serie as string]));
@@ -573,7 +586,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
               <CardTitle className="text-base text-foreground flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-green-600" />
                 Desempenho Geral
-                <span className="text-xs font-normal text-muted-foreground ml-auto">Todas as notas</span>
+                <span className="text-xs font-normal text-muted-foreground ml-auto">Por aluno (média geral)</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
