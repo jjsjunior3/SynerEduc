@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge';
 import {
   CheckCircle, XCircle, Loader2, Save, AlertCircle,
-  Clock, LogOut, Plus, Trash2,
+  Clock, LogOut, Plus, Trash2, CheckCircle2, Edit2,
+  ClipboardCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -90,6 +91,9 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
   const [turmaIdReal, setTurmaIdReal] = useState<string | null>(null);
   // Quantas aulas o professor ministra neste dia (padrão 1, pode adicionar até 5)
   const [totalAulasDia, setTotalAulasDia] = useState(1);
+  // Controle de estado de envio
+  const [jaEnviada, setJaEnviada]   = useState(false);
+  const [modoEdicao, setModoEdicao] = useState(false);
 
   const serieNome = typeof serie === 'string' ? serie : serie?.nome;
 
@@ -146,6 +150,10 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
       }
       setTotalAulasDia(maxAulas);
 
+      // Marca como enviada se já existem registros no banco para este dia
+      const temRegistros = (freqData?.length ?? 0) > 0;
+      setJaEnviada(temRegistros);
+
       // Monta lista
       const lista: AlunoFrequencia[] = alunosData.map((aluno: any) => {
         const registros = freqMap.get(aluno.id) ?? [];
@@ -174,6 +182,8 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
   }, [usuario?.id, disciplina?.id, serieNome, dataFrequencia, turmaIdReal]);
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
+  // Ao trocar a data, reseta o modo de visualização
+  useEffect(() => { setModoEdicao(false); }, [dataFrequencia]);
 
   // ── Adicionar mais uma aula ao dia ─────────────────────────────────────────
   const adicionarAula = () => {
@@ -302,6 +312,8 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
       }
 
       toast.success(`Frequência de ${formatarData(dataFrequencia)} salva!`);
+      setJaEnviada(true);
+      setModoEdicao(false);
       await carregarDados();
     } catch (err: any) {
       toast.error('Erro ao salvar: ' + err.message);
@@ -321,12 +333,99 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
     };
   };
 
+  // ── Helper: verifica se uma aula já está registrada no banco ─────────────
+  const aulaJaRegistrada = (num: number) =>
+    listaAlunos.length > 0 &&
+    listaAlunos.every(a => {
+      const aula = a.aulas.find(x => x.numero_aula === num);
+      return aula?.db_id !== null;
+    });
+
+  // ── Resumo total por status (todos os alunos, todas as aulas) ─────────────
+  const resumoGeral = () => {
+    let presentes = 0, ausentes = 0, atrasados = 0, evadidos = 0;
+    listaAlunos.forEach(a =>
+      a.aulas.forEach(au => {
+        if (au.status === 'presente')  presentes++;
+        else if (au.status === 'ausente')  ausentes++;
+        else if (au.status === 'atrasado') atrasados++;
+        else if (au.status === 'evadido')  evadidos++;
+      })
+    );
+    return { presentes, ausentes, atrasados, evadidos };
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <Card>
         <CardContent className="pt-6 space-y-6">
 
+          {/* ── Painel de Frequência Registrada ─────────────────────────── */}
+          {jaEnviada && !modoEdicao && !loading && listaAlunos.length > 0 && (() => {
+            const r = resumoGeral();
+            return (
+              <div className="rounded-xl border-2 border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-950/30 p-5 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                      <CheckCircle2 className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-green-800 dark:text-green-200 text-base leading-tight">
+                        Frequência Registrada
+                      </p>
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                        {formatarData(dataFrequencia)} · {totalAulasDia} aula(s) · {listaAlunos.length} alunos
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setModoEdicao(true)}
+                    className="gap-2 border-green-400 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-950/50"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Editar Frequência
+                  </Button>
+                </div>
+
+                {/* Contadores por aula */}
+                <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(totalAulasDia, 4)}, minmax(0,1fr))` }}>
+                  {Array.from({ length: totalAulasDia }, (_, i) => i + 1).map(num => {
+                    const c = contagemPorAula(num);
+                    return (
+                      <div key={num} className="rounded-lg bg-white dark:bg-green-950/40 border border-green-200 dark:border-green-700 p-3">
+                        <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-2 flex items-center gap-1.5">
+                          <ClipboardCheck className="w-3.5 h-3.5" />
+                          {num}ª Aula
+                        </p>
+                        <div className="grid grid-cols-2 gap-1 text-xs">
+                          <span className="text-green-700 dark:text-green-300 font-medium">✅ {c.presentes} presente(s)</span>
+                          <span className="text-red-600 dark:text-red-400 font-medium">❌ {c.ausentes} ausente(s)</span>
+                          {c.atrasados > 0 && <span className="text-yellow-600 dark:text-yellow-400 font-medium">⏰ {c.atrasados} atrasado(s)</span>}
+                          {c.evadidos  > 0 && <span className="text-orange-600 dark:text-orange-400 font-medium">🚪 {c.evadidos} evadido(s)</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Totais consolidados */}
+                <div className="flex flex-wrap gap-3 pt-2 border-t border-green-200 dark:border-green-700 text-xs text-green-700 dark:text-green-300">
+                  <span>Total: <strong>{r.presentes}</strong> presentes</span>
+                  <span>·</span>
+                  <span><strong>{r.ausentes}</strong> ausentes</span>
+                  {r.atrasados > 0 && <><span>·</span><span><strong>{r.atrasados}</strong> atrasados</span></>}
+                  {r.evadidos  > 0 && <><span>·</span><span><strong>{r.evadidos}</strong> evadidos</span></>}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Seletor de data (sempre visível) ───────────────────────────── */}
           {/* Controles de data e aulas */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex flex-wrap items-end gap-4">
@@ -363,8 +462,23 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
             </div>
           </div>
 
+          {/* Banner modo edição */}
+          {jaEnviada && modoEdicao && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-600">
+              <Edit2 className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+              <p className="text-xs text-amber-700 dark:text-amber-300 flex-1">
+                <strong>Modo de edição</strong> — você está editando uma frequência já registrada. As alterações substituirão os registros anteriores.
+              </p>
+              <Button variant="ghost" size="sm"
+                onClick={() => setModoEdicao(false)}
+                className="text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-950/50 text-xs h-7">
+                Cancelar
+              </Button>
+            </div>
+          )}
+
           {/* Cards de contagem por aula */}
-          {!loading && listaAlunos.length > 0 && (
+          {!loading && listaAlunos.length > 0 && (!jaEnviada || modoEdicao) && (
             <div className="space-y-4">
               {Array.from({ length: totalAulasDia }, (_, i) => i + 1).map(num => {
                 const c = contagemPorAula(num);
@@ -372,8 +486,17 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
                   <Card key={num} className="border-border bg-muted/30">
                     <CardHeader className="pb-3 pt-4 px-5 border-b border-border">
                       <div className="flex items-center justify-between flex-wrap gap-3">
-                        <CardTitle className="text-sm font-semibold text-foreground">
+                        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
                           {num}ª Aula
+                          {aulaJaRegistrada(num) ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700">
+                              <CheckCircle2 className="w-2.5 h-2.5" /> Registrada
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                              <Clock className="w-2.5 h-2.5" /> Pendente
+                            </span>
+                          )}
                         </CardTitle>
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* Contadores */}
@@ -490,7 +613,7 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
           )}
 
           {/* Botão salvar */}
-          {!loading && listaAlunos.length > 0 && (
+          {!loading && listaAlunos.length > 0 && (!jaEnviada || modoEdicao) && (
             <div className="flex items-center justify-between pt-4 border-t border-border">
               <div className="text-sm text-muted-foreground hidden md:block">
                 Registrando{' '}
