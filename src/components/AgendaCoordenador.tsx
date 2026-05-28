@@ -175,11 +175,9 @@ export default function AgendaCoordenador({ onVoltar }: AgendaCoordenadorProps) 
     async function carregar() {
       try {
         // ── SÉRIES ──────────────────────────────────────────
-        // Séries EAD têm segmento='fundamental', presencial têm segmento='presencial'
+        // Migration 2026-05-28: series.segmento usa 'ead'/'presencial' diretamente.
         const qSeries = supabase.from('series').select('id, nome').eq('ativa', true).order('nome');
-        const querySeries = segmento === 'presencial'
-          ? qSeries.eq('segmento', 'presencial')
-          : qSeries.neq('segmento', 'presencial');
+        const querySeries = qSeries.eq('segmento', segmento);
 
         // ── PROFESSORES ──────────────────────────────────────
         // Professores sempre filtram por segmento 'ead' ou 'presencial'

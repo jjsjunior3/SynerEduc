@@ -48,17 +48,16 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
   const houveMudanca = JSON.stringify(grade) !== JSON.stringify(gradeOriginal);
 
   // ── Carrega séries filtradas pelo segmento ──
-  // ATENÇÃO: tabela 'series' usa 'fundamental' para EAD (legado)
-  // TODO: Julho 2025 — remover segmentoBanco e usar segmento direto após rodar:
-  // UPDATE series SET segmento = 'ead' WHERE segmento = 'fundamental';
+  // Migration rodada em 2026-05-28:
+  //   UPDATE series SET segmento = 'ead' WHERE segmento = 'fundamental';
+  // Workaround segmentoBanco removido — banco usa 'ead'/'presencial' diretamente.
   useEffect(() => {
     if (!segmento) return;
-    const segmentoBanco = segmento === 'ead' ? 'fundamental' : segmento;
 
     supabase
       .from('series')
       .select('id, nome')
-      .eq('segmento', segmentoBanco)
+      .eq('segmento', segmento)
       .eq('ativa', true)
       .order('nome')
       .then(({ data }) => { if (data) setSeriesDisponiveis(data); });

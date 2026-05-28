@@ -109,11 +109,9 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
   useEffect(() => {
     async function carregarFiltros() {
       try {
-        // Séries EAD têm segmento='fundamental', presencial têm segmento='presencial'
+        // Migration 2026-05-28: series.segmento usa 'ead'/'presencial' diretamente.
         const qSeries = supabase.from('series').select('nome').eq('ativa', true).order('nome');
-        const seriesQuery = segmento === 'presencial'
-          ? qSeries.eq('segmento', 'presencial')
-          : qSeries.neq('segmento', 'presencial');
+        const seriesQuery = qSeries.eq('segmento', segmento);
 
         const [{ data: profs }, { data: disc }, { data: seriesData }] = await Promise.all([
           // Professores do segmento
