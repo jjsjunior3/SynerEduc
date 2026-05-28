@@ -96,7 +96,7 @@ function getStatusInfo(status: string) {
   }
 }
 
-const fmt     = (d?: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '-';
+const fmt     = (d?: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
 const fmtHora = (d?: string) => d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
 
 // ─── Component ────────────────────────────────────────────────────────────────

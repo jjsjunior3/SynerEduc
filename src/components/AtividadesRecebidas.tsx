@@ -324,7 +324,7 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
   };
 
   const formatarData = (d?: string) =>
-    d ? new Date(d).toLocaleDateString('pt-BR') : '-';
+    d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
 
   const formatarDataHora = (d?: string) =>
     d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';

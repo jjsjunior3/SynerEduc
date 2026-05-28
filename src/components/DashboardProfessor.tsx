@@ -56,7 +56,7 @@ interface Comunicado {
 
 function formatarData(dataISO: string) {
   try {
-    return new Date(dataISO).toLocaleDateString("pt-BR");
+    return new Date(dataISO + 'T12:00:00').toLocaleDateString("pt-BR");
   } catch {
     return dataISO;
   }
