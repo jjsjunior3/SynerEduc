@@ -368,14 +368,33 @@ function GestaoEscola({ onVoltar, segmentoForcado }: GestaoEscolaProps) {
     if (!confirmarExcluirSerie) return;
     const { id } = confirmarExcluirSerie;
     try {
+      // 1. Excluir turmas vinculadas
       const { error: erroTurmas } = await supabase.from("turmas").delete().eq("serie_id", id);
       if (erroTurmas) throw erroTurmas;
+
+      // 2. Count check — garante que todas as turmas foram realmente removidas.
+      //    O Supabase pode retornar error:null mesmo quando a RLS bloqueia
+      //    silenciosamente, o que deixaria turmas órfãs com serie_id inválido.
+      const { count: turmasRestantes } = await supabase
+        .from("turmas")
+        .select("*", { count: "exact", head: true })
+        .eq("serie_id", id);
+
+      if (turmasRestantes && turmasRestantes > 0) {
+        throw new Error(`${turmasRestantes} turma(s) não foram excluídas — verifique as permissões.`);
+      }
+
+      // 3. Somente agora excluir a série
       const { error: erroSerie } = await supabase.from("series").delete().eq("id", id);
       if (erroSerie) throw erroSerie;
+
       setSeries(prev => prev.filter(s => s.id !== id));
       toast.success("Série e turmas excluídas!");
-    } catch { toast.error("Erro ao excluir série."); }
-    finally { setConfirmarExcluirSerie(null); }
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao excluir série.");
+    } finally {
+      setConfirmarExcluirSerie(null);
+    }
   };
 
   // ─── Filtros e contagens ─────────────────────────────────────────────────────
@@ -737,6 +756,12 @@ function GestaoEscola({ onVoltar, segmentoForcado }: GestaoEscolaProps) {
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold">{confirmarExcluirSerie?.nome}</span> e todas as turmas vinculadas serão removidas permanentemente.
             </p>
+            {confirmarExcluirSerie && confirmarExcluirSerie.totalAlunos > 0 && (
+              <p className="text-sm text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                Esta série possui <strong>{confirmarExcluirSerie.totalAlunos}</strong> aluno(s) matriculado(s).
+              </p>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
