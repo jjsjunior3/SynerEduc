@@ -1,0 +1,18 @@
+{
+  "python.defaultInterpreterPath": "",
+  "python.experiments.enabled": false,
+  "python.languageServer": "None",
+  "files.exclude": {
+    ".claude": true,
+    "build": true,
+    "build.zip": true,
+    "node_modules": true
+  },
+  "typescript.tsserver.maxTsServerMemory": 2048,
+  "typescript.disableAutomaticTypeAcquisition": true,
+  "typescript.tsserver.experimental.enableProjectDiagnostics": false,
+  "editor.formatOnSave": false,
+  "extensions.experimental.affinity": {
+    "ms-vscode.vscode-typescript-next": 1
+  }
+}

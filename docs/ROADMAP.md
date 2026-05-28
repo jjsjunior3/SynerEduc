@@ -28,12 +28,12 @@ Antes de abrir o Claude para implementar algo:
 
 | ID | Componente | Descrição | Issue |
 |---|---|---|---|
-| BUG-005 | `RelatorioConteudo.tsx` | Dados 100% mockados — "247 conteúdos", "89 videoaulas" são inventados | — |
-| BUG-006 | `EstatisticasConteudista.tsx` | `text-gray-900` hardcoded — texto invisível em dark mode | — |
-| BUG-007 | `ConquistasEstudante.tsx`, `EstatisticasEstudo.tsx` | Prop `darkMode: boolean` em vez de `useTheme()` — dark mode inconsistente | — |
+| ~~BUG-005~~ | ~~`RelatorioConteudo.tsx`~~ | ~~Dados mockados — componente abandonado~~ | ✅ #4 |
+| ~~BUG-006~~ | ~~`EstatisticasConteudista.tsx`~~ | ~~Dark mode quebrado — componente abandonado~~ | ✅ #4 |
+| ~~BUG-007~~ | ~~`ConquistasEstudante.tsx`, `EstatisticasEstudo.tsx`~~ | ~~Componentes abandonados (só usados por MaterialEstudoModerno, também abandonado)~~ | ✅ #4 |
 | ~~BUG-008~~ | ~~múltiplos~~ | ~~Nome "Colégio Conexão EAD Maranhense" errado em 8 componentes~~ | ✅ #1 |
 | BUG-009 | `ControlePagamentos.tsx` | Tipo de pagamento embutido no campo `observacao` — dados estruturados misturados com texto | — |
-| BUG-010 | `UploadConteudoPDF.tsx` | Lista de séries hardcoded — não reflete mudanças feitas via `GestaoEscola` | — |
+| ~~BUG-010~~ | ~~`UploadConteudoPDF.tsx`~~ | ~~Séries hardcoded — componente abandonado~~ | ✅ #4 |
 | BUG-011 | `GestaoEscola.tsx:363` | DELETE de série sem `count` check — turmas órfãs se o primeiro delete falhar silenciosamente | — |
 
 ### 🟢 Melhorias / Baixo impacto
@@ -41,8 +41,8 @@ Antes de abrir o Claude para implementar algo:
 | ID | Componente | Descrição | Issue |
 |---|---|---|---|
 | BUG-012 | `FloatingHelpButton.tsx` | Importa `AcessoRapidoCorrecoes` que não consta no glob de componentes | — |
-| BUG-013 | `AdvancedUploadComponent.tsx` | Arquivo utilitário na pasta `components/` — não exporta JSX | — |
-| BUG-014 | `AgendaCoordenador.tsx` | Aba "Configurar Grade" duplica funcionalidade de `GestaoHorarios` | — |
+| ~~BUG-013~~ | ~~`AdvancedUploadComponent.tsx`~~ | ~~Arquivo utilitário abandonado~~ | ✅ #4 |
+| ~~BUG-014~~ | ~~`AgendaCoordenador.tsx`~~ | ~~Não é duplicação — design intencional. Ver comentário no arquivo.~~ | ✅ #5 |
 | ~~BUG-015~~ | ~~`App.tsx`, `AulasAoVivoProfessor`, `MaterialEstudoModerno`~~ | ~~`console.log` de debug expondo dados em produção~~ | ✅ #3 |
 
 ---
@@ -61,6 +61,8 @@ Antes de abrir o Claude para implementar algo:
 | BUG-008 | Nome "Colégio Conexão EAD Maranhense" errado em 8 componentes | #1 | `e339bc85` |
 | BUG-002 | Datas com 1 dia a menos em 3 componentes (bug UTC-3) | #2 | `51986a06` |
 | BUG-015 | `console.log` de debug expondo dados em produção | #3 | `03106af6` |
+| BUG-005/006/007/010/013 | 7 componentes abandonados deletados (RelatorioConteudo, EstatisticasConteudista, MaterialEstudoModerno, ConquistasEstudante, EstatisticasEstudo, UploadConteudoPDF, AdvancedUploadComponent) | #4 | — |
+| BUG-014 | AgendaCoordenador "Configurar Grade" não é duplicação — design documentado | #5 | — |
 
 ---
 
@@ -73,12 +75,12 @@ Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 - [x] ~~**BUG-008**~~ — ~~Corrigir nome da escola~~ ✅ #1
 - [x] ~~**BUG-002**~~ — ~~Fix UTC-3 em datas~~ ✅ #2
 - [x] ~~**BUG-015**~~ — ~~Remover `console.log` de debug~~ ✅ #3
+- [x] ~~**BUG-005/006/007/010/013**~~ — ~~Remover componentes abandonados~~ ✅ #4
+- [x] ~~**BUG-014**~~ — ~~Documentar design de AgendaCoordenador~~ ✅ #5
 - [ ] **BUG-001** — Remover `sendBeacon` quebrado do `usePresence` (5 min)
 - [ ] **BUG-003 + BUG-004** — Substituir todos os `window.confirm` por `AlertDialog` (30 min)
-- [ ] **BUG-006** — Dark mode em `EstatisticasConteudista` (10 min)
-- [ ] **BUG-007** — Migrar prop `darkMode` para `useTheme()` (20 min)
 
-> **Progresso Fase 1:** 3/7 concluídos · Restante: ~1 hora · Risco: zero
+> **Progresso Fase 1:** 5/7 concluídos · Restante: ~35 min · Risco: zero
 
 ---
 

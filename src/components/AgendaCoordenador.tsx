@@ -1,4 +1,25 @@
 // src/components/AgendaCoordenador.tsx
+//
+// DESIGN — Este componente tem duas responsabilidades distintas:
+//
+// 1. Aba "Acompanhar" → Revisão e aprovação das agendas dos professores.
+//    O coordenador analisa, edita se necessário e envia ao aluno (status: 'enviado').
+//
+// 2. Aba "Configurar Grade" → Alimenta a tabela `grade_horaria` com os vínculos
+//    professor × disciplina × série × turno × segmento.
+//    Esses dados são consumidos por:
+//      - FrequenciaAluno    (relatório de frequência por turma)
+//      - FrequenciaProfessor (chamada por aula)
+//      - Controle de envio de agenda (qual professor é responsável por qual horário)
+//
+//    Por que existe separado do GestaoHorarios?
+//    O GestaoHorarios é a EXIBIÇÃO do horário para alunos e professores.
+//    "Configurar Grade" é a GESTÃO do vínculo, necessária porque um mesmo colégio
+//    pode ter múltiplos professores de Matemática com escopos distintos:
+//    ex: fund.1 EAD, fund.2 EAD, médio EAD, fund.2 Presencial — cada um com
+//    seu próprio horário e turma. Sem essa configuração, o sistema não sabe
+//    qual professor chamar em cada aula.
+//
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
