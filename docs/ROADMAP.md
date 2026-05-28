@@ -124,20 +124,10 @@ Auditoria concluída em 2026-05-28. Nenhum vazamento EAD ↔ Presencial confirma
 | `FrequenciaProfessores` | ✅ Sem risco | `segmentoForcado` aplicado em todas as queries |
 | `GestaoHorarios` | ✅ Sem risco | Usa `useSegmento()` hook corretamente |
 
-### ⚠️ Tech debt encontrado na auditoria
+### ✅ Tech debt resolvido em 2026-05-28
 
-**`GestaoHorarios.tsx` — migration SQL pendente (TODO de Julho/2025)**
-
-A tabela `series` ainda usa `segmento = 'fundamental'` para representar EAD (legado).
-O componente contorna isso com `segmentoBanco`, mas a migration nunca foi rodada:
-
-```sql
-UPDATE series SET segmento = 'ead' WHERE segmento = 'fundamental';
-```
-
-Impacto: filtros funcionam via workaround, mas o valor no banco está semanticamente errado.
-Risco: baixo (workaround ativo), mas pode causar confusão em queries futuras.
-**Ação:** rodar a migration SQL diretamente no Supabase e remover o `segmentoBanco` do código.
+**Migration SQL `series.segmento fundamental→ead`** — executada e código atualizado.
+`GestaoHorarios`, `AgendaCoordenador` e `AgendaProfessores` usam `.eq('segmento', segmento)` diretamente. Commit `4aa9c9b7`.
 
 ---
 
