@@ -92,8 +92,8 @@ Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 
 ### Fase 2 — Melhorias pedagógicas
 
-- [ ] **Notificação de agenda aprovada** — Professor recebe notificação quando coordenador aprova sua agenda
-- [ ] **Resumo do dia no dashboard do professor** — Cards rápidos: aulas hoje, faltas lançadas, agenda pendente
+- [x] ~~**Notificação de agenda aprovada**~~ — ~~Professor recebe notificação quando coordenador aprova sua agenda~~ — INSERT em `notificacoes` no `salvarEdicao` de `AgendaProfessores.tsx` ✅
+- [x] ~~**Resumo do dia no dashboard do professor**~~ — ~~Cards rápidos: aulas hoje, faltas lançadas, agenda pendente~~ — Seção "Hoje" em `DashboardProfessor.tsx` ✅
 - [x] ~~**Dashboard do aluno — frequência**~~ — ~~Mini card mostrando % de presença no mês atual~~ — já implementado em `DashboardAluno.tsx` ✅
 - [x] ~~**Atividades — contador de entregas pendentes**~~ — ~~Badge no menu do professor~~ — já implementado em `DashboardProfessor.tsx` (`totalPendentesCorrecao`) ✅
 - [x] ~~**BUG-010**~~ — ~~Séries dinâmicas em `UploadConteudoPDF`~~ — componente deletado em #4 ✅

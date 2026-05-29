@@ -73,6 +73,11 @@ export function DashboardProfessor() {
   const [totalAtividadesEnviadas, setTotalAtividadesEnviadas] = useState(0);
   const [totalPendentesCorrecao, setTotalPendentesCorrecao] = useState(0);
 
+  // Resumo do dia
+  const [aulasHoje, setAulasHoje]           = useState<number>(0);
+  const [frequenciasHoje, setFrequenciasHoje] = useState<number>(0);
+  const [agendaEnviada, setAgendaEnviada]   = useState<number>(0);
+
   const [disciplinaSelecionada, setDisciplinaSelecionada] = useState<any>(null);
   const [turmaSelecionada, setTurmaSelecionada] = useState<any>(null);
   const [serieHorario, setSerieHorario] = useState<string>("");
@@ -85,6 +90,11 @@ export function DashboardProfessor() {
   const { segmento } = useSegmento();
   const avatarRef = useRef<HTMLButtonElement>(null);
 
+  // Label do dia atual para exibição (ex: "quarta-feira, 28 de maio")
+  const diaLabel = new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
+
   const getDropdownPos = () => {
     if (!avatarRef.current) return { top: 68, right: 16 };
     const rect = avatarRef.current.getBoundingClientRect();
@@ -96,6 +106,7 @@ export function DashboardProfessor() {
       carregarTurmasProfessor();
       carregarComunicados();
       carregarContadoresAtividades();
+      carregarResumoHoje();
       fetchNotificacoesCount();
 
       const channel = supabase
@@ -178,6 +189,47 @@ export function DashboardProfessor() {
       setTotalAtividadesEnviadas(0);
       setTotalPendentesCorrecao(0);
     }
+  };
+
+  const carregarResumoHoje = async () => {
+    if (!usuario?.id || !segmento) return;
+
+    const diasDB = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const diaHoje = diasDB[new Date().getDay()];
+    const hoje = new Date().toISOString().split('T')[0];
+
+    const [gradeR, freqData, agendaR] = await Promise.all([
+      // 1. Aulas do PROFESSOR na grade_horaria para hoje (filtra pelo professor logado)
+      supabase
+        .from('grade_horaria')
+        .select('*', { count: 'exact', head: true })
+        .eq('professor_id', usuario.id)
+        .eq('dia_semana', diaHoje)
+        .eq('segmento', segmento),
+
+      // 2. Aulas de frequência lançadas PELO professor hoje (professor_id na tabela)
+      supabase
+        .from('frequencia_diaria')
+        .select('numero_aula')
+        .eq('professor_id', usuario.id)
+        .eq('data_aula', hoje),
+
+      // 3. Agendas DE HOJE aguardando aprovação do coordenador
+      supabase
+        .from('agenda_professor')
+        .select('*', { count: 'exact', head: true })
+        .eq('professor_id', usuario.id)
+        .eq('data_aula', hoje)
+        .eq('status', 'enviado'),
+    ]);
+
+    setAulasHoje(gradeR.count ?? 0);
+
+    // Conta aulas distintas lançadas (não registros por aluno)
+    const aulasDistintas = new Set((freqData.data ?? []).map((r: any) => r.numero_aula)).size;
+    setFrequenciasHoje(aulasDistintas);
+
+    setAgendaEnviada(agendaR.count ?? 0);
   };
 
   const carregarTurmasProfessor = async () => {
@@ -549,6 +601,66 @@ export function DashboardProfessor() {
           </div>
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
         </section>
+
+        {/* ── Resumo do Dia ── */}
+        {!carregando && (
+          <section>
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <div className="w-1 h-6 bg-orange-500 rounded-full" />
+              <span className="capitalize">Hoje · {diaLabel}</span>
+            </h2>
+            <div className="grid grid-cols-3 gap-4">
+
+              {/* Aulas na grade */}
+              <div className="rounded-xl p-4 flex items-center gap-3 border border-green-200 dark:border-green-800"
+                style={{ backgroundColor: 'rgba(34,197,94,0.08)' }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: 'rgba(34,197,94,0.18)' }}>
+                  <BookOpen className="w-5 h-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground hidden sm:block">Aulas na Grade</p>
+                  <p className="text-2xl font-bold text-green-700 dark:text-green-300">{aulasHoje}</p>
+                </div>
+              </div>
+
+              {/* Frequência lançada */}
+              <div className="rounded-xl p-4 flex items-center gap-3 border border-teal-200 dark:border-teal-800"
+                style={{ backgroundColor: 'rgba(20,184,166,0.08)' }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: 'rgba(20,184,166,0.18)' }}>
+                  <CheckCircle2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground hidden sm:block">Aulas c/ Freq. Lançada</p>
+                  <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{frequenciasHoje}</p>
+                </div>
+              </div>
+
+              {/* Agenda aguardando aprovação — clicável */}
+              <button
+                onClick={() => setViewAtual('agenda')}
+                className={`rounded-xl p-4 flex items-center gap-3 border text-left w-full transition-all ${
+                  agendaEnviada > 0
+                    ? 'border-amber-300 dark:border-amber-700 hover:opacity-80 cursor-pointer'
+                    : 'border-slate-200 dark:border-slate-700 cursor-default'
+                }`}
+                style={{ backgroundColor: agendaEnviada > 0 ? 'rgba(217,119,6,0.08)' : 'rgba(100,116,139,0.06)' }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: agendaEnviada > 0 ? 'rgba(217,119,6,0.18)' : 'rgba(100,116,139,0.12)' }}>
+                  <Clock className={`w-5 h-5 ${agendaEnviada > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground hidden sm:block">Agenda de Hoje p/ Aprovar</p>
+                  <p className={`text-2xl font-bold ${agendaEnviada > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {agendaEnviada}
+                  </p>
+                </div>
+              </button>
+
+            </div>
+          </section>
+        )}
 
         {/* Cards de resumo */}
         {!carregando && (

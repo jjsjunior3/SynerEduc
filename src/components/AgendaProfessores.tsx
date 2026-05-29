@@ -43,6 +43,7 @@ interface AgendaEvento {
   status: StatusAgenda;
   serie: string;
   turma: string | null;
+  professor_id: string;
   professor_nome: string;
   disciplina_nome: string;
   editado_por_nome: string | null;
@@ -192,6 +193,7 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
           status: (item.status ?? 'pendente') as StatusAgenda,
           serie: String(item.serie ?? ''),
           turma: item.turma ? String(item.turma) : null,
+          professor_id: String(item.professor?.id ?? ''),
           professor_nome: String(item.professor?.nome ?? 'Professor'),
           disciplina_nome: String(item.disciplina?.nome ?? 'Disciplina'),
           editado_por_nome: item.editado_por ? (editorMap[item.editado_por] || 'Coordenação') : null,
@@ -296,6 +298,18 @@ export default function AgendaProfessores({ onVoltar }: AgendaProfessoresProps) 
       setEventoSelecionado(atualizado);
       setModoEdicao(false);
       toast.success('Agenda atualizada com sucesso!');
+
+      // Notifica o professor que a coordenação revisou a agenda
+      if (eventoSelecionado.professor_id) {
+        const dataFormatada = formatarDataCurta(eventoSelecionado.data_aula);
+        await supabase.from('notificacoes').insert({
+          user_id:   eventoSelecionado.professor_id,
+          tipo:      'sistema',
+          titulo:    'Agenda revisada pela coordenação',
+          descricao: `Sua agenda de ${eventoSelecionado.disciplina_nome} do dia ${dataFormatada} foi revisada e ajustada pela coordenação.`,
+          lida:      false,
+        });
+      }
     } catch (err: any) {
       toast.error('Erro ao salvar: ' + err.message);
     } finally { setSalvandoEdicao(false); }
