@@ -35,6 +35,7 @@ interface EntradaCaixa {
   valor: number;
   data_entrada: string;
   tipo: TipoPagamento;
+  metodo_pagamento: string | null;
   observacao: string | null;
   segmento: string | null;
 }
@@ -52,6 +53,7 @@ interface FormNova {
   valor: string;
   data_entrada: string;
   tipo: TipoPagamento;
+  metodo_pagamento: string;
   observacao: string;
   segmento: string;
 }
@@ -61,10 +63,18 @@ const hoje = () => new Date().toISOString().split('T')[0];
 const FORM_INICIAL: FormNova = {
   aluno_id: '', aluno_nome: '', valor: '',
   data_entrada: hoje(), tipo: 'mensalidade',
-  observacao: '', segmento: 'ead',
+  metodo_pagamento: '', observacao: '', segmento: 'ead',
 };
 
 const POR_PAGINA = 10;
+
+const METODOS_PAGAMENTO = [
+  { value: 'pix',      label: 'PIX' },
+  { value: 'boleto',   label: 'Boleto' },
+  { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'cartao',   label: 'Cartão' },
+  { value: 'outro',    label: 'Outro' },
+];
 
 const TIPOS_PAGAMENTO: { value: TipoPagamento; label: string; icon: React.ReactNode; cor: string }[] = [
   { value: 'mensalidade', label: 'Mensalidade', icon: <FileCheck      className="w-4 h-4" />, cor: 'text-blue-600 dark:text-blue-400' },
@@ -190,11 +200,12 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
   const [form, setForm]                 = useState<FormNova>(FORM_INICIAL);
   const [versao, setVersao]             = useState(0);
 
-  const [busca, setBusca]           = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('todos');
-  const [filtroMes, setFiltroMes]   = useState(mesAtual);
-  const [pagina, setPagina]         = useState(1);
-  const [total, setTotal]           = useState(0);
+  const [busca, setBusca]               = useState('');
+  const [filtroTipo, setFiltroTipo]     = useState('todos');
+  const [filtroMetodo, setFiltroMetodo] = useState('todos');
+  const [filtroMes, setFiltroMes]       = useState(mesAtual);
+  const [pagina, setPagina]             = useState(1);
+  const [total, setTotal]               = useState(0);
 
   const [totalMes, setTotalMes]                   = useState(0);
   const [qtdMes, setQtdMes]                       = useState(0);
@@ -216,7 +227,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
       const to   = from + POR_PAGINA - 1;
       let q = supabase
         .from('financeiro_mensalidades')
-        .select(`id, aluno_id, tipo, valor, vencimento, status, pago_em, observacao, segmento,
+        .select(`id, aluno_id, tipo, metodo_pagamento, valor, vencimento, status, pago_em, observacao, segmento,
           users!financeiro_mensalidades_aluno_id_fkey (nome, serie)`, { count: 'exact' })
         .eq('status', 'pago')
         .eq('segmento', segmentoGestor)
@@ -230,7 +241,8 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
           .gte('pago_em', `${ano}-${mes}-01T00:00:00`)
           .lte('pago_em', `${ano}-${mes}-${String(fimDia).padStart(2,'0')}T23:59:59`);
       }
-      if (filtroTipo !== 'todos') q = q.eq('tipo', filtroTipo);
+      if (filtroTipo   !== 'todos') q = q.eq('tipo', filtroTipo);
+      if (filtroMetodo !== 'todos') q = q.eq('metodo_pagamento', filtroMetodo);
 
       const { data, count, error } = await q;
       if (error) throw error;
@@ -241,9 +253,10 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
         aluno_serie:  r.users?.serie ?? null,
         valor:        Number(r.valor),
         data_entrada: r.pago_em ?? r.vencimento,
-        tipo:         (r.tipo ?? 'mensalidade') as TipoPagamento,
-        observacao:   r.observacao || null,
-        segmento:     r.segmento,
+        tipo:             (r.tipo ?? 'mensalidade') as TipoPagamento,
+        metodo_pagamento: r.metodo_pagamento || null,
+        observacao:       r.observacao || null,
+        segmento:         r.segmento,
       }));
 
       if (busca.trim()) rows = rows.filter(r => r.aluno_nome.toLowerCase().includes(busca.toLowerCase()));
@@ -254,7 +267,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
     } finally {
       setLoading(false);
     }
-  }, [pagina, filtroTipo, filtroMes, busca, versao]);
+  }, [pagina, filtroTipo, filtroMetodo, filtroMes, busca, versao]);
 
   const carregarResumo = useCallback(async () => {
     if (!filtroMes) return;
@@ -278,13 +291,14 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
   function abrirEdicao(e: EntradaCaixa) {
     setEditando(e);
     setForm({
-      aluno_id:     e.aluno_id,
-      aluno_nome:   e.aluno_nome,
-      valor:        e.valor.toFixed(2).replace('.', ','),
-      data_entrada: e.data_entrada.split('T')[0],
-      tipo:         e.tipo,
-      observacao:   e.observacao ?? '',
-      segmento:     e.segmento ?? 'ead',
+      aluno_id:         e.aluno_id,
+      aluno_nome:       e.aluno_nome,
+      valor:            e.valor.toFixed(2).replace('.', ','),
+      data_entrada:     e.data_entrada.split('T')[0],
+      tipo:             e.tipo,
+      metodo_pagamento: e.metodo_pagamento ?? '',
+      observacao:       e.observacao ?? '',
+      segmento:         e.segmento ?? 'ead',
     });
     setModalAberto(true);
   }
@@ -303,14 +317,15 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
     setSalvando(true);
     try {
       const payload = {
-        aluno_id:   form.aluno_id,
-        valor:      parseFloat(form.valor.replace(',', '.')),
-        vencimento: form.data_entrada,
-        status:     'pago',
-        pago_em:    `${form.data_entrada}T12:00:00`,
-        segmento:   segmentoGestor,
-        tipo:       form.tipo,
-        observacao: form.observacao.trim() || null,
+        aluno_id:         form.aluno_id,
+        valor:            parseFloat(form.valor.replace(',', '.')),
+        vencimento:       form.data_entrada,
+        status:           'pago',
+        pago_em:          `${form.data_entrada}T12:00:00`,
+        segmento:         segmentoGestor,
+        tipo:             form.tipo,
+        metodo_pagamento: form.metodo_pagamento || null,
+        observacao:       form.observacao.trim() || null,
       };
       if (editando) {
         const { error } = await supabase.from('financeiro_mensalidades').update(payload).eq('id', editando.id);
@@ -354,7 +369,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
 
     const { data, error } = await supabase
       .from('financeiro_mensalidades')
-      .select(`id, tipo, valor, pago_em, observacao,
+      .select(`id, tipo, metodo_pagamento, valor, pago_em, observacao,
         users!financeiro_mensalidades_aluno_id_fkey (nome, serie)`)
       .eq('status', 'pago')
       .eq('segmento', segmentoGestor)
@@ -368,12 +383,15 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
       .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
     const rows = (data ?? []).map((r: any) => ({
-      nome:  r.users?.nome  ?? '—',
-      serie: r.users?.serie ?? '—',
-      tipo:  (r.tipo ?? 'mensalidade') as TipoPagamento,
-      obs:   r.observacao ?? '',
-      valor: Number(r.valor),
-      data:  formatDate(r.pago_em ?? ''),
+      nome:   r.users?.nome  ?? '—',
+      serie:  r.users?.serie ?? '—',
+      tipo:   (r.tipo ?? 'mensalidade') as TipoPagamento,
+      metodo: r.metodo_pagamento
+        ? (METODOS_PAGAMENTO.find(m => m.value === r.metodo_pagamento)?.label ?? r.metodo_pagamento)
+        : '—',
+      obs:    r.observacao ?? '',
+      valor:  Number(r.valor),
+      data:   formatDate(r.pago_em ?? ''),
     }));
 
     const totalGeral = rows.reduce((s, r) => s + r.valor, 0);
@@ -398,6 +416,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
             ${TIPOS_PAGAMENTO.find(t => t.value === r.tipo)?.label ?? r.tipo}
           </span>
         </td>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:11px;font-weight:600">${r.metodo}</td>
         <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:11px">${r.obs || '—'}</td>
         <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:800;color:#15803d;font-size:13px">
           ${formatBRL(r.valor)}
@@ -458,7 +477,8 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
             <th style="width:85px">Data</th>
             <th>Aluno</th>
             <th style="width:120px">Série</th>
-            <th style="width:110px">Tipo</th>
+            <th style="width:110px">Categoria</th>
+            <th style="width:90px">Método</th>
             <th>Descrição</th>
             <th class="right" style="width:120px">Valor</th>
           </tr>
@@ -466,7 +486,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
         <tbody>
           ${linhas}
           <tr class="total-row">
-            <td colspan="5">TOTAL DO MÊS · ${rows.length} entrada${rows.length !== 1 ? 's' : ''}</td>
+            <td colspan="6">TOTAL DO MÊS · ${rows.length} entrada${rows.length !== 1 ? 's' : ''}</td>
             <td class="right">${formatBRL(totalGeral)}</td>
           </tr>
         </tbody>
@@ -559,7 +579,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
       {/* Filtros */}
       <Card className="bg-card border-border">
         <CardContent className="p-4">
-          <div className="grid sm:grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <Label className="text-xs text-foreground">Buscar aluno</Label>
               <div className="relative mt-1">
@@ -569,12 +589,22 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
               </div>
             </div>
             <div>
-              <Label className="text-xs text-foreground">Tipo</Label>
+              <Label className="text-xs text-foreground">Categoria</Label>
               <Select value={filtroTipo} onValueChange={v => { setFiltroTipo(v); setPagina(1); }}>
                 <SelectTrigger className="mt-1 bg-background border-border text-foreground"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="todos">Todas as categorias</SelectItem>
                   {TIPOS_PAGAMENTO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-foreground">Método</Label>
+              <Select value={filtroMetodo} onValueChange={v => { setFiltroMetodo(v); setPagina(1); }}>
+                <SelectTrigger className="mt-1 bg-background border-border text-foreground"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os métodos</SelectItem>
+                  {METODOS_PAGAMENTO.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -602,7 +632,7 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
             <table className="w-full">
               <thead className="bg-muted border-b border-border">
                 <tr>
-                  {['Aluno', 'Série', 'Tipo', 'Valor', 'Data Entrada', 'Descrição', 'Ações'].map(h => (
+                  {['Aluno', 'Série', 'Categoria', 'Método', 'Valor', 'Data Entrada', 'Descrição', 'Ações'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
@@ -611,11 +641,11 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
               </thead>
               <tbody className="divide-y divide-border">
                 {loading ? (
-                  <tr><td colSpan={7} className="px-5 py-10 text-center">
+                  <tr><td colSpan={8} className="px-5 py-10 text-center">
                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mx-auto" />
                   </td></tr>
                 ) : entradas.length === 0 ? (
-                  <tr><td colSpan={7} className="px-5 py-12 text-center">
+                  <tr><td colSpan={8} className="px-5 py-12 text-center">
                     <Banknote className="w-10 h-10 text-muted-foreground/20 mx-auto mb-2" />
                     <p className="text-muted-foreground text-sm">Nenhuma entrada registrada neste período.</p>
                     <p className="text-xs text-muted-foreground mt-1">Use "Registrar Entrada" para lançar um pagamento recebido.</p>
@@ -627,6 +657,11 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">{e.aluno_serie ?? '—'}</td>
                     <td className="px-4 py-3">{tipoBadge(e.tipo)}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
+                      {e.metodo_pagamento
+                        ? METODOS_PAGAMENTO.find(m => m.value === e.metodo_pagamento)?.label ?? e.metodo_pagamento
+                        : <span className="opacity-30">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-sm font-bold text-green-700 dark:text-green-400 whitespace-nowrap">
                       {formatBRL(e.valor)}
                     </td>
@@ -723,6 +758,25 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
               </div>
             </div>
 
+            {/* Método de pagamento */}
+            <div>
+              <Label className="text-foreground text-xs font-semibold uppercase tracking-wide">
+                Método <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <Select
+                value={form.metodo_pagamento}
+                onValueChange={v => setForm(prev => ({ ...prev, metodo_pagamento: v }))}>
+                <SelectTrigger className="mt-1 bg-background border-border text-foreground">
+                  <SelectValue placeholder="Como foi recebido?" />
+                </SelectTrigger>
+                <SelectContent>
+                  {METODOS_PAGAMENTO.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Valor + Data */}
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -794,10 +848,13 @@ export function ControlePagamentos({ onVoltar, segmentoGestor = "ead" }: Control
             <div className="space-y-4 pt-1">
               <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 space-y-2">
                 {[
-                  { l: 'Aluno',  v: modalExcluir.aluno_nome },
-                  { l: 'Valor',  v: formatBRL(modalExcluir.valor) },
-                  { l: 'Tipo',   v: TIPOS_PAGAMENTO.find(t => t.value === modalExcluir.tipo)?.label ?? modalExcluir.tipo },
-                  { l: 'Data',   v: formatDate(modalExcluir.data_entrada) },
+                  { l: 'Aluno',   v: modalExcluir.aluno_nome },
+                  { l: 'Valor',   v: formatBRL(modalExcluir.valor) },
+                  { l: 'Categoria', v: TIPOS_PAGAMENTO.find(t => t.value === modalExcluir.tipo)?.label ?? modalExcluir.tipo },
+                  { l: 'Método',  v: modalExcluir.metodo_pagamento
+                      ? (METODOS_PAGAMENTO.find(m => m.value === modalExcluir.metodo_pagamento)?.label ?? modalExcluir.metodo_pagamento)
+                      : '—' },
+                  { l: 'Data',    v: formatDate(modalExcluir.data_entrada) },
                 ].map(({ l, v }) => (
                   <div key={l} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{l}:</span>

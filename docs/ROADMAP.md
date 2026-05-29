@@ -32,7 +32,7 @@ Antes de abrir o Claude para implementar algo:
 | ~~BUG-006~~ | ~~`EstatisticasConteudista.tsx`~~ | ~~Dark mode quebrado — componente abandonado~~ | ✅ #4 |
 | ~~BUG-007~~ | ~~`ConquistasEstudante.tsx`, `EstatisticasEstudo.tsx`~~ | ~~Componentes abandonados (só usados por MaterialEstudoModerno, também abandonado)~~ | ✅ #4 |
 | ~~BUG-008~~ | ~~múltiplos~~ | ~~Nome "Colégio Conexão EAD Maranhense" errado em 8 componentes~~ | ✅ #1 |
-| BUG-009 | `ControlePagamentos.tsx` | Tipo de pagamento embutido no campo `observacao` — dados estruturados misturados com texto | — |
+| ~~BUG-009~~ | ~~`ControlePagamentos.tsx`~~ | ~~Método de pagamento sem coluna própria — PIX/Boleto/Dinheiro embutido em `observacao`~~ | ✅ #9 |
 | ~~BUG-010~~ | ~~`UploadConteudoPDF.tsx`~~ | ~~Séries hardcoded — componente abandonado~~ | ✅ #4 |
 | ~~BUG-011~~ | ~~`GestaoEscola.tsx:363`~~ | ~~DELETE de série sem `count` check — turmas órfãs~~ | ✅ #8 |
 
@@ -66,6 +66,7 @@ Antes de abrir o Claude para implementar algo:
 | BUG-001 | `sendBeacon` sem autenticação — já estava corrigido antes desta sessão | #6 | — |
 | BUG-003/004 | 7 `confirm()` → `AlertDialog` em 6 componentes | #7 | `3e7b6fe2` |
 | BUG-011 | count check no DELETE série→turmas em `GestaoEscola` | #8 | `c8821464` |
+| BUG-009 | Coluna `metodo_pagamento` (pix/boleto/dinheiro/cartao/outro) em `financeiro_mensalidades` | #9 | — |
 | BUG-012 | `FloatingHelpButton` — componente abandonado deletado | — | `45f2fcad` |
 | — | `AdminUsuariosSimple` — componente abandonado deletado (auditoria segmento) | — | `e6a71161` |
 
