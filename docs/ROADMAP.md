@@ -94,8 +94,8 @@ Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 
 - [ ] **Notificação de agenda aprovada** — Professor recebe notificação quando coordenador aprova sua agenda
 - [ ] **Resumo do dia no dashboard do professor** — Cards rápidos: aulas hoje, faltas lançadas, agenda pendente
-- [ ] **Dashboard do aluno — frequência** — Mini card mostrando % de presença no mês atual
-- [ ] **Atividades — contador de entregas pendentes** — Badge no menu do professor mostrando quantas atividades aguardam correção
+- [x] ~~**Dashboard do aluno — frequência**~~ — ~~Mini card mostrando % de presença no mês atual~~ — já implementado em `DashboardAluno.tsx` ✅
+- [x] ~~**Atividades — contador de entregas pendentes**~~ — ~~Badge no menu do professor~~ — já implementado em `DashboardProfessor.tsx` (`totalPendentesCorrecao`) ✅
 - [x] ~~**BUG-010**~~ — ~~Séries dinâmicas em `UploadConteudoPDF`~~ — componente deletado em #4 ✅
 - [x] ~~**BUG-005**~~ — ~~`RelatorioConteudo` com dados reais~~ — componente deletado em #4 ✅
 
