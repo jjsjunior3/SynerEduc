@@ -66,7 +66,7 @@ Antes de abrir o Claude para implementar algo:
 | BUG-001 | `sendBeacon` sem autenticação — já estava corrigido antes desta sessão | #6 | — |
 | BUG-003/004 | 7 `confirm()` → `AlertDialog` em 6 componentes | #7 | `3e7b6fe2` |
 | BUG-011 | count check no DELETE série→turmas em `GestaoEscola` | #8 | `c8821464` |
-| BUG-009 | Coluna `metodo_pagamento` (pix/boleto/dinheiro/cartao/outro) em `financeiro_mensalidades` | #9 | — |
+| BUG-009 | Coluna `metodo_pagamento` (pix/boleto/dinheiro/cartao/outro) em `financeiro_mensalidades` | #9 | `01a5fbb3` |
 | BUG-012 | `FloatingHelpButton` — componente abandonado deletado | — | `45f2fcad` |
 | — | `AdminUsuariosSimple` — componente abandonado deletado (auditoria segmento) | — | `e6a71161` |
 
