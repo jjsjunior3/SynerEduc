@@ -99,6 +99,23 @@ Estas não adicionam funcionalidade, apenas corrigem o que está quebrado:
 - [x] ~~**BUG-010**~~ — ~~Séries dinâmicas em `UploadConteudoPDF`~~ — componente deletado em #4 ✅
 - [x] ~~**BUG-005**~~ — ~~`RelatorioConteudo` com dados reais~~ — componente deletado em #4 ✅
 
+> **Progresso Fase 2:** 6/6 concluídos ✅ · Fase 2 completa!
+
+---
+
+### T1 — Testes unitários ✅ `b5ecf270`
+
+- [x] ~~Vitest + @vitest/coverage-v8 instalados (devDependencies, zero impacto em prod)~~
+- [x] ~~`vitest.config.ts` separado do `vite.config.ts`~~
+- [x] ~~`src/utils/dateUtils.ts` — 8 funções de data sem DOM~~
+- [x] ~~`src/utils/authUtils.ts` — 6 helpers de perfil/permissão~~
+- [x] ~~`src/utils/serieUtils.ts` — 5 funções de filtragem/ordenação~~
+- [x] ~~`src/__tests__/calculoNotas.test.ts` — 10 testes da lógica de notas~~
+- [x] ~~`src/__tests__/dateUtils.test.ts` — 15 testes de datas~~
+- [x] ~~`src/__tests__/authUtils.test.ts` — 20 testes de permissão~~
+- [x] ~~`src/__tests__/serieUtils.test.ts` — 20 testes de séries~~
+- **Resultado: 65/65 testes passando · `npm run test:run`**
+
 ---
 
 ### Fase 3 — Multi-tenant (futuro)
