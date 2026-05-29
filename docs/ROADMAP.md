@@ -1,5 +1,5 @@
 # ROADMAP — Portal Conexão AVA · SynerEduc
-> Backlog priorizado · Atualizado em: 2026-05-29 · Última revisão: 2026-05-29  
+> Backlog priorizado por dependência estrutural · Atualizado em: 2026-05-29  
 > Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · ⏸ Adiado · 🚫 Descartado
 
 ---
@@ -13,58 +13,95 @@ Antes de abrir o Claude para implementar algo:
 
 ---
 
-## Visão geral — fases estratégicas (SynerEduc Roadmap)
+## Cronograma por prioridade de dependência estrutural
 
-| Fase | Nome | Prazo | Status |
-|---|---|---|---|
-| **T1** | Testes unitários | Sem. 1 | ✅ Concluído `b5ecf270` |
-| **Fase 1** | Correções & melhorias pedagógicas | Maio 2026 | ✅ Concluído |
-| **F1.1** | Multi-tenant (fundação multi-escola) | Mês 1-2 | 🔴 Próximo |
-| **F1.2** | Liberar acesso portal (secretaria) | Mês 1 | ⏸ Adiado 7 meses |
-| **F1.3** | Virada de ano letivo | Mês 2 | 🟢 Planejado |
-| **F2.1** | IA — Histórico Escolar | Mês 2-3 | 🟢 Planejado |
-| **F3** | Portal do Responsável | Mês 3-4 | 🟢 Planejado |
-| **F4** | Financeiro Avançado + Boletos (Asaas) | Mês 4-5 | 🟡 Futuro |
-| **F5** | Agentes de IA por Perfil | Mês 5-6 | 🟡 Futuro |
-| **F6** | Mobile PWA → React Native | Mês 6+ | 🟡 Futuro |
+> A ordem abaixo não é arbitrária — cada item está onde está porque algo abaixo dele depende de ele existir primeiro. Nada está na frente de outro sem motivo técnico real.
+
+```
+CONCLUÍDO
+ ✅ T1   → Testes unitários (rede de segurança para tudo abaixo)
+ ✅ F1   → Correções críticas (bugs, nome, datas, confirm → dialog)
+ ✅ F2   → Melhorias pedagógicas (resumo do dia, notificações, frequência)
+
+DEPENDÊNCIA ESTRUTURAL PARA IA
+ #1  F2.1 → IA Histórico Escolar  ← Edge Function + proxy Claude API
+              │                      (foundation de TODA a IA do sistema)
+              ▼
+ #2  F5   → Agentes de IA — 6/7 perfis  ← reutiliza F2.1 imediatamente
+              │   (secretaria, gestor, coord, prof, financeiro, aluno)
+              │
+ #3  F3   → Portal do Responsável  ← novo perfil, RLS isolado
+              │
+              ├──► #4  F5++ → 7º agente (responsavel) ← fecha F5 completo
+              │
+              └──► #7  F4  → Financeiro Avançado + Asaas
+
+REFACTOR ESTRUTURAL (antes da 2ª escola + antes de F4 para evitar retrabalho)
+ #5  F1.1 → Multi-tenant  ← escola_id em todas as tabelas + RLS
+              │
+              └──► deadline natural: Colégio Ariane Maria (~nov/2026)
+
+DEADLINE SAZONAL (independente, mas tem data limite)
+ #6  F1.3 → Virada de ano letivo  ← deadline: outubro/2026 (testar antes de dez)
+
+PRODUTO ESTABILIZADO
+ #8  F6  → Mobile PWA → React Native  ← critério: < 2 bugs críticos/mês
+
+ADIADO
+ ⏸  F1.2 → Liberar acesso portal  ← dez/2026 (matrículas do ano seguinte)
+```
+
+### Resumo executivo
+
+| Prioridade | Fase | Por que esta posição | Esforço est. | Janela |
+|:---:|---|---|:---:|---|
+| **#1** | F2.1 IA Histórico | **Foundation de toda IA** — Edge Function proxy Claude API | 2 sem | Jun/2026 |
+| **#2** | F5 Agentes (6/7) | Objetivo principal — reutiliza F2.1 direto | 3-4 sem | Jun-Jul |
+| **#3** | F3 Portal Responsável | Fecha F5 (7º agente) + habilita F4 | 2-3 sem | Jul |
+| **#4** | F5 completo (7º ag.) | 1 semana após F3 estar no ar | 1 sem | Jul-Ago |
+| **#5** | F1.1 Multi-tenant | Antes da 2ª escola + antes de F4 (evita retrabalho Asaas) | 3-4 sem | Ago-Set |
+| **#6** | F1.3 Virada de ano | Deadline dez/2026 — testar com 2 meses de antecedência | 1-2 sem | Set-Out |
+| **#7** | F4 Financeiro+Asaas | Após F3 (portal) + F1.1 (multi-tenant) = zero retrabalho | 2-3 sem | Out-Nov |
+| **#8** | F6 PWA | Produto estável — após tudo acima consolidado | 1-2 sem | Nov-Dez |
+| **⏸** | F1.2 Liberar acesso | Todos os alunos já cadastrados — retomar nas matrículas | — | Dez/2026 |
 
 ---
 
-## Bugs mapeados (ANALISE_COMPLETA.md)
+## Bugs mapeados (ANALISE_COMPLETA.md) — todos resolvidos
 
-### 🔴 Críticos
+### 🔴 Críticos — ✅ todos corrigidos
 
 | ID | Componente | Descrição | Issue |
 |---|---|---|---|
-| ~~BUG-001~~ | ~~`usePresence.ts`~~ | ~~`sendBeacon` sem autenticação~~ — já corrigido antes desta sessão | ✅ #6 |
+| ~~BUG-001~~ | ~~`usePresence.ts`~~ | ~~`sendBeacon` sem autenticação~~ | ✅ #6 |
 | ~~BUG-002~~ | ~~`DashboardAluno.tsx`~~ | ~~Datas exibidas com 1 dia a menos no Brasil (UTC-3)~~ | ✅ #2 |
 | ~~BUG-003~~ | ~~`EnviarComunicado.tsx:222,253`~~ | ~~`window.confirm()` em vez de `AlertDialog`~~ | ✅ #7 |
 | ~~BUG-004~~ | ~~`AgendaProfessor.tsx:156`, `AgendaProfessores.tsx:200`~~ | ~~`window.confirm()` em vez de `AlertDialog`~~ | ✅ #7 |
 
-### 🟡 Importantes
+### 🟡 Importantes — ✅ todos corrigidos
 
 | ID | Componente | Descrição | Issue |
 |---|---|---|---|
 | ~~BUG-005~~ | ~~`RelatorioConteudo.tsx`~~ | ~~Dados mockados — componente abandonado~~ | ✅ #4 |
 | ~~BUG-006~~ | ~~`EstatisticasConteudista.tsx`~~ | ~~Dark mode quebrado — componente abandonado~~ | ✅ #4 |
-| ~~BUG-007~~ | ~~`ConquistasEstudante.tsx`, `EstatisticasEstudo.tsx`~~ | ~~Componentes abandonados (só usados por MaterialEstudoModerno, também abandonado)~~ | ✅ #4 |
+| ~~BUG-007~~ | ~~`ConquistasEstudante.tsx`, `EstatisticasEstudo.tsx`~~ | ~~Componentes abandonados~~ | ✅ #4 |
 | ~~BUG-008~~ | ~~múltiplos~~ | ~~Nome "Colégio Conexão EAD Maranhense" errado em 8 componentes~~ | ✅ #1 |
-| ~~BUG-009~~ | ~~`ControlePagamentos.tsx`~~ | ~~Método de pagamento sem coluna própria — PIX/Boleto/Dinheiro embutido em `observacao`~~ | ✅ #9 |
+| ~~BUG-009~~ | ~~`ControlePagamentos.tsx`~~ | ~~Método de pagamento sem coluna própria~~ | ✅ #9 |
 | ~~BUG-010~~ | ~~`UploadConteudoPDF.tsx`~~ | ~~Séries hardcoded — componente abandonado~~ | ✅ #4 |
 | ~~BUG-011~~ | ~~`GestaoEscola.tsx:363`~~ | ~~DELETE de série sem `count` check — turmas órfãs~~ | ✅ #8 |
 
-### 🟢 Melhorias / Baixo impacto
+### 🟢 Melhorias — ✅ todas corrigidas
 
 | ID | Componente | Descrição | Issue |
 |---|---|---|---|
-| ~~BUG-012~~ | ~~`FloatingHelpButton.tsx`~~ | ~~Componente abandonado — importava `AcessoRapidoCorrecoes` inexistente~~ | ✅ #4-padrão |
+| ~~BUG-012~~ | ~~`FloatingHelpButton.tsx`~~ | ~~Componente abandonado~~ | ✅ #4 |
 | ~~BUG-013~~ | ~~`AdvancedUploadComponent.tsx`~~ | ~~Arquivo utilitário abandonado~~ | ✅ #4 |
-| ~~BUG-014~~ | ~~`AgendaCoordenador.tsx`~~ | ~~Não é duplicação — design intencional. Ver comentário no arquivo.~~ | ✅ #5 |
-| ~~BUG-015~~ | ~~`App.tsx`, `AulasAoVivoProfessor`, `MaterialEstudoModerno`~~ | ~~`console.log` de debug expondo dados em produção~~ | ✅ #3 |
+| ~~BUG-014~~ | ~~`AgendaCoordenador.tsx`~~ | ~~Não é duplicação — design intencional documentado~~ | ✅ #5 |
+| ~~BUG-015~~ | ~~`App.tsx`, `AulasAoVivoProfessor`~~ | ~~`console.log` de debug em produção~~ | ✅ #3 |
 
 ---
 
-## Bugs já corrigidos ✅
+## Histórico de correções ✅
 
 | ID | Descrição | Issue | Commit |
 |---|---|---|---|
@@ -78,176 +115,206 @@ Antes de abrir o Claude para implementar algo:
 | BUG-008 | Nome "Colégio Conexão EAD Maranhense" errado em 8 componentes | #1 | `e339bc85` |
 | BUG-002 | Datas com 1 dia a menos em 3 componentes (bug UTC-3) | #2 | `51986a06` |
 | BUG-015 | `console.log` de debug expondo dados em produção | #3 | `03106af6` |
-| BUG-005/006/007/010/013 | 7 componentes abandonados deletados (RelatorioConteudo, EstatisticasConteudista, MaterialEstudoModerno, ConquistasEstudante, EstatisticasEstudo, UploadConteudoPDF, AdvancedUploadComponent) | #4 | — |
-| BUG-014 | AgendaCoordenador "Configurar Grade" não é duplicação — design documentado | #5 | — |
-| BUG-001 | `sendBeacon` sem autenticação — já estava corrigido antes desta sessão | #6 | — |
+| BUG-005/006/007/010/013 | 7 componentes abandonados deletados | #4 | — |
+| BUG-014 | AgendaCoordenador — design documentado | #5 | — |
+| BUG-001 | `sendBeacon` sem autenticação — já corrigido antes | #6 | — |
 | BUG-003/004 | 7 `confirm()` → `AlertDialog` em 6 componentes | #7 | `3e7b6fe2` |
 | BUG-011 | count check no DELETE série→turmas em `GestaoEscola` | #8 | `c8821464` |
-| BUG-009 | Coluna `metodo_pagamento` (pix/boleto/dinheiro/cartao/outro) em `financeiro_mensalidades` | #9 | `01a5fbb3` |
+| BUG-009 | Coluna `metodo_pagamento` em `financeiro_mensalidades` | #9 | `01a5fbb3` |
 | BUG-012 | `FloatingHelpButton` — componente abandonado deletado | — | `45f2fcad` |
-| — | `AdminUsuariosSimple` — componente abandonado deletado (auditoria segmento) | — | `e6a71161` |
+| — | `AdminUsuariosSimple` — componente abandonado deletado | — | `e6a71161` |
 
 ---
 
-## Features planejadas
+## Features — por prioridade de dependência estrutural
 
 ---
 
 ### ✅ T1 — Testes unitários · `b5ecf270`
 
-> **Por que começar aqui?** Antes de qualquer mudança estrutural (multi-tenant mexe em _todas_ as tabelas), precisamos de uma rede de segurança. Se um teste quebrar, você sabe exatamente onde o problema está.
+> **Posição:** Primeiro de tudo — rede de segurança antes de qualquer mudança estrutural.
 
-- [x] ~~Vitest + @vitest/coverage-v8 instalados (devDependencies, zero impacto em prod)~~
+- [x] ~~Vitest + @vitest/coverage-v8 (devDependencies — zero impacto em prod)~~
 - [x] ~~`vitest.config.ts` separado do `vite.config.ts`~~
-- [x] ~~`src/utils/dateUtils.ts` — 8 funções de data sem DOM~~
-- [x] ~~`src/utils/authUtils.ts` — 6 helpers de perfil/permissão~~
-- [x] ~~`src/utils/serieUtils.ts` — 5 funções de filtragem/ordenação~~
-- [x] ~~`src/__tests__/calculoNotas.test.ts` — 10 testes da lógica de notas~~
-- [x] ~~`src/__tests__/dateUtils.test.ts` — 15 testes de datas~~
-- [x] ~~`src/__tests__/authUtils.test.ts` — 20 testes de permissão~~
-- [x] ~~`src/__tests__/serieUtils.test.ts` — 20 testes de séries~~
-
-**Resultado: 65/65 testes passando · `npm run test:run`**
+- [x] ~~`dateUtils.ts`, `authUtils.ts`, `serieUtils.ts` — utils puras testáveis~~
+- [x] ~~4 suítes de teste — `calculoNotas`, `dateUtils`, `authUtils`, `serieUtils`~~
+- **65/65 testes passando · `npm run test:run`**
 
 ---
 
-### ✅ Fase 1 — Correções (prioridade imediata)
+### ✅ Fase 1 — Correções críticas
 
-Estas não adicionam funcionalidade, apenas corrigem o que estava quebrado:
+- [x] ~~BUG-008 Nome da escola~~ ✅ · ~~BUG-002 UTC-3~~ ✅ · ~~BUG-015 console.log~~ ✅
+- [x] ~~BUG-005/006/007/010/013 Componentes abandonados~~ ✅
+- [x] ~~BUG-003/004 window.confirm → AlertDialog~~ ✅
+- [x] ~~BUG-001/011/009 sendBeacon, count check, metodo_pagamento~~ ✅
 
-- [x] ~~**BUG-008**~~ — ~~Corrigir nome da escola~~ ✅ #1
-- [x] ~~**BUG-002**~~ — ~~Fix UTC-3 em datas~~ ✅ #2
-- [x] ~~**BUG-015**~~ — ~~Remover `console.log` de debug~~ ✅ #3
-- [x] ~~**BUG-005/006/007/010/013**~~ — ~~Remover componentes abandonados~~ ✅ #4
-- [x] ~~**BUG-014**~~ — ~~Documentar design de AgendaCoordenador~~ ✅ #5
-- [x] ~~**BUG-001**~~ — ~~sendBeacon sem autenticação~~ — já estava corrigido ✅ #6
-- [x] ~~**BUG-003 + BUG-004**~~ — ~~Substituir todos os `window.confirm` por `AlertDialog`~~ ✅ #7
-
-> **Progresso Fase 1:** 7/7 concluídos ✅
+> **7/7 concluídos ✅**
 
 ---
 
 ### ✅ Fase 2 — Melhorias pedagógicas
 
-- [x] ~~**Notificação de agenda aprovada**~~ — INSERT em `notificacoes` no `salvarEdicao` de `AgendaProfessores.tsx` ✅
-- [x] ~~**Resumo do dia no dashboard do professor**~~ — Seção "Hoje" em `DashboardProfessor.tsx` ✅
-- [x] ~~**Dashboard do aluno — frequência**~~ — Mini card com % de presença no mês em `DashboardAluno.tsx` ✅
-- [x] ~~**Atividades — contador de entregas pendentes**~~ — `totalPendentesCorrecao` em `DashboardProfessor.tsx` ✅
-- [x] ~~**BUG-009**~~ — ~~Coluna `metodo_pagamento` em `financeiro_mensalidades`~~ ✅ #9
+- [x] ~~Notificação quando coordenador revisa agenda do professor~~ ✅
+- [x] ~~Seção "Hoje" no dashboard do professor (aulas, freq, agenda)~~ ✅
+- [x] ~~Mini card de frequência % no dashboard do aluno~~ ✅
+- [x] ~~Badge de entregas pendentes de correção~~ ✅
 
-> **Progresso Fase 2:** 5/5 concluídos ✅
-
----
-
-### 🔴 F1.1 — Multi-tenant · Mês 1-2 · PRÓXIMO
-
-> **Por que é crítico?** Em ~6 meses o Colégio Ariane Maria precisa ser cadastrado. Sem multi-tenant, os dados das escolas se misturam — catástrofe em produção. A fundação certa precisa ser construída antes.
-
-- [ ] Criar tabela `escolas` no Supabase (`id`, `nome`, `cnpj`, `segmentos_ativos`, `dominio`)
-- [ ] Adicionar campo `escola_id` em todas as tabelas com dados de alunos/professores
-- [ ] RLS isolado por `escola_id` (baseado no JWT do usuário)
-- [ ] Hook `useEscola()` — detecta escola pelo domínio ou por `escola_id` no perfil
-- [ ] Migrar dados existentes (EAD + Presencial) para o registro da escola atual
-- [ ] `school.ts` dinâmico — buscar configuração do banco por `escola_id`
-- [ ] Portal de onboarding para novas escolas
-
-**Dependências:** T1 ✅ · Fase 1 ✅
+> **5/5 concluídos ✅**
 
 ---
 
-### ⏸ F1.2 — Liberar acesso portal · Adiado ~7 meses
+### 🔴 #1 — F2.1 · IA — Histórico Escolar · Jun/2026 · ~2 semanas
 
-> **Contexto:** Todos os alunos já estão cadastrados via admin geral. O fluxo de secretaria liberar acesso individual só será necessário no próximo período de matrículas (~dezembro 2026).
+> **Por que é o #1?** É a peça de infraestrutura que habilita TODA a IA do sistema.
+> Sem a Edge Function proxy + integração Claude API, o F5 (Agentes) não tem onde rodar.
+> Além disso, entrega valor imediato — histórico escolar em segundos vs. 60 dias na secretaria.
+> **Custo estimado: < R$ 0,10 por histórico.**
 
-- [ ] Botão "Liberar Acesso" na tela de matrícula
-- [ ] Criar user no Supabase Auth + enviar e-mail de boas-vindas
-- [ ] Vincular user à `fichas_matricula` + campo `tem_acesso_portal = true`
-
-**Reavaliar em:** Dez/2026 (início das matrículas do ano letivo seguinte)
-
----
-
-### 🟢 F1.3 — Virada de ano letivo · Mês 2
-
-> **Por que no mês 2?** Precisa estar pronto antes do segundo semestre para que a virada de ano seja testada com antecedência — nunca estrear uma migração em produção sem testes.
-
-- [ ] Fluxo de promoção de série com revisão e aprovação do gestor
-- [ ] Arquivar frequência e agenda do ano anterior (tabelas `*_arquivo_YYYY`)
-- [ ] Preservar notas, contratos e documentos históricos intactos
-- [ ] Resetar `status` dos alunos para o novo ano letivo
-
-**Dependências:** F1.1 (escola_id necessário para não misturar históricos)
-
----
-
-### 🟢 F2.1 — IA — Histórico Escolar · Mês 2-3
-
-> **Por que é diferencial?** Uma secretaria que leva 60 dias para emitir histórico escolar — e você entrega em segundos — é argumento de venda irresistível para novas escolas. Custo estimado: **< R$ 0,10 por histórico**.
-
-- [ ] Integrar Claude API em `EmissaoDocumentos.tsx`
+**Tarefas:**
+- [ ] Edge Function Supabase `claude-proxy` — proxy seguro para Claude API (chave nunca no front)
+- [ ] Integrar em `EmissaoDocumentos.tsx` — botão "Gerar com IA"
 - [ ] Prompt estruturado com notas, frequência e dados completos do aluno
 - [ ] Texto gerado editável antes de imprimir / exportar PDF
-- [ ] Edge Function Supabase como proxy seguro para a Claude API (não expõe chave no front)
-- [ ] Log de emissões por escola (auditoria)
+- [ ] Adicionar testes unitários do prompt builder em `src/__tests__/`
+- [ ] Log de emissões por escola (auditoria de uso da IA)
+
+**Entrega:** secretaria gera histórico em segundos, com revisão humana antes de imprimir.
 
 ---
 
-### 🟢 F3 — Portal do Responsável · Mês 3-4
+### 🔴 #2 — F5 · Agentes de IA — 6/7 perfis · Jun-Jul/2026 · ~3-4 semanas
 
-> **Valor de mercado estimado:** + R$ 300/mês por escola. Com 10 escolas = + R$ 3.000/mês recorrente adicional.
+> **Por que é o #2?** Reutiliza diretamente a Edge Function criada em F2.1.
+> Nenhuma nova infraestrutura necessária — só o componente de chat e os prompts por perfil.
+> O 7º agente (responsável) fica para após o Portal do Responsável (F3) existir.
+> **Nenhuma dependência de multi-tenant — funciona perfeitamente em single-tenant.**
 
-- [ ] `DashboardResponsavel.tsx` com perfil isolado por RLS (vê apenas filhos vinculados)
-- [ ] Frequência, notas e boletim em tempo real
-- [ ] Comunicados da coordenação (leitura + confirmação de leitura)
-- [ ] Horário escolar do filho
-- [ ] Chat com a coordenação (integrado às `notificacoes`)
-- [ ] Vinculação responsável → aluno na ficha de matrícula
+**Tarefas:**
+- [ ] Componente `ChatIA.tsx` — botão flutuante reutilizável (posição fixa, estilo consistente)
+- [ ] Hook `useChatIA(perfil)` — gerencia histórico da conversa + calls à Edge Function
+- [ ] **Agente 1 · Secretaria** — matrícula, documentos, alunos pendentes, fichas
+- [ ] **Agente 2 · Gestor** — indicadores gerais, inadimplência, desempenho por série
+- [ ] **Agente 3 · Coordenador** — agenda pendente, frequência da semana, atividades a corrigir
+- [ ] **Agente 4 · Professor** — boletins do dia, lançamento de frequência, agenda de hoje
+- [ ] **Agente 5 · Financeiro** — mensalidades em aberto, fluxo de caixa, relatórios
+- [ ] **Agente 6 · Aluno** — notas, frequência, atividades pendentes, próximas provas
+- [ ] Adicionar `ChatIA` nos dashboards dos 6 perfis acima
+
+**Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4.
 
 ---
 
-### 🟡 F4 — Financeiro Avançado + Boletos (Asaas) · Mês 4-5
+### 🟢 #3 — F3 · Portal do Responsável · Jul/2026 · ~2-3 semanas
 
-> **Valor de mercado estimado:** + R$ 200/mês por escola. Elimina trabalho manual da secretaria financeira.
+> **Por que é o #3?** Duas dependências simultâneas:
+> (a) fecha o F5 ao adicionar o 7º agente de IA;
+> (b) é pré-requisito do F4 (o self-service de boletos precisa do portal para existir).
+> **Valor de mercado estimado: + R$ 300/mês por escola.**
 
+**Tarefas:**
+- [ ] Novo tipo de usuário `responsavel` com RLS isolado (vê apenas filhos vinculados)
+- [ ] `DashboardResponsavel.tsx` — frequência, notas, comunicados, horário do filho
+- [ ] Vinculação `responsavel_id → aluno_id` na ficha de matrícula
+- [ ] Chat com coordenação (integrado ao sistema de notificações existente)
+- [ ] Confirmação de leitura de comunicados
+
+---
+
+### 🟢 #4 — F5 completo · 7º Agente (Responsável) · Jul-Ago/2026 · ~1 semana
+
+> **Por que é o #4?** Depende do F3 existir. Com o Portal do Responsável no ar,
+> adicionar o 7º agente é questão de escrever o prompt especializado e plugar o `ChatIA`.
+
+**Tarefas:**
+- [ ] **Agente 7 · Responsável** — situação do filho (notas, frequência, pendências financeiras, próximas provas)
+- [ ] Adicionar `ChatIA` no `DashboardResponsavel.tsx`
+
+---
+
+### 🔴 #5 — F1.1 · Multi-tenant · Ago-Set/2026 · ~3-4 semanas
+
+> **Por que é o #5 e não o #1?** A IA funciona perfeitamente em single-tenant.
+> Colocar F1.1 antes de F5 seria bloquear o objetivo principal sem nenhum ganho prático.
+> **Por que está no #5 e não no final?** F4 (Asaas) feito sem multi-tenant = retrabalho
+> garantido em todas as tabelas financeiras. E a 2ª escola (Ariane Maria) precisa estar
+> pronta para ser onboardada por volta de nov/2026.
+
+**Tarefas:**
+- [ ] Tabela `escolas` (`id`, `nome`, `cnpj`, `segmentos_ativos`, `dominio`)
+- [ ] Campo `escola_id` em todas as tabelas de dados (users, notas, frequência, agenda, financeiro…)
+- [ ] RLS policies baseadas em `escola_id` do JWT — isolamento total entre escolas
+- [ ] Hook `useEscola()` — detecta escola pelo domínio ou `escola_id` no perfil
+- [ ] Migration dos dados existentes para o registro da escola atual
+- [ ] `school.ts` dinâmico (busca configurações do banco por `escola_id`)
+- [ ] Atualizar queries dos agentes de IA (F5) para filtrar por `escola_id`
+
+**Dependência reversa:** F4 e F6 devem ser feitos APÓS F1.1 para evitar retrabalho.
+
+---
+
+### 🟢 #6 — F1.3 · Virada de ano letivo · Set-Out/2026 · ~1-2 semanas
+
+> **Por que é o #6?** Não depende de nada estrutural, mas tem **deadline sazonal: dezembro/2026**.
+> Recomendado testar com 2 meses de antecedência — nunca estrear migração em produção sem testes.
+> Feito após F1.1 = tabelas de arquivo já nascem com `escola_id` (mais limpo).
+
+**Tarefas:**
+- [ ] Fluxo de promoção de série com revisão e aprovação do gestor
+- [ ] Arquivar frequência e agenda do ano anterior (`*_arquivo_2026`)
+- [ ] Preservar notas, contratos e documentos históricos intactos
+- [ ] Resetar status dos alunos para o novo ano letivo
+- [ ] Tela de confirmação com lista de alunos afetados antes de executar
+
+**Deadline:** testar em outubro, executar em dezembro/2026.
+
+---
+
+### 🟡 #7 — F4 · Financeiro Avançado + Boletos (Asaas) · Out-Nov/2026 · ~2-3 semanas
+
+> **Por que é o #7?** Duas dependências reais:
+> (a) F3 — o self-service do responsável precisa do portal;
+> (b) F1.1 — construir integração Asaas em single-tenant e depois migrar para multi-tenant
+> é retrabalho garantido em webhook handlers, tabelas e RLS.
+> **Valor de mercado estimado: + R$ 200/mês por escola.**
+
+**Tarefas:**
 - [ ] Integração gateway **Asaas** (boleto + PIX, webhook nativo)
-- [ ] Baixa automática de mensalidades via webhook do Asaas
-- [ ] Responsável gera o próprio boleto (self-service no Portal do Responsável)
+- [ ] Webhook handler para baixa automática de mensalidades
+- [ ] Responsável gera o próprio boleto (self-service no portal F3)
 - [ ] Dashboard financeiro com inadimplência em tempo real
 - [ ] Notificação automática de vencimento (7 dias antes)
 
-**Dependências:** F3 (Portal do Responsável precisa existir para o self-service)
-
 ---
 
-### 🟡 F5 — Agentes de IA por Perfil · Mês 5-6
+### 🟡 #8 — F6 · Mobile PWA → React Native · Nov-Dez/2026 · ~1-2 semanas
 
-> **Valor de mercado estimado:** + R$ 400/mês. Maior diferencial competitivo — nenhum sistema escolar no Brasil faz isso com contexto real do banco de dados.
+> **Por que é o #8?** Produto web deve estar consolidado e estável antes de virar PWA.
+> PWA instalável sem publicar nas lojas — entrega rápida, sem reescrita.
+> React Native (Expo) apenas quando critério objetivo for atingido.
 
-- [ ] Componente `ChatIA.tsx` reutilizável (botão flutuante, posição fixa)
-- [ ] Edge Function Supabase como proxy seguro da Claude API (com contexto do usuário)
-- [ ] **7 agentes especializados:**
-  - `secretaria` — matrícula, documentos, alunos pendentes
-  - `gestor` — indicadores, inadimplência, desempenho geral
-  - `coordenador` — agenda, frequência, atividades pendentes de correção
-  - `professor` — boletins, lançamento de frequência, agenda do dia
-  - `financeiro` — mensalidades, relatórios, fluxo de caixa
-  - `aluno` — notas, frequência, atividades pendentes
-  - `responsavel` — situação do filho, pendências financeiras
-
-**Dependências:** F2.1 (padrão de proxy Claude API estabelecido)
-
----
-
-### 🟡 F6 — Mobile PWA → React Native · Mês 6+
-
-> **Estratégia:** PWA é instalável como app sem publicar nas lojas — entrega rápida. React Native (Expo) quando o produto web estiver estabilizado (< 2 bugs críticos/mês).
-
-- [ ] `manifest.json` + ícones + `theme-color`
-- [ ] Service Worker com cache offline (páginas estáticas)
-- [ ] `vite-plugin-pwa` integrado ao build existente
+**Tarefas:**
+- [ ] `manifest.json` + ícones 192/512px + `theme-color`
+- [ ] Service Worker com cache offline (páginas estáticas + assets)
+- [ ] `vite-plugin-pwa` integrado ao build existente (zero impacto no dev)
 - [ ] Push Notifications via Web Push API
-- [ ] **Critério para React Native:** produto web com < 2 bugs críticos/mês por 60 dias consecutivos
-- [ ] React Native (Expo) — compartilha lógica de negócio com o web
+- [ ] **Critério para React Native:** < 2 bugs críticos/mês por 60 dias consecutivos
+- [ ] React Native (Expo) — reutiliza toda a lógica de negócio e hooks
+
+---
+
+### ⏸ F1.2 · Liberar acesso portal · Dez/2026
+
+> **Contexto:** Todos os alunos já estão cadastrados via admin geral.
+> O fluxo de secretaria liberar acesso individual só será necessário
+> no próximo período de matrículas (~dezembro 2026).
+
+**Tarefas (quando retomar):**
+- [ ] Botão "Liberar Acesso" na tela de matrícula
+- [ ] Criar user no Supabase Auth + enviar e-mail de boas-vindas
+- [ ] Vincular user à `fichas_matricula` + `tem_acesso_portal = true`
+
+**Reavaliar em:** Dez/2026 (início das matrículas do ano letivo seguinte).
 
 ---
 
