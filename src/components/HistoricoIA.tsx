@@ -237,12 +237,12 @@ Regras:
       let arquivo_url = ''
       if (arquivo) {
         const ext = arquivo.name.split('.').pop()
-        const path = `historicos_externos/${alunoVinculadoId || alunoId}/${Date.now()}.${ext}`
+        const path = `${alunoVinculadoId || alunoId}/${Date.now()}.${ext}`
         const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('documentos')
+          .from('historicos-externos')
           .upload(path, arquivo, { upsert: true })
         if (!uploadErr && uploadData) {
-          const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(path)
+          const { data: urlData } = supabase.storage.from('historicos-externos').getPublicUrl(path)
           arquivo_url = urlData.publicUrl
         }
       }
