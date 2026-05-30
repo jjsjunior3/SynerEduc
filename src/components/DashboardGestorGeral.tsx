@@ -32,6 +32,7 @@ import { RelatorioFinanceiro }  from './RelatorioFinanceiro';
 import BoletimCoordenador       from './BoletimCoordenador';
 import EmissaoDocumentos        from './EmissaoDocumentos';
 import HistoricoIA              from './HistoricoIA';
+import ArquivoHistorico         from './ArquivoHistorico';
 
 // ─── Tipos ───────────────────────────────────────────────
 type SecaoAtiva =
@@ -46,6 +47,7 @@ type SecaoAtiva =
   | 'relatorio-financeiro'
   | 'emissao-documentos'
   | 'historico-ia'
+  | 'arquivo-historico'
   | 'configuracoes';
 
 // Estado de navegação contextual — passado como prop para os filhos
@@ -129,6 +131,7 @@ export default function DashboardGestorGeral() {
         { id: 'boletins',             label: 'Boletins',         icon: <BookOpen       className="w-4 h-4" /> },
         { id: 'emissao-documentos',   label: 'Emitir Documentos',icon: <Stamp          className="w-4 h-4" /> },
         { id: 'historico-ia',         label: 'Histórico c/ IA',  icon: <History        className="w-4 h-4" /> },
+        { id: 'arquivo-historico',    label: 'Arquivo Histórico',icon: <History        className="w-4 h-4" /> },
       ],
     },
     {
@@ -671,6 +674,15 @@ export default function DashboardGestorGeral() {
         return (
           <div className="p-6">
             <HistoricoIA
+              usuario={{ id: usuario!.id, nome: usuario!.nome, tipo: usuario!.tipo, segmento: (usuario!.segmento ?? 'ead') as 'ead' | 'presencial' }}
+            />
+          </div>
+        );
+
+      case 'arquivo-historico':
+        return (
+          <div className="p-6">
+            <ArquivoHistorico
               usuario={{ id: usuario!.id, nome: usuario!.nome, tipo: usuario!.tipo, segmento: (usuario!.segmento ?? 'ead') as 'ead' | 'presencial' }}
             />
           </div>

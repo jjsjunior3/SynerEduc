@@ -1,0 +1,618 @@
+// ArquivoHistorico.tsx — F2.2
+// Digitalização de fichas e boletins históricos com IA
+// Fluxo: Aluno → Boletins Conexão → Escola Anterior
+
+import { useState } from 'react'
+import { supabase } from '../supabase/supabaseClient'
+import { toast } from 'sonner'
+import { UserCheck, BookOpen, History, ChevronRight, Search, Upload, Loader2, CheckCircle, Edit2, Trash2 } from 'lucide-react'
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+
+interface Usuario {
+  id: string
+  nome: string
+  tipo: string
+  segmento: 'ead' | 'presencial'
+}
+
+interface AlunoHistorico {
+  id: string
+  nome: string
+  data_nascimento?: string
+  cpf?: string
+  filiacao?: string
+  serie_saida?: string
+  ano_saida?: number
+  motivo_saida?: string
+  segmento: string
+}
+
+interface BoletimsExtraido {
+  disciplina: string
+  serie: string
+  ano_letivo: number
+  bimestre: number
+  av1?: number
+  av2?: number
+  av3?: number
+  recuperacao?: number
+  media_final: number
+  faltas: number
+  carga_horaria: number
+  situacao: 'aprovado' | 'reprovado' | 'recuperacao' | 'cursando'
+}
+
+interface Props {
+  usuario: Usuario
+}
+
+const TIPOS_ARQUIVO = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+const MAX_MB = 10
+
+// ─── Componente principal ─────────────────────────────────────────────────────
+
+export default function ArquivoHistorico({ usuario }: Props) {
+  // Etapa atual do wizard
+  const [etapa, setEtapa] = useState<'aluno' | 'boletins' | 'externo' | 'concluido'>('aluno')
+
+  // ── Estado — Aluno histórico ────────────────────────────────────────────────
+  const [buscaTermo, setBuscaTermo]         = useState('')
+  const [resultadosBusca, setResultadosBusca] = useState<AlunoHistorico[]>([])
+  const [buscando, setBuscando]             = useState(false)
+  const [alunoSelecionado, setAlunoSelecionado] = useState<AlunoHistorico | null>(null)
+  const [modoNovoAluno, setModoNovoAluno]   = useState(false)
+  const [dadosFicha, setDadosFicha]         = useState<Partial<AlunoHistorico>>({ segmento: usuario.segmento })
+  const [processandoFicha, setProcessandoFicha] = useState(false)
+  const [arquivoFicha, setArquivoFicha]     = useState<File | null>(null)
+
+  // ── Estado — Boletins ───────────────────────────────────────────────────────
+  const [arquivoBoletim, setArquivoBoletim] = useState<File | null>(null)
+  const [boletinsExtraidos, setBoletinsExtraidos] = useState<BoletimsExtraido[]>([])
+  const [processandoBoletim, setProcessandoBoletim] = useState(false)
+  const [boletinsSalvos, setBoletinsSalvos] = useState(false)
+
+  // ─── Buscar aluno histórico existente ────────────────────────────────────────
+  async function buscarAluno(termo: string) {
+    setBuscaTermo(termo)
+    if (termo.length < 2) { setResultadosBusca([]); return }
+    setBuscando(true)
+    try {
+      const { data } = await supabase
+        .from('alunos_historicos')
+        .select('id, nome, data_nascimento, serie_saida, ano_saida, segmento')
+        .eq('segmento', usuario.segmento)
+        .ilike('nome', `%${termo}%`)
+        .limit(8)
+      setResultadosBusca(data ?? [])
+    } finally {
+      setBuscando(false)
+    }
+  }
+
+  // ─── Digitalizar ficha de matrícula com IA ───────────────────────────────────
+  async function digitalizarFicha() {
+    if (!arquivoFicha) return
+    setProcessandoFicha(true)
+    try {
+      const base64 = await fileToBase64(arquivoFicha)
+      const isPdf = arquivoFicha.type === 'application/pdf'
+
+      const prompt = `Analise esta ficha de matrícula escolar brasileira e extraia as informações do aluno.
+
+Retorne APENAS um JSON válido com esta estrutura:
+{
+  "nome": "Nome completo do aluno",
+  "data_nascimento": "YYYY-MM-DD ou vazio",
+  "cpf": "CPF do aluno ou vazio",
+  "filiacao": "Nome do pai e da mãe separados por vírgula, ou vazio",
+  "serie_saida": "Última série cursada nesta escola, ex: 3ª série - Ensino Médio",
+  "ano_saida": 2025,
+  "motivo_saida": "conclusao ou transferencia ou desistencia ou outro"
+}
+
+Se um campo não estiver visível, use string vazia ou 0.`
+
+      const { data, error } = await supabase.functions.invoke('claude-proxy', {
+        body: { conteudo_base64: base64, media_type: arquivoFicha.type, is_pdf: isPdf, prompt },
+      })
+      if (error || data?.erro) throw new Error(error?.message ?? data?.erro)
+
+      const json = JSON.parse(limparJson(data.texto))
+      setDadosFicha(prev => ({ ...prev, ...json }))
+      toast.success('Ficha digitalizada! Revise os dados antes de salvar.')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Erro ao digitalizar ficha.')
+    } finally {
+      setProcessandoFicha(false)
+    }
+  }
+
+  // ─── Salvar aluno histórico ───────────────────────────────────────────────────
+  async function salvarAlunoHistorico() {
+    if (!dadosFicha.nome) { toast.error('Nome do aluno é obrigatório.'); return }
+    try {
+      let arquivo_ficha_url = ''
+      if (arquivoFicha) {
+        const ext = arquivoFicha.name.split('.').pop()
+        const path = `${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('fichas-historicas').upload(path, arquivoFicha, { upsert: true })
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from('fichas-historicas').getPublicUrl(path)
+          arquivo_ficha_url = urlData.publicUrl
+        }
+      }
+
+      const { data, error } = await supabase.from('alunos_historicos').insert({
+        ...dadosFicha,
+        arquivo_ficha_url,
+        criado_por: usuario.id,
+        segmento: usuario.segmento,
+      }).select().single()
+
+      if (error) throw error
+      setAlunoSelecionado(data)
+      setModoNovoAluno(false)
+      toast.success(`Perfil de ${data.nome} criado!`)
+      setEtapa('boletins')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Erro ao salvar aluno.')
+    }
+  }
+
+  // ─── Digitalizar boletim com IA ───────────────────────────────────────────────
+  async function digitalizarBoletim() {
+    if (!arquivoBoletim) return
+    setProcessandoBoletim(true)
+    setBoletinsExtraidos([])
+    try {
+      const base64 = await fileToBase64(arquivoBoletim)
+      const isPdf = arquivoBoletim.type === 'application/pdf'
+
+      const prompt = `Analise este boletim/histórico escolar do Colégio Conexão Maranhense e extraia TODAS as notas.
+
+Retorne APENAS um array JSON com esta estrutura (um objeto por disciplina por bimestre):
+[
+  {
+    "disciplina": "Nome da disciplina",
+    "serie": "Ex: 2ª série - Ensino Médio",
+    "ano_letivo": 2024,
+    "bimestre": 1,
+    "av1": 7.5,
+    "av2": 8.0,
+    "av3": null,
+    "recuperacao": null,
+    "media_final": 7.75,
+    "faltas": 2,
+    "carga_horaria": 80,
+    "situacao": "aprovado"
+  }
+]
+
+Regras:
+- bimestre é 1, 2, 3 ou 4
+- situacao: aprovado, reprovado, recuperacao ou cursando
+- Se não houver AV3 (segmento EAD), use null
+- Extraia TODOS os bimestres de TODOS os anos visíveis no documento
+- Use números para notas (não vírgula: 7.5 não 7,5)
+- Se faltas ou carga_horaria não estiverem visíveis, use 0`
+
+      const { data, error } = await supabase.functions.invoke('claude-proxy', {
+        body: { conteudo_base64: base64, media_type: arquivoBoletim.type, is_pdf: isPdf, prompt },
+      })
+      if (error || data?.erro) throw new Error(error?.message ?? data?.erro)
+
+      const json = JSON.parse(limparJson(data.texto))
+      if (!Array.isArray(json)) throw new Error('Formato inesperado. Tente um arquivo mais legível.')
+      setBoletinsExtraidos(json)
+      toast.success(`${json.length} registros extraídos! Revise antes de salvar.`)
+    } catch (err: any) {
+      toast.error(err.message ?? 'Erro ao digitalizar boletim.')
+    } finally {
+      setProcessandoBoletim(false)
+    }
+  }
+
+  // ─── Salvar boletins históricos ───────────────────────────────────────────────
+  async function salvarBoletins() {
+    if (!alunoSelecionado || boletinsExtraidos.length === 0) return
+    try {
+      let arquivo_url = ''
+      if (arquivoBoletim) {
+        const ext = arquivoBoletim.name.split('.').pop()
+        const path = `${alunoSelecionado.id}/${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('boletins-historicos').upload(path, arquivoBoletim, { upsert: true })
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from('boletins-historicos').getPublicUrl(path)
+          arquivo_url = urlData.publicUrl
+        }
+      }
+
+      const registros = boletinsExtraidos.map(b => ({
+        aluno_id:            alunoSelecionado.id,
+        disciplina:          b.disciplina,
+        serie:               b.serie,
+        ano_letivo:          b.ano_letivo,
+        bimestre:            b.bimestre,
+        av1:                 b.av1 ?? null,
+        av2:                 b.av2 ?? null,
+        av3:                 b.av3 ?? null,
+        recuperacao:         b.recuperacao ?? null,
+        media_final:         b.media_final,
+        faltas:              b.faltas ?? 0,
+        carga_horaria:       b.carga_horaria ?? 0,
+        situacao:            b.situacao,
+        segmento:            usuario.segmento,
+        arquivo_boletim_url: arquivo_url,
+        criado_por:          usuario.id,
+      }))
+
+      const { error } = await supabase.from('boletins_historicos').insert(registros)
+      if (error) throw error
+
+      setBoletinsSalvos(true)
+      toast.success(`${registros.length} registros salvos com sucesso!`)
+    } catch (err: any) {
+      toast.error(err.message ?? 'Erro ao salvar boletins.')
+    }
+  }
+
+  function atualizarBoletim(index: number, campo: keyof BoletimsExtraido, valor: string | number) {
+    setBoletinsExtraidos(prev => {
+      const novo = [...prev]
+      novo[index] = { ...novo[index], [campo]: valor }
+      return novo
+    })
+  }
+
+  function removerBoletim(index: number) {
+    setBoletinsExtraidos(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="space-y-6">
+
+      {/* Cabeçalho */}
+      <div>
+        <h2 className="text-2xl font-bold text-foreground">Arquivo Histórico Escolar</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Digitalize fichas e boletins de anos anteriores com IA — construa o histórico retroativo do aluno.
+        </p>
+      </div>
+
+      {/* Stepper */}
+      <div className="flex items-center gap-2 text-sm">
+        {[
+          { id: 'aluno',    label: 'Aluno',             icon: <UserCheck className="w-4 h-4" /> },
+          { id: 'boletins', label: 'Boletins Conexão',  icon: <BookOpen  className="w-4 h-4" /> },
+          { id: 'externo',  label: 'Escola Anterior',   icon: <History   className="w-4 h-4" /> },
+        ].map((step, i) => (
+          <div key={step.id} className="flex items-center gap-2">
+            <button
+              onClick={() => alunoSelecionado && setEtapa(step.id as any)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors
+                ${etapa === step.id
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              {step.icon} {step.label}
+            </button>
+            {i < 2 && <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        ))}
+      </div>
+
+      {/* ─────────────── ETAPA 1: ALUNO ─────────────────────────── */}
+      {etapa === 'aluno' && (
+        <div className="space-y-4">
+
+          {/* Buscar aluno já cadastrado */}
+          {!modoNovoAluno && !alunoSelecionado && (
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+              <h3 className="font-semibold text-foreground">Buscar aluno histórico existente</h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text" value={buscaTermo}
+                  onChange={e => buscarAluno(e.target.value)}
+                  placeholder="Digite o nome do aluno..."
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {buscando && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-muted-foreground" />}
+              </div>
+              {resultadosBusca.length > 0 && (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  {resultadosBusca.map(a => (
+                    <button key={a.id} onClick={() => { setAlunoSelecionado(a); setBuscaTermo(a.nome); setResultadosBusca([]) }}
+                            className="w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors border-b border-border last:border-0">
+                      <span className="font-medium text-foreground">{a.nome}</span>
+                      <span className="text-muted-foreground ml-2">· {a.serie_saida ?? '—'} · {a.ano_saida ?? '—'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 border-t border-border" />
+                <span className="text-xs text-muted-foreground">ou</span>
+                <div className="flex-1 border-t border-border" />
+              </div>
+              <button onClick={() => setModoNovoAluno(true)}
+                      className="w-full py-2.5 rounded-lg border border-dashed border-blue-400 text-blue-600 dark:text-blue-400 text-sm font-medium hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                + Cadastrar novo aluno histórico
+              </button>
+            </div>
+          )}
+
+          {/* Aluno selecionado */}
+          {alunoSelecionado && !modoNovoAluno && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-green-800 dark:text-green-200">{alunoSelecionado.nome}</p>
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  {alunoSelecionado.serie_saida ?? '—'} · {alunoSelecionado.ano_saida ?? '—'} · {alunoSelecionado.segmento}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setEtapa('boletins')}
+                        className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors">
+                  Continuar →
+                </button>
+                <button onClick={() => { setAlunoSelecionado(null); setBuscaTermo('') }}
+                        className="px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors">
+                  Trocar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Formulário novo aluno */}
+          {modoNovoAluno && (
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-foreground">Novo aluno histórico</h3>
+                <button onClick={() => setModoNovoAluno(false)} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+              </div>
+
+              {/* Upload ficha */}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-2">
+                  Digitalizar ficha de matrícula com IA (opcional)
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground cursor-pointer hover:bg-muted transition-colors">
+                    <Upload className="w-4 h-4" />
+                    {arquivoFicha ? arquivoFicha.name : 'Upload PDF ou foto'}
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
+                           onChange={e => { const f = e.target.files?.[0]; if (f && TIPOS_ARQUIVO.includes(f.type) && f.size <= MAX_MB * 1024 * 1024) setArquivoFicha(f) }} />
+                  </label>
+                  {arquivoFicha && (
+                    <button onClick={digitalizarFicha} disabled={processandoFicha}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2">
+                      {processandoFicha ? <><Loader2 className="w-4 h-4 animate-spin" /> Analisando...</> : 'Extrair com IA'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Campos do aluno */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Campo label="Nome *" value={dadosFicha.nome ?? ''} onChange={v => setDadosFicha(p => ({...p, nome: v}))} />
+                <Campo label="Data de Nascimento" value={dadosFicha.data_nascimento ?? ''} onChange={v => setDadosFicha(p => ({...p, data_nascimento: v}))} placeholder="AAAA-MM-DD" />
+                <Campo label="CPF" value={dadosFicha.cpf ?? ''} onChange={v => setDadosFicha(p => ({...p, cpf: v}))} />
+                <Campo label="Última Série na Conexão" value={dadosFicha.serie_saida ?? ''} onChange={v => setDadosFicha(p => ({...p, serie_saida: v}))} placeholder="Ex: 3ª série - Ensino Médio" />
+                <Campo label="Ano de Saída" value={String(dadosFicha.ano_saida ?? '')} onChange={v => setDadosFicha(p => ({...p, ano_saida: Number(v)}))} placeholder="2025" />
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Motivo da Saída</label>
+                  <select value={dadosFicha.motivo_saida ?? ''} onChange={e => setDadosFicha(p => ({...p, motivo_saida: e.target.value}))}
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Selecione...</option>
+                    <option value="conclusao">Conclusão de curso</option>
+                    <option value="transferencia">Transferência</option>
+                    <option value="desistencia">Desistência</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <Campo label="Filiação (pai e mãe)" value={dadosFicha.filiacao ?? ''} onChange={v => setDadosFicha(p => ({...p, filiacao: v}))} placeholder="Nome do pai, Nome da mãe" />
+                </div>
+              </div>
+
+              <button onClick={salvarAlunoHistorico}
+                      disabled={!dadosFicha.nome}
+                      className="w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                Salvar e continuar para Boletins →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─────────────── ETAPA 2: BOLETINS CONEXÃO ──────────────── */}
+      {etapa === 'boletins' && alunoSelecionado && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              Aluno: <strong>{alunoSelecionado.nome}</strong> — agora adicione os boletins da Conexão de anos anteriores.
+            </p>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <h3 className="font-semibold text-foreground">Upload de boletim / histórico interno</h3>
+            <p className="text-xs text-muted-foreground">
+              Você pode fazer upload de um PDF ou foto do boletim. Pode repetir este processo para cada ano letivo.
+            </p>
+
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground cursor-pointer hover:bg-muted transition-colors">
+                <Upload className="w-4 h-4" />
+                {arquivoBoletim ? arquivoBoletim.name : 'Upload PDF ou foto do boletim'}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
+                       onChange={e => {
+                         const f = e.target.files?.[0]
+                         if (f && TIPOS_ARQUIVO.includes(f.type) && f.size <= MAX_MB * 1024 * 1024) {
+                           setArquivoBoletim(f)
+                           setBoletinsExtraidos([])
+                           setBoletinsSalvos(false)
+                         }
+                       }} />
+              </label>
+              {arquivoBoletim && !processandoBoletim && (
+                <button onClick={digitalizarBoletim}
+                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+                  Extrair notas com IA
+                </button>
+              )}
+              {processandoBoletim && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Analisando...
+                </div>
+              )}
+            </div>
+
+            {/* Tabela de boletins extraídos */}
+            {boletinsExtraidos.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-foreground">{boletinsExtraidos.length} registros extraídos — revise antes de salvar:</p>
+                  {boletinsSalvos && (
+                    <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+                      <CheckCircle className="w-4 h-4" /> Salvo
+                    </div>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border">
+                        {['Disciplina','Série','Ano','Bim','AV1','AV2','Média','Faltas','Situação',''].map(h => (
+                          <th key={h} className="text-left pb-2 px-1 font-semibold text-muted-foreground">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {boletinsExtraidos.map((b, i) => (
+                        <tr key={i} className="hover:bg-muted/30">
+                          <td className="py-1 px-1"><input value={b.disciplina} onChange={e => atualizarBoletim(i,'disciplina',e.target.value)} className="w-24 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs" /></td>
+                          <td className="py-1 px-1"><input value={b.serie} onChange={e => atualizarBoletim(i,'serie',e.target.value)} className="w-20 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs" /></td>
+                          <td className="py-1 px-1"><input type="number" value={b.ano_letivo} onChange={e => atualizarBoletim(i,'ano_letivo',Number(e.target.value))} className="w-14 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
+                          <td className="py-1 px-1"><input type="number" min={1} max={4} value={b.bimestre} onChange={e => atualizarBoletim(i,'bimestre',Number(e.target.value))} className="w-10 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
+                          <td className="py-1 px-1"><input type="number" step="0.1" value={b.av1 ?? ''} onChange={e => atualizarBoletim(i,'av1',parseFloat(e.target.value))} className="w-12 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
+                          <td className="py-1 px-1"><input type="number" step="0.1" value={b.av2 ?? ''} onChange={e => atualizarBoletim(i,'av2',parseFloat(e.target.value))} className="w-12 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
+                          <td className="py-1 px-1"><input type="number" step="0.1" value={b.media_final} onChange={e => atualizarBoletim(i,'media_final',parseFloat(e.target.value))} className="w-12 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center font-medium" /></td>
+                          <td className="py-1 px-1"><input type="number" value={b.faltas} onChange={e => atualizarBoletim(i,'faltas',Number(e.target.value))} className="w-10 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
+                          <td className="py-1 px-1">
+                            <select value={b.situacao} onChange={e => atualizarBoletim(i,'situacao',e.target.value as any)} className="px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs">
+                              <option value="aprovado">Aprovado</option>
+                              <option value="reprovado">Reprovado</option>
+                              <option value="recuperacao">Recuperação</option>
+                              <option value="cursando">Cursando</option>
+                            </select>
+                          </td>
+                          <td className="py-1 px-1">
+                            <button onClick={() => removerBoletim(i)} className="text-muted-foreground hover:text-red-500 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {!boletinsSalvos && (
+                  <button onClick={salvarBoletins}
+                          className="px-6 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors">
+                    Confirmar e salvar {boletinsExtraidos.length} registros
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Ações */}
+          <div className="flex items-center justify-between pt-2">
+            <button onClick={() => { setArquivoBoletim(null); setBoletinsExtraidos([]); setBoletinsSalvos(false) }}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              <Edit2 className="w-4 h-4" /> Adicionar outro boletim
+            </button>
+            <button onClick={() => setEtapa('externo')}
+                    className="px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+              Próximo: Escola Anterior →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────── ETAPA 3: ESCOLA ANTERIOR ───────────────── */}
+      {etapa === 'externo' && alunoSelecionado && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+            <History className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div className="text-sm text-amber-800 dark:text-amber-200">
+              <p className="font-medium">Histórico da escola anterior de {alunoSelecionado.nome}</p>
+              <p className="text-xs mt-0.5">Use o módulo "Histórico c/ IA" para digitalizar o histórico da escola anterior e vincule ao perfil deste aluno.</p>
+            </div>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-5 text-center space-y-3">
+            <History className="w-10 h-10 text-muted-foreground mx-auto" />
+            <p className="text-sm text-muted-foreground">
+              Para adicionar o histórico de outra escola, vá em <strong>"Histórico c/ IA"</strong> no menu lateral e use o ID do aluno histórico:
+            </p>
+            <code className="px-3 py-1.5 rounded-lg bg-muted text-foreground text-xs font-mono">{alunoSelecionado.id}</code>
+            <p className="text-xs text-muted-foreground">
+              O histórico ficará vinculado a <strong>{alunoSelecionado.nome}</strong> e será incluído na geração do histórico retroativo completo.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <button onClick={() => setEtapa('concluido')}
+                    className="px-6 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" /> Concluir digitalização
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────── CONCLUÍDO ──────────────────────────────── */}
+      {etapa === 'concluido' && alunoSelecionado && (
+        <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+          <CheckCircle className="w-16 h-16 text-green-500" />
+          <h3 className="text-xl font-bold text-foreground">Digitalização concluída!</h3>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            O arquivo histórico de <strong>{alunoSelecionado.nome}</strong> foi criado. Os boletins e histórico escolar estão salvos e prontos para gerar o histórico retroativo completo.
+          </p>
+          <button onClick={() => { setEtapa('aluno'); setAlunoSelecionado(null); setBuscaTermo(''); setBoletinsExtraidos([]); setBoletinsSalvos(false); setArquivoFicha(null); setArquivoBoletim(null); setDadosFicha({ segmento: usuario.segmento }) }}
+                  className="mt-2 px-5 py-2.5 rounded-lg border border-border text-sm text-foreground hover:bg-muted transition-colors">
+            Digitalizar outro aluno
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function Campo({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+             className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+  )
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+function limparJson(texto: string): string {
+  return texto.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+}
