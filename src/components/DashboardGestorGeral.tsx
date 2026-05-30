@@ -17,7 +17,7 @@ import {
   XCircle, CreditCard, LogOut, Menu, X,
   RefreshCw, AlertCircle, Building2, BarChart3,
   Upload, BookOpen, Sun, Moon, ArrowRight,
-  Stamp,
+  Stamp, History,
 } from 'lucide-react';
 import logoEscola from '../assets/e339c695d5503d560f7e53d2039456d52fd95ea5.png';
 import { useAlunosPendencias } from '../hooks/useAlunosPendencias';
@@ -30,7 +30,8 @@ import { ControlePagamentos }   from './ControlePagamentos';
 import { ControleDespesas }     from './ControleDespesas';
 import { RelatorioFinanceiro }  from './RelatorioFinanceiro';
 import BoletimCoordenador       from './BoletimCoordenador';
-import EmissaoDocumentos        from './EmissaoDocumentos';  // ← NOVO
+import EmissaoDocumentos        from './EmissaoDocumentos';
+import HistoricoIA              from './HistoricoIA';
 
 // ─── Tipos ───────────────────────────────────────────────
 type SecaoAtiva =
@@ -43,7 +44,8 @@ type SecaoAtiva =
   | 'controle-pagamentos'
   | 'controle-despesas'
   | 'relatorio-financeiro'
-  | 'emissao-documentos'   // ← NOVO
+  | 'emissao-documentos'
+  | 'historico-ia'
   | 'configuracoes';
 
 // Estado de navegação contextual — passado como prop para os filhos
@@ -125,7 +127,8 @@ export default function DashboardGestorGeral() {
         { id: 'documentos-recebidos', label: 'Documentos',       icon: <Upload         className="w-4 h-4" /> },
         { id: 'emissao-contratos',    label: 'Contratos',        icon: <FileText       className="w-4 h-4" /> },
         { id: 'boletins',             label: 'Boletins',         icon: <BookOpen       className="w-4 h-4" /> },
-        { id: 'emissao-documentos',   label: 'Emitir Documentos',icon: <Stamp          className="w-4 h-4" /> }, // ← NOVO
+        { id: 'emissao-documentos',   label: 'Emitir Documentos',icon: <Stamp          className="w-4 h-4" /> },
+        { id: 'historico-ia',         label: 'Histórico c/ IA',  icon: <History        className="w-4 h-4" /> },
       ],
     },
     {
@@ -247,7 +250,8 @@ export default function DashboardGestorGeral() {
               { label: 'Emitir Contrato',      icon: <FileText     className="w-5 h-5" />, acao: () => setSecaoAtiva('emissao-contratos'),     bgL: '#ede9fe', bgD: '#2e1065', cor: '#7c3aed' },
               { label: 'Registrar Pagamento',  icon: <CreditCard   className="w-5 h-5" />, acao: () => setSecaoAtiva('controle-pagamentos'),   bgL: '#dcfce7', bgD: '#14532d', cor: '#16a34a' },
               { label: 'Controle de Despesas', icon: <TrendingDown className="w-5 h-5" />, acao: () => setSecaoAtiva('controle-despesas'),     bgL: '#ffedd5', bgD: '#431407', cor: '#ea580c' },
-              { label: 'Emitir Documentos',    icon: <Stamp        className="w-5 h-5" />, acao: () => setSecaoAtiva('emissao-documentos'),    bgL: '#e0f2fe', bgD: '#0c2a3f', cor: '#0284c7' }, // ← NOVO
+              { label: 'Emitir Documentos',    icon: <Stamp        className="w-5 h-5" />, acao: () => setSecaoAtiva('emissao-documentos'),    bgL: '#e0f2fe', bgD: '#0c2a3f', cor: '#0284c7' },
+              { label: 'Histórico c/ IA',     icon: <History      className="w-5 h-5" />, acao: () => setSecaoAtiva('historico-ia'),           bgL: '#f0fdf4', bgD: '#052e16', cor: '#16a34a' },
             ].map(a => (
               <button key={a.label} onClick={a.acao}
                 className="flex items-center gap-4 p-5 rounded-xl border border-border hover:shadow-md hover:scale-[1.02] transition-all text-left"
@@ -660,9 +664,17 @@ export default function DashboardGestorGeral() {
       case 'relatorio-financeiro':
         return <RelatorioFinanceiro onVoltar={() => setSecaoAtiva('dashboard')} segmentoGestor={segmentoGestor} />;
 
-      // ── NOVO: Emissão de Documentos ──────────────────────────────────────
       case 'emissao-documentos':
         return <EmissaoDocumentos usuario={usuario!} />;
+
+      case 'historico-ia':
+        return (
+          <div className="p-6">
+            <HistoricoIA
+              usuario={{ id: usuario!.id, nome: usuario!.nome, tipo: usuario!.tipo, segmento: (usuario!.segmento ?? 'ead') as 'ead' | 'presencial' }}
+            />
+          </div>
+        );
 
       case 'configuracoes':
         return (
