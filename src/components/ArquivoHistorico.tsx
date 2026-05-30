@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { supabase } from '../supabase/supabaseClient'
 import { toast } from 'sonner'
 import { UserCheck, BookOpen, History, ChevronRight, Search, Upload, Loader2, CheckCircle, Edit2, Trash2 } from 'lucide-react'
+import HistoricoIA from './HistoricoIA'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -651,24 +652,15 @@ Regras:
       {/* ─────────────── ETAPA 3: ESCOLA ANTERIOR ───────────────── */}
       {etapa === 'externo' && alunoSelecionado && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-            <History className="w-5 h-5 text-amber-600 flex-shrink-0" />
-            <div className="text-sm text-amber-800 dark:text-amber-200">
-              <p className="font-medium">Histórico da escola anterior de {alunoSelecionado.nome}</p>
-              <p className="text-xs mt-0.5">Use o módulo "Histórico c/ IA" para digitalizar o histórico da escola anterior e vincule ao perfil deste aluno.</p>
-            </div>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-5 text-center space-y-3">
-            <History className="w-10 h-10 text-muted-foreground mx-auto" />
-            <p className="text-sm text-muted-foreground">
-              Para adicionar o histórico de outra escola, vá em <strong>"Histórico c/ IA"</strong> no menu lateral e use o ID do aluno histórico:
-            </p>
-            <code className="px-3 py-1.5 rounded-lg bg-muted text-foreground text-xs font-mono">{alunoSelecionado.id}</code>
-            <p className="text-xs text-muted-foreground">
-              O histórico ficará vinculado a <strong>{alunoSelecionado.nome}</strong> e será incluído na geração do histórico retroativo completo.
-            </p>
-          </div>
-          <div className="flex justify-center">
+          {/* HistoricoIA embutido — sem troca de tela, sem copiar ID */}
+          <HistoricoIA
+            usuario={usuario}
+            alunoHistoricoId={alunoSelecionado.id}
+            alunoHistoricoNome={alunoSelecionado.nome}
+            modoEmbutido
+          />
+
+          <div className="flex justify-center pt-2">
             <button onClick={() => setEtapa('concluido')}
                     className="px-6 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors flex items-center gap-2">
               <CheckCircle className="w-4 h-4" /> Concluir digitalização

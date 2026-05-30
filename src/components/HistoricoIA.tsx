@@ -34,14 +34,20 @@ interface HistoricoExterno {
 
 interface Props {
   usuario: Usuario
+  // Aluno ativo no sistema (users.id)
   alunoId?: string
   aluno_nome?: string
+  // Aluno histórico sem conta (alunos_historicos.id) — usado no fluxo ArquivoHistorico
+  alunoHistoricoId?: string
+  alunoHistoricoNome?: string
+  // Quando embutido em outro componente, oculta o cabeçalho
+  modoEmbutido?: boolean
 }
 
 const TIPOS_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 const TAMANHO_MAX_MB = 10
 
-export default function HistoricoIA({ usuario, alunoId, aluno_nome }: Props) {
+export default function HistoricoIA({ usuario, alunoId, aluno_nome, alunoHistoricoId, alunoHistoricoNome, modoEmbutido }: Props) {
   const [etapa, setEtapa] = useState<'upload' | 'processando' | 'revisao' | 'salvo'>('upload')
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -50,6 +56,8 @@ export default function HistoricoIA({ usuario, alunoId, aluno_nome }: Props) {
   const [historico, setHistorico] = useState<HistoricoExterno | null>(null)
   const [alunoVinculadoId, setAlunoVinculadoId] = useState<string>(alunoId ?? '')
   const [alunoVinculadoNome, setAlunoVinculadoNome] = useState<string>(aluno_nome ?? '')
+  // Quando vem do ArquivoHistorico, o aluno histórico já está pré-selecionado
+  const alunoHistoricoFixo = !!alunoHistoricoId
   const [buscandoAluno, setBuscandoAluno] = useState(false)
   const [resultadosAluno, setResultadosAluno] = useState<{ id: string; nome: string }[]>([])
   const [termoBuscaAluno, setTermoBuscaAluno] = useState(aluno_nome ?? '')
@@ -227,40 +235,42 @@ Regras:
   }
 
   async function salvarHistorico() {
-    if (!historico || (!alunoVinculadoId && !alunoId)) {
+    const idAluno          = alunoVinculadoId || alunoId || null
+    const idAlunoHistorico = alunoHistoricoId || null
+    if (!historico || (!idAluno && !idAlunoHistorico)) {
       setErro('Vincule um aluno antes de salvar.')
       return
     }
     setProgresso('Salvando...')
 
     try {
+      // Bucket privado — salva o path, não URL pública
       let arquivo_url = ''
       if (arquivo) {
         const ext = arquivo.name.split('.').pop()
-        const path = `${alunoVinculadoId || alunoId}/${Date.now()}.${ext}`
-        const { data: uploadData, error: uploadErr } = await supabase.storage
+        const pasta = idAlunoHistorico ?? idAluno ?? 'sem-vinculo'
+        const storagePath = `${pasta}/${Date.now()}.${ext}`
+        const { error: uploadErr } = await supabase.storage
           .from('historicos-externos')
-          .upload(path, arquivo, { upsert: true })
-        if (!uploadErr && uploadData) {
-          const { data: urlData } = supabase.storage.from('historicos-externos').getPublicUrl(path)
-          arquivo_url = urlData.publicUrl
-        }
+          .upload(storagePath, arquivo, { upsert: true })
+        if (!uploadErr) arquivo_url = storagePath
       }
 
       const { error } = await supabase.from('historico_externo').insert({
-        aluno_id: alunoVinculadoId || alunoId,
-        nome_aluno: historico.nome_aluno,
-        data_nascimento: historico.data_nascimento || null,
+        aluno_id:            idAlunoHistorico ? null : idAluno,
+        aluno_historico_id:  idAlunoHistorico,
+        nome_aluno:          historico.nome_aluno,
+        data_nascimento:     historico.data_nascimento || null,
         nome_escola_anterior: historico.nome_escola_anterior,
-        municipio_escola: historico.municipio_escola,
-        uf_escola: historico.uf_escola,
-        cnpj_escola: historico.cnpj_escola || null,
-        nivel_ensino: historico.nivel_ensino,
-        disciplinas: historico.disciplinas,
-        observacoes: historico.observacoes || null,
+        municipio_escola:    historico.municipio_escola,
+        uf_escola:           historico.uf_escola,
+        cnpj_escola:         historico.cnpj_escola || null,
+        nivel_ensino:        historico.nivel_ensino,
+        disciplinas:         historico.disciplinas,
+        observacoes:         historico.observacoes || null,
         arquivo_url,
-        criado_por: usuario.id,
-        segmento: usuario.segmento,
+        criado_por:          usuario.id,
+        segmento:            usuario.segmento,
       })
 
       if (error) throw error
@@ -287,24 +297,36 @@ Regras:
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            Histórico Escolar com IA
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Faça o upload do histórico da escola anterior — a IA extrai os dados automaticamente para revisão.
-          </p>
+      {/* Cabeçalho — oculto quando embutido em outro componente */}
+      {!modoEmbutido && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-foreground">
+              Histórico Escolar com IA
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Faça o upload do histórico da escola anterior — a IA extrai os dados automaticamente para revisão.
+            </p>
+          </div>
+          {etapa !== 'upload' && etapa !== 'salvo' && (
+            <button onClick={resetar}
+                    className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors">
+              Recomeçar
+            </button>
+          )}
         </div>
-        {etapa !== 'upload' && etapa !== 'salvo' && (
-          <button
-            onClick={resetar}
-            className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
-          >
-            Recomeçar
-          </button>
-        )}
-      </div>
+      )}
+
+      {/* Quando embutido, mostra o aluno histórico pré-selecionado */}
+      {modoEmbutido && alunoHistoricoFixo && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
+          <span className="text-lg">📚</span>
+          <span>Histórico da escola anterior de <strong>{alunoHistoricoNome}</strong></span>
+          {etapa !== 'upload' && etapa !== 'salvo' && (
+            <button onClick={resetar} className="ml-auto text-xs text-blue-600 hover:underline">Recomeçar</button>
+          )}
+        </div>
+      )}
 
       {/* Erro global */}
       {erro && (
@@ -446,8 +468,8 @@ Regras:
             </div>
           </div>
 
-          {/* Vincular aluno */}
-          {!alunoId && (
+          {/* Vincular aluno — oculto quando aluno histórico já vem pré-selecionado */}
+          {!alunoId && !alunoHistoricoFixo && (
             <div className="bg-card border border-border rounded-xl p-5 space-y-3">
               <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
                 Vincular ao Aluno no Sistema *
