@@ -1,5 +1,5 @@
 # ROADMAP — Portal Conexão AVA · SynerEduc
-> Backlog priorizado por dependência estrutural · Atualizado em: 2026-05-29  
+> Backlog priorizado por dependência estrutural · Atualizado em: 2026-05-30  
 > Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · ⏸ Adiado · 🚫 Descartado
 
 ---
@@ -64,6 +64,19 @@ ADIADO
 | **#7** | F4 Financeiro+Asaas | Após F3 (portal) + F1.1 (multi-tenant) = zero retrabalho | 2-3 sem | Out-Nov |
 | **#8** | F6 PWA | Produto estável — após tudo acima consolidado | 1-2 sem | Nov-Dez |
 | **⏸** | F1.2 Liberar acesso | Todos os alunos já cadastrados — retomar nas matrículas | — | Dez/2026 |
+
+---
+
+## Bugs backend — descobertos via análise do Supabase (2026-05-30)
+
+| ID | Componente | Descrição | Issue | Risco |
+|---|---|---|---|:---:|
+| BUG-B001 | `fn_atualizar_media` | Fórmula errada para Presencial — AV3 ignorado e REC incorreta | #11 | 🟡 |
+| BUG-B002 | `total_alunos_ativos()` | Referencia tabela 'usuarios' inexistente | #12 | 🟢 |
+| BUG-B003 | `buscar_agenda_por_data` | 3 versões no banco, 2 quebradas | #13 | 🟡 |
+| BUG-B004 | `eh_admin()` | Não inclui gestor_geral — inconsistência de privilégios | #14 | 🟢 |
+| SEC-001 | `grade_horaria` | RLS USING(true) — qualquer usuário pode escrever | #10 | 🟢 |
+| IDX-001 | múltiplas tabelas | 9 indexes críticos ausentes | #15 | 🟢 |
 
 ---
 
