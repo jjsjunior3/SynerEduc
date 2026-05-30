@@ -28,19 +28,13 @@ interface AlunoHistorico {
   segmento: string
 }
 
+// Apenas média final anual — não bimestral
 interface BoletimsExtraido {
-  disciplina: string
-  serie: string
-  ano_letivo: number
-  bimestre: number
-  av1?: number
-  av2?: number
-  av3?: number
-  recuperacao?: number
-  media_final: number
-  faltas: number
-  carga_horaria: number
-  situacao: 'aprovado' | 'reprovado' | 'recuperacao' | 'cursando'
+  disciplina:   string
+  serie:        string
+  ano_letivo:   number
+  media_final:  number
+  situacao:     'aprovado' | 'reprovado' | 'recuperacao' | 'cursando'
 }
 
 interface Props {
@@ -171,34 +165,25 @@ Se um campo não estiver visível, use string vazia ou 0.`
       const base64 = await fileToBase64(arquivoBoletim)
       const isPdf = arquivoBoletim.type === 'application/pdf'
 
-      const prompt = `Analise este boletim/histórico escolar do Colégio Conexão Maranhense e extraia TODAS as notas.
+      const prompt = `Analise este boletim escolar e extraia a MÉDIA FINAL ANUAL de cada disciplina.
 
-Retorne APENAS um array JSON com esta estrutura (um objeto por disciplina por bimestre):
+Retorne APENAS um array JSON — um objeto por disciplina:
 [
   {
     "disciplina": "Nome da disciplina",
     "serie": "Ex: 2ª série - Ensino Médio",
     "ano_letivo": 2024,
-    "bimestre": 1,
-    "av1": 7.5,
-    "av2": 8.0,
-    "av3": null,
-    "recuperacao": null,
-    "media_final": 7.75,
-    "faltas": 2,
-    "carga_horaria": 80,
+    "media_final": 8.5,
     "situacao": "aprovado"
   }
 ]
 
 Regras:
-- bimestre é 1, 2, 3 ou 4
-- situacao: aprovado, reprovado, recuperacao ou cursando
-- Se não houver AV3 (segmento EAD), use null
-- Extraia TODOS os bimestres de TODOS os anos visíveis no documento
-- Use números para notas (não vírgula: 7.5 não 7,5)
-- Se faltas ou carga_horaria não estiverem visíveis, use 0
-- IMPORTANTE: retorne SOMENTE o array JSON, sem texto antes, sem texto depois, sem explicações`
+- Use a coluna M.FINAL, MÉDIA FINAL ou RESULTADO do documento (não as médias bimestrais)
+- situacao deve ser exatamente: aprovado, reprovado, recuperacao ou cursando
+- Inclua TODAS as disciplinas visíveis, incluindo extracurriculares
+- Use ponto decimal (8.5 não 8,5)
+- SOMENTE o array JSON — sem texto antes, sem texto depois, sem explicações`
 
       const { data, error } = await supabase.functions.invoke('claude-proxy', {
         body: {
@@ -268,14 +253,8 @@ Regras:
         disciplina:          b.disciplina,
         serie:               b.serie,
         ano_letivo:          b.ano_letivo,
-        bimestre:            b.bimestre,
-        av1:                 b.av1 ?? null,
-        av2:                 b.av2 ?? null,
-        av3:                 b.av3 ?? null,
-        recuperacao:         b.recuperacao ?? null,
+        bimestre:            0,      // 0 = média final anual
         media_final:         b.media_final,
-        faltas:              b.faltas ?? 0,
-        carga_horaria:       b.carga_horaria ?? 0,
         situacao:            b.situacao,
         segmento:            usuario.segmento,
         arquivo_boletim_url: arquivo_url,
@@ -294,9 +273,9 @@ Regras:
 
   function atualizarBoletim(index: number, campo: keyof BoletimsExtraido, valor: string | number) {
     setBoletinsExtraidos(prev => {
-      const novo = [...prev]
-      novo[index] = { ...novo[index], [campo]: valor }
-      return novo
+      const copia = [...prev]
+      copia[index] = { ...copia[index], [campo]: valor }
+      return copia
     })
   }
 
@@ -519,35 +498,46 @@ Regras:
                   )}
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
-                        {['Disciplina','Série','Ano','Bim','AV1','AV2','Média','Faltas','Situação',''].map(h => (
-                          <th key={h} className="text-left pb-2 px-1 font-semibold text-muted-foreground">{h}</th>
+                        {['Disciplina', 'Série', 'Ano', 'Média Final', 'Situação', ''].map(h => (
+                          <th key={h} className="text-left pb-2 px-2 font-semibold text-muted-foreground text-xs">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {boletinsExtraidos.map((b, i) => (
-                        <tr key={i} className="hover:bg-muted/30">
-                          <td className="py-1 px-1"><input value={b.disciplina} onChange={e => atualizarBoletim(i,'disciplina',e.target.value)} className="w-24 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs" /></td>
-                          <td className="py-1 px-1"><input value={b.serie} onChange={e => atualizarBoletim(i,'serie',e.target.value)} className="w-20 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs" /></td>
-                          <td className="py-1 px-1"><input type="number" value={b.ano_letivo} onChange={e => atualizarBoletim(i,'ano_letivo',Number(e.target.value))} className="w-14 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
-                          <td className="py-1 px-1"><input type="number" min={1} max={4} value={b.bimestre} onChange={e => atualizarBoletim(i,'bimestre',Number(e.target.value))} className="w-10 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
-                          <td className="py-1 px-1"><input type="number" step="0.1" value={b.av1 ?? ''} onChange={e => atualizarBoletim(i,'av1',parseFloat(e.target.value))} className="w-12 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
-                          <td className="py-1 px-1"><input type="number" step="0.1" value={b.av2 ?? ''} onChange={e => atualizarBoletim(i,'av2',parseFloat(e.target.value))} className="w-12 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
-                          <td className="py-1 px-1"><input type="number" step="0.1" value={b.media_final} onChange={e => atualizarBoletim(i,'media_final',parseFloat(e.target.value))} className="w-12 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center font-medium" /></td>
-                          <td className="py-1 px-1"><input type="number" value={b.faltas} onChange={e => atualizarBoletim(i,'faltas',Number(e.target.value))} className="w-10 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs text-center" /></td>
-                          <td className="py-1 px-1">
-                            <select value={b.situacao} onChange={e => atualizarBoletim(i,'situacao',e.target.value as any)} className="px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs">
+                        <tr key={i} className="hover:bg-muted/30 transition-colors">
+                          <td className="py-1.5 px-2">
+                            <input value={b.disciplina} onChange={e => atualizarBoletim(i, 'disciplina', e.target.value)}
+                                   className="w-full px-2 py-1 rounded border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          </td>
+                          <td className="py-1.5 px-2">
+                            <input value={b.serie} onChange={e => atualizarBoletim(i, 'serie', e.target.value)}
+                                   className="w-36 px-2 py-1 rounded border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          </td>
+                          <td className="py-1.5 px-2">
+                            <input type="number" value={b.ano_letivo} onChange={e => atualizarBoletim(i, 'ano_letivo', Number(e.target.value))}
+                                   className="w-16 px-2 py-1 rounded border border-border bg-background text-foreground text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          </td>
+                          <td className="py-1.5 px-2">
+                            <input type="number" step="0.1" min="0" max="10" value={b.media_final}
+                                   onChange={e => atualizarBoletim(i, 'media_final', parseFloat(e.target.value))}
+                                   className={`w-20 px-2 py-1 rounded border border-border bg-background text-xs text-center font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500
+                                     ${Number(b.media_final) >= 7 ? 'text-green-600 dark:text-green-400' : Number(b.media_final) >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`} />
+                          </td>
+                          <td className="py-1.5 px-2">
+                            <select value={b.situacao} onChange={e => atualizarBoletim(i, 'situacao', e.target.value as any)}
+                                    className="px-2 py-1 rounded border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
                               <option value="aprovado">Aprovado</option>
                               <option value="reprovado">Reprovado</option>
                               <option value="recuperacao">Recuperação</option>
                               <option value="cursando">Cursando</option>
                             </select>
                           </td>
-                          <td className="py-1 px-1">
-                            <button onClick={() => removerBoletim(i)} className="text-muted-foreground hover:text-red-500 transition-colors">
+                          <td className="py-1.5 px-2">
+                            <button onClick={() => removerBoletim(i)} className="text-muted-foreground hover:text-red-500 transition-colors p-1 rounded">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </td>
