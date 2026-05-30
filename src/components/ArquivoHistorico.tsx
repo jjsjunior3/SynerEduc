@@ -61,6 +61,7 @@ export default function ArquivoHistorico({ usuario }: Props) {
   const [arquivoFicha, setArquivoFicha]     = useState<File | null>(null)
 
   // ── Estado — Boletins ───────────────────────────────────────────────────────
+  const [modoEntrada, setModoEntrada]       = useState<'ia' | 'manual'>('ia')
   const [arquivoBoletim, setArquivoBoletim] = useState<File | null>(null)
   const [boletinsExtraidos, setBoletinsExtraidos] = useState<BoletimsExtraido[]>([])
   const [processandoBoletim, setProcessandoBoletim] = useState(false)
@@ -271,6 +272,19 @@ Regras:
     }
   }
 
+  function adicionarLinhaManual() {
+    setBoletinsExtraidos(prev => [
+      ...prev,
+      {
+        disciplina:  '',
+        serie:       alunoSelecionado?.serie_saida ?? '',
+        ano_letivo:  alunoSelecionado?.ano_saida ?? new Date().getFullYear() - 1,
+        media_final: 0,
+        situacao:    'aprovado',
+      },
+    ])
+  }
+
   function atualizarBoletim(index: number, campo: keyof BoletimsExtraido, valor: string | number) {
     setBoletinsExtraidos(prev => {
       const copia = [...prev]
@@ -449,118 +463,182 @@ Regras:
           <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
             <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
             <p className="text-sm text-blue-800 dark:text-blue-200">
-              Aluno: <strong>{alunoSelecionado.nome}</strong> — agora adicione os boletins da Conexão de anos anteriores.
+              Aluno: <strong>{alunoSelecionado.nome}</strong> — adicione os boletins da Conexão de anos anteriores.
             </p>
           </div>
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <h3 className="font-semibold text-foreground">Upload de boletim / histórico interno</h3>
-            <p className="text-xs text-muted-foreground">
-              Você pode fazer upload de um PDF ou foto do boletim. Pode repetir este processo para cada ano letivo.
-            </p>
 
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground cursor-pointer hover:bg-muted transition-colors">
-                <Upload className="w-4 h-4" />
-                {arquivoBoletim ? arquivoBoletim.name : 'Upload PDF ou foto do boletim'}
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
-                       onChange={e => {
-                         const f = e.target.files?.[0]
-                         if (f && TIPOS_ARQUIVO.includes(f.type) && f.size <= MAX_MB * 1024 * 1024) {
-                           setArquivoBoletim(f)
-                           setBoletinsExtraidos([])
-                           setBoletinsSalvos(false)
-                         }
-                       }} />
-              </label>
-              {arquivoBoletim && !processandoBoletim && (
-                <button onClick={digitalizarBoletim}
-                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-                  Extrair notas com IA
-                </button>
-              )}
-              {processandoBoletim && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Analisando...
-                </div>
-              )}
+            {/* ── Toggle IA / Manual ── */}
+            <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
+              <button
+                onClick={() => { setModoEntrada('ia'); setBoletinsExtraidos([]); setBoletinsSalvos(false) }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all
+                  ${modoEntrada === 'ia'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Loader2 className={`w-4 h-4 ${modoEntrada === 'ia' && processandoBoletim ? 'animate-spin' : ''}`} />
+                Extrair com IA
+              </button>
+              <button
+                onClick={() => { setModoEntrada('manual'); setBoletinsExtraidos([]); setBoletinsSalvos(false); setArquivoBoletim(null) }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all
+                  ${modoEntrada === 'manual'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Edit2 className="w-4 h-4" />
+                Entrada Manual
+              </button>
             </div>
 
-            {/* Tabela de boletins extraídos */}
-            {boletinsExtraidos.length > 0 && (
+            {/* ── Modo IA ── */}
+            {modoEntrada === 'ia' && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-foreground">{boletinsExtraidos.length} registros extraídos — revise antes de salvar:</p>
-                  {boletinsSalvos && (
-                    <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-                      <CheckCircle className="w-4 h-4" /> Salvo
+                <p className="text-xs text-muted-foreground">
+                  Upload do PDF ou foto do boletim — a IA extrai as médias finais automaticamente. Pode repetir para cada ano letivo.
+                </p>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground cursor-pointer hover:bg-muted transition-colors">
+                    <Upload className="w-4 h-4" />
+                    {arquivoBoletim ? arquivoBoletim.name : 'Upload PDF ou foto do boletim'}
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
+                           onChange={e => {
+                             const f = e.target.files?.[0]
+                             if (f && TIPOS_ARQUIVO.includes(f.type) && f.size <= MAX_MB * 1024 * 1024) {
+                               setArquivoBoletim(f)
+                               setBoletinsExtraidos([])
+                               setBoletinsSalvos(false)
+                             }
+                           }} />
+                  </label>
+                  {arquivoBoletim && !processandoBoletim && (
+                    <button onClick={digitalizarBoletim}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2">
+                      <Loader2 className="w-4 h-4" /> Extrair notas com IA
+                    </button>
+                  )}
+                  {processandoBoletim && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Analisando o documento...
                     </div>
                   )}
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        {['Disciplina', 'Série', 'Ano', 'Média Final', 'Situação', ''].map(h => (
-                          <th key={h} className="text-left pb-2 px-2 font-semibold text-muted-foreground text-xs">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {boletinsExtraidos.map((b, i) => (
-                        <tr key={i} className="hover:bg-muted/30 transition-colors">
-                          <td className="py-1.5 px-2">
-                            <input value={b.disciplina} onChange={e => atualizarBoletim(i, 'disciplina', e.target.value)}
-                                   className="w-full px-2 py-1 rounded border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <input value={b.serie} onChange={e => atualizarBoletim(i, 'serie', e.target.value)}
-                                   className="w-36 px-2 py-1 rounded border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <input type="number" value={b.ano_letivo} onChange={e => atualizarBoletim(i, 'ano_letivo', Number(e.target.value))}
-                                   className="w-16 px-2 py-1 rounded border border-border bg-background text-foreground text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <input type="number" step="0.1" min="0" max="10" value={b.media_final}
-                                   onChange={e => atualizarBoletim(i, 'media_final', parseFloat(e.target.value))}
-                                   className={`w-20 px-2 py-1 rounded border border-border bg-background text-xs text-center font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500
-                                     ${Number(b.media_final) >= 7 ? 'text-green-600 dark:text-green-400' : Number(b.media_final) >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`} />
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <select value={b.situacao} onChange={e => atualizarBoletim(i, 'situacao', e.target.value as any)}
-                                    className="px-2 py-1 rounded border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
-                              <option value="aprovado">Aprovado</option>
-                              <option value="reprovado">Reprovado</option>
-                              <option value="recuperacao">Recuperação</option>
-                              <option value="cursando">Cursando</option>
-                            </select>
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <button onClick={() => removerBoletim(i)} className="text-muted-foreground hover:text-red-500 transition-colors p-1 rounded">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {!boletinsSalvos && (
-                  <button onClick={salvarBoletins}
-                          className="px-6 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors">
-                    Confirmar e salvar {boletinsExtraidos.length} registros
-                  </button>
+              </div>
+            )}
+
+            {/* ── Modo Manual ── */}
+            {modoEntrada === 'manual' && (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Preencha as disciplinas manualmente. Use este modo quando não tiver o PDF disponível ou preferir digitar direto.
+                </p>
+                <button
+                  onClick={adicionarLinhaManual}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-blue-400 text-blue-600 dark:text-blue-400 text-sm font-medium hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                >
+                  + Adicionar disciplina
+                </button>
+              </div>
+            )}
+
+            {/* ── Tabela compartilhada (IA e Manual) ── */}
+            {(boletinsExtraidos.length > 0 || modoEntrada === 'manual') && (
+              <div className="space-y-3">
+                {boletinsExtraidos.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-foreground">
+                      {modoEntrada === 'ia'
+                        ? `${boletinsExtraidos.length} registros extraídos — revise antes de salvar:`
+                        : `${boletinsExtraidos.length} ${boletinsExtraidos.length === 1 ? 'disciplina' : 'disciplinas'} — revise e salve:`}
+                    </p>
+                    {boletinsSalvos && (
+                      <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+                        <CheckCircle className="w-4 h-4" /> Salvo
+                      </div>
+                    )}
+                  </div>
                 )}
+
+                {boletinsExtraidos.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          {['Disciplina', 'Série', 'Ano', 'Média Final', 'Situação', ''].map(h => (
+                            <th key={h} className="text-left pb-2 px-2 font-semibold text-muted-foreground text-xs">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {boletinsExtraidos.map((b, i) => (
+                          <tr key={i} className="hover:bg-muted/30 transition-colors">
+                            <td className="py-1.5 px-2">
+                              <input value={b.disciplina} onChange={e => atualizarBoletim(i, 'disciplina', e.target.value)}
+                                     placeholder="Ex: Matemática"
+                                     className="w-full px-2 py-1 rounded border border-border bg-background text-foreground text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <input value={b.serie} onChange={e => atualizarBoletim(i, 'serie', e.target.value)}
+                                     placeholder="2ª série - Ensino Médio"
+                                     className="w-36 px-2 py-1 rounded border border-border bg-background text-foreground text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <input type="number" value={b.ano_letivo} onChange={e => atualizarBoletim(i, 'ano_letivo', Number(e.target.value))}
+                                     className="w-16 px-2 py-1 rounded border border-border bg-background text-foreground text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <input type="number" step="0.1" min="0" max="10" value={b.media_final}
+                                     onChange={e => atualizarBoletim(i, 'media_final', parseFloat(e.target.value))}
+                                     className={`w-20 px-2 py-1 rounded border border-border bg-background text-xs text-center font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500
+                                       ${Number(b.media_final) >= 7 ? 'text-green-600 dark:text-green-400' : Number(b.media_final) >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`} />
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <select value={b.situacao} onChange={e => atualizarBoletim(i, 'situacao', e.target.value as any)}
+                                      className="px-2 py-1 rounded border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="aprovado">Aprovado</option>
+                                <option value="reprovado">Reprovado</option>
+                                <option value="recuperacao">Recuperação</option>
+                                <option value="cursando">Cursando</option>
+                              </select>
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <button onClick={() => removerBoletim(i)} className="text-muted-foreground hover:text-red-500 transition-colors p-1 rounded">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Botão "+ Adicionar" disponível em ambos os modos */}
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={adicionarLinhaManual}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    + Adicionar disciplina
+                  </button>
+                  {boletinsExtraidos.length > 0 && !boletinsSalvos && (
+                    <button onClick={salvarBoletins}
+                            className="px-6 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors">
+                      Confirmar e salvar {boletinsExtraidos.length} {boletinsExtraidos.length === 1 ? 'registro' : 'registros'}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Ações */}
+          {/* Ações rodapé */}
           <div className="flex items-center justify-between pt-2">
             <button onClick={() => { setArquivoBoletim(null); setBoletinsExtraidos([]); setBoletinsSalvos(false) }}
                     className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-              <Edit2 className="w-4 h-4" /> Adicionar outro boletim
+              <Edit2 className="w-4 h-4" /> Adicionar outro boletim / ano
             </button>
             <button onClick={() => setEtapa('externo')}
                     className="px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
