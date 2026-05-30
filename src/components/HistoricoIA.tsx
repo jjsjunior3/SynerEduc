@@ -116,10 +116,6 @@ export default function HistoricoIA({ usuario, alunoId, aluno_nome }: Props) {
 
       setProgresso('Enviando para análise com IA...')
 
-      const conteudoArquivo = isPdf
-        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
-        : { type: 'image',    source: { type: 'base64', media_type: arquivo.type,       data: base64 } }
-
       const prompt = `Você é um assistente especializado em análise de documentos escolares brasileiros.
 
 Analise o histórico escolar fornecido e extraia TODAS as informações disponíveis.
@@ -158,33 +154,22 @@ Regras:
 - ano_letivo deve ser número inteiro
 - Não invente dados que não estejam no documento`
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
-          messages: [
-            {
-              role: 'user',
-              content: [conteudoArquivo, { type: 'text', text: prompt }],
-            },
-          ],
-        }),
+      // Chama a Edge Function (chave Anthropic fica segura no servidor)
+      const { data, error: fnError } = await supabase.functions.invoke('claude-proxy', {
+        body: {
+          conteudo_base64: base64,
+          media_type:      arquivo.type,
+          is_pdf:          isPdf,
+          prompt,
+        },
       })
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}))
-        throw new Error((errData as any)?.error?.message ?? `Erro na API: ${response.status}`)
-      }
+      if (fnError) throw new Error(fnError.message ?? 'Erro ao chamar Edge Function.')
+      if (data?.erro) throw new Error(data.erro)
 
       setProgresso('Processando resposta...')
-      const data = await response.json()
 
-      const textoResposta = data.content
-        ?.filter((b: any) => b.type === 'text')
-        .map((b: any) => b.text)
-        .join('') ?? ''
+      const textoResposta: string = data?.texto ?? ''
 
       const jsonLimpo = textoResposta
         .replace(/```json\s*/gi, '')
