@@ -132,14 +132,16 @@ Se um campo não estiver visível, use string vazia ou 0.`
   async function salvarAlunoHistorico() {
     if (!dadosFicha.nome) { toast.error('Nome do aluno é obrigatório.'); return }
     try {
+      // Bucket privado — guarda o caminho (path), não a URL pública
       let arquivo_ficha_url = ''
       if (arquivoFicha) {
         const ext = arquivoFicha.name.split('.').pop()
-        const path = `${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage.from('fichas-historicas').upload(path, arquivoFicha, { upsert: true })
+        const storagePath = `${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('fichas-historicas')
+          .upload(storagePath, arquivoFicha, { upsert: true })
         if (!upErr) {
-          const { data: urlData } = supabase.storage.from('fichas-historicas').getPublicUrl(path)
-          arquivo_ficha_url = urlData.publicUrl
+          arquivo_ficha_url = storagePath
         }
       }
 
@@ -195,15 +197,45 @@ Regras:
 - Se não houver AV3 (segmento EAD), use null
 - Extraia TODOS os bimestres de TODOS os anos visíveis no documento
 - Use números para notas (não vírgula: 7.5 não 7,5)
-- Se faltas ou carga_horaria não estiverem visíveis, use 0`
+- Se faltas ou carga_horaria não estiverem visíveis, use 0
+- IMPORTANTE: retorne SOMENTE o array JSON, sem texto antes, sem texto depois, sem explicações`
 
       const { data, error } = await supabase.functions.invoke('claude-proxy', {
-        body: { conteudo_base64: base64, media_type: arquivoBoletim.type, is_pdf: isPdf, prompt },
+        body: {
+          conteudo_base64: base64,
+          media_type:      arquivoBoletim.type,
+          is_pdf:          isPdf,
+          prompt,
+          max_tokens:      8000,   // boletins completos podem ter muitos registros
+        },
       })
       if (error || data?.erro) throw new Error(error?.message ?? data?.erro)
 
-      const json = JSON.parse(limparJson(data.texto))
-      if (!Array.isArray(json)) throw new Error('Formato inesperado. Tente um arquivo mais legível.')
+      // Extrai o array — o Claude às vezes envolve em {"notas": [...]} ou adiciona texto
+      const textoLimpo = limparJson(data.texto ?? '')
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(textoLimpo)
+      } catch {
+        throw new Error(`Não foi possível interpretar a resposta da IA. Resposta recebida: "${(data.texto ?? '').slice(0, 120)}..."`)
+      }
+
+      // Aceita tanto array direto quanto objeto { notas: [...] } ou { disciplinas: [...] }
+      let registros: BoletimsExtraido[]
+      if (Array.isArray(parsed)) {
+        registros = parsed
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        const chaves = Object.values(parsed as Record<string, unknown>)
+        const arr = chaves.find(v => Array.isArray(v)) as BoletimsExtraido[] | undefined
+        if (arr) registros = arr
+        else throw new Error('Formato inesperado: objeto JSON sem array interno.')
+      } else {
+        throw new Error('Formato inesperado. Tente um arquivo mais legível ou com melhor qualidade.')
+      }
+
+      if (registros.length === 0) throw new Error('Nenhuma nota encontrada no documento. Verifique se o arquivo está legível.')
+
+      const json = registros // alias para manter código abaixo
       setBoletinsExtraidos(json)
       toast.success(`${json.length} registros extraídos! Revise antes de salvar.`)
     } catch (err: any) {
@@ -217,14 +249,17 @@ Regras:
   async function salvarBoletins() {
     if (!alunoSelecionado || boletinsExtraidos.length === 0) return
     try {
+      // Bucket privado — guarda o caminho (path), não a URL pública
       let arquivo_url = ''
       if (arquivoBoletim) {
         const ext = arquivoBoletim.name.split('.').pop()
-        const path = `${alunoSelecionado.id}/${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage.from('boletins-historicos').upload(path, arquivoBoletim, { upsert: true })
+        const storagePath = `${alunoSelecionado.id}/${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('boletins-historicos')
+          .upload(storagePath, arquivoBoletim, { upsert: true })
         if (!upErr) {
-          const { data: urlData } = supabase.storage.from('boletins-historicos').getPublicUrl(path)
-          arquivo_url = urlData.publicUrl
+          // Guarda o path — URL assinada gerada na exibição se necessário
+          arquivo_url = storagePath
         }
       }
 
@@ -613,6 +648,27 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
+/**
+ * Extrai o primeiro bloco JSON válido (array ou objeto) de qualquer resposta
+ * do Claude — mesmo quando ele coloca texto explicativo antes ou depois.
+ */
 function limparJson(texto: string): string {
-  return texto.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  // 1. Remove blocos markdown ```json ... ```
+  let s = texto.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+
+  // 2. Tenta extrair array JSON ( [...] )
+  const startArr = s.indexOf('[')
+  const endArr   = s.lastIndexOf(']')
+  if (startArr !== -1 && endArr > startArr) {
+    return s.slice(startArr, endArr + 1)
+  }
+
+  // 3. Fallback: tenta extrair objeto JSON ( {...} )
+  const startObj = s.indexOf('{')
+  const endObj   = s.lastIndexOf('}')
+  if (startObj !== -1 && endObj > startObj) {
+    return s.slice(startObj, endObj + 1)
+  }
+
+  return s
 }
