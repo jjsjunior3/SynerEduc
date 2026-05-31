@@ -14,7 +14,7 @@ import {
   Search, FileText, Plus, GraduationCap,
   CheckCircle, Clock, XCircle, AlertCircle,
   LogOut, Menu, X, RefreshCw, Upload,
-  BookOpen, Sun, Moon, ArrowRight, Stamp, History,
+  BookOpen, Sun, Moon, ArrowRight, Stamp, History, Archive,
 } from 'lucide-react';
 import logoEscola from '../assets/e339c695d5503d560f7e53d2039456d52fd95ea5.png';
 import { useAlunosPendencias } from '../hooks/useAlunosPendencias';
@@ -27,7 +27,7 @@ import { EmissaoContratos }     from './EmissaoContratos';
 import BoletimCoordenador       from './BoletimCoordenador';
 import EmissaoDocumentos        from './EmissaoDocumentos';
 import HistoricoIA              from './HistoricoIA';
-import ArquivoHistorico         from './ArquivoHistorico';
+import ArquivoMorto             from './ArquivoMorto';
 
 // ─── Tipos ───────────────────────────────────────────────
 type SecaoAtiva =
@@ -39,7 +39,7 @@ type SecaoAtiva =
   | 'boletins'
   | 'emissao-documentos'
   | 'historico-ia'
-  | 'arquivo-historico'
+  | 'arquivo-morto'
   | 'configuracoes';
 
 type AcaoContextual =
@@ -116,7 +116,7 @@ export default function DashboardSecretaria() {
         { id: 'boletins',             label: 'Boletins',          icon: <BookOpen      className="w-4 h-4" /> },
         { id: 'emissao-documentos',   label: 'Emitir Documentos', icon: <Stamp         className="w-4 h-4" /> },
         { id: 'historico-ia',         label: 'Histórico c/ IA',   icon: <History       className="w-4 h-4" /> },
-        { id: 'arquivo-historico',    label: 'Arquivo Histórico', icon: <History       className="w-4 h-4" /> },
+        { id: 'arquivo-morto',        label: 'Arquivo Morto',     icon: <Archive       className="w-4 h-4" /> },
       ],
     },
     {
@@ -251,7 +251,8 @@ export default function DashboardSecretaria() {
               { label: 'Gerenciar Alunos',    icon: <Users        className="w-5 h-5" />, acao: () => setSecaoAtiva('alunos'),               bgL: '#ffedd5', bgD: '#431407', cor: '#ea580c' },
               { label: 'Boletins',            icon: <BookOpen     className="w-5 h-5" />, acao: () => setSecaoAtiva('boletins'),             bgL: '#fef9c3', bgD: '#3b2f00', cor: '#ca8a04' },
               { label: 'Emitir Documentos',   icon: <Stamp        className="w-5 h-5" />, acao: () => setSecaoAtiva('emissao-documentos'),   bgL: '#e0f2fe', bgD: '#0c2a3f', cor: '#0284c7' },
-              { label: 'Histórico c/ IA',     icon: <History      className="w-5 h-5" />, acao: () => setSecaoAtiva('historico-ia'),          bgL: '#f0fdf4', bgD: '#052e16', cor: '#16a34a' },
+              { label: 'Histórico c/ IA',     icon: <History      className="w-5 h-5" />, acao: () => setSecaoAtiva('historico-ia'),   bgL: '#f0fdf4', bgD: '#052e16', cor: '#16a34a' },
+              { label: 'Arquivo Morto',       icon: <Archive      className="w-5 h-5" />, acao: () => setSecaoAtiva('arquivo-morto'),  bgL: '#f5f3ff', bgD: '#2e1065', cor: '#7c3aed' },
             ].map(a => (
               <button key={a.label} onClick={a.acao}
                 className="flex items-center gap-4 p-5 rounded-xl border border-border hover:shadow-md hover:scale-[1.02] transition-all text-left"
@@ -653,10 +654,10 @@ export default function DashboardSecretaria() {
           </div>
         );
 
-      case 'arquivo-historico':
+      case 'arquivo-morto':
         return (
           <div className="p-6">
-            <ArquivoHistorico
+            <ArquivoMorto
               usuario={{ id: usuario!.id, nome: usuario!.nome, tipo: usuario!.tipo, segmento: (usuario!.segmento ?? 'ead') as 'ead' | 'presencial' }}
             />
           </div>
