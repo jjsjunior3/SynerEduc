@@ -34,7 +34,7 @@ CREATE POLICY "admin pode gerenciar limites"
   FOR ALL
   USING (
     EXISTS (
-      SELECT 1 FROM usuarios u
+      SELECT 1 FROM users u
       WHERE u.id = auth.uid()
         AND u.tipo IN ('admin_geral', 'admin_synerEduc')
     )
@@ -44,6 +44,7 @@ CREATE POLICY "autenticados podem ler limites"
   ON agente_limites
   FOR SELECT
   USING (auth.role() = 'authenticated');
+
 
 -- -----------------------------------------------------------------------------
 -- 2. agente_uso_diario — consumo acumulado por usuário/dia
@@ -79,7 +80,7 @@ CREATE POLICY "admin ve todo uso"
   FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM usuarios u
+      SELECT 1 FROM users u
       WHERE u.id = auth.uid()
         AND u.tipo IN ('admin_geral', 'admin_synerEduc', 'gestor_geral')
     )
@@ -121,7 +122,7 @@ CREATE POLICY "admin ve todos os logs"
   FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM usuarios u
+      SELECT 1 FROM users u
       WHERE u.id = auth.uid()
         AND u.tipo IN ('admin_geral', 'admin_synerEduc', 'gestor_geral')
     )
