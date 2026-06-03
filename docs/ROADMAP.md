@@ -218,6 +218,8 @@ ADIADO
 | F5.7 · Agente Aluno (Pedagógico) | #26 | F5.1 + F5.2 | ❌ |
 | F5.8 · Agente Financeiro | #27 | F5.2 | ❌ |
 | F5.9 · Agente Admin Geral | #28 | F5.2 | ❌ |
+| F5.10 · DashboardConteudista → interface de gestão do RAG | #29 | F5.1 | ❌ |
+| F5.11 · Painel de Monitoramento de IA (Admin SynerEduc) | #30 | F5.0 | ❌ |
 
 > ⚠️ parcial = funciona com dados ao vivo; apenas a consulta ao regimento fica pendente até o documento chegar.
 
@@ -243,6 +245,8 @@ ADIADO
 - [ ] **Agente 6 · Financeiro** (#27) — mensalidades em aberto, fluxo de caixa, relatórios
 - [ ] **Agente 7 · Admin Geral** (#28) — status do sistema, consumo IA, logs de segurança
 - [ ] Adicionar `ChatIA` nos dashboards dos 6 perfis acima (7º entra no #4 com F3)
+- [ ] **F5.10** (#29) — DashboardConteudista adaptado como interface de gestão do RAG (upload + status de indexação)
+- [ ] **F5.11** (#30) — Painel de monitoramento de IA no Admin SynerEduc (consumo, custo, logs, limites)
 
 **Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4.
 
