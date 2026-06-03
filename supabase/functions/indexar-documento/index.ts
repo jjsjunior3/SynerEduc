@@ -270,7 +270,7 @@ serve(async (req: Request) => {
   const pineconeKey   = Deno.env.get('PINECONE_API_KEY')!
   const pineconeHost  = Deno.env.get('PINECONE_HOST')!      // ex: https://xxx.svc.pinecone.io
   const supabaseUrl   = Deno.env.get('SUPABASE_URL')!
-  const serviceKey    = Deno.env.get('SUPABASE_SERVICE_KEY')!
+  const serviceKey    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
   for (const [k, v] of Object.entries({ anthropicKey, voyageKey, pineconeKey, pineconeHost, supabaseUrl, serviceKey })) {
     if (!v) return json({ erro: `Secret ${k} não configurado.` }, 500)
