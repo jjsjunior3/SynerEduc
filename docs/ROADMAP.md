@@ -1,5 +1,5 @@
 # ROADMAP — Portal Conexão AVA · SynerEduc
-> Backlog priorizado por dependência estrutural · Atualizado em: 2026-05-30  
+> Backlog priorizado por dependência estrutural · Atualizado em: 2026-06-03  
 > Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · ⏸ Adiado · 🚫 Descartado
 
 ---
@@ -24,10 +24,12 @@ CONCLUÍDO
  ✅ F2   → Melhorias pedagógicas (resumo do dia, notificações, frequência)
 
 DEPENDÊNCIA ESTRUTURAL PARA IA
- #1  F2.1 → IA Histórico Escolar  ← Edge Function + proxy Claude API
-              │                      (foundation de TODA a IA do sistema)
+ ✅  F2.1 → IA Histórico Escolar  ← Edge Function + proxy Claude API
+ ✅  F2.2 → Arquivo Histórico     ← fichas + boletins + escola anterior com IA
+ ✅  F2.3 → Arquivo Morto         ← histórico retroativo unificado + pré-visualização
+              │
               ▼
- #2  F5   → Agentes de IA — 6/7 perfis  ← reutiliza F2.1 imediatamente
+ #1  F5   → Agentes de IA — 6/7 perfis  ← reutiliza F2.1 imediatamente
               │   (secretaria, gestor, coord, prof, financeiro, aluno)
               │
  #3  F3   → Portal do Responsável  ← novo perfil, RLS isolado
@@ -55,9 +57,9 @@ ADIADO
 
 | Prioridade | Fase | Por que esta posição | Esforço est. | Janela |
 |:---:|---|---|:---:|---|
-| **#1** | F2.1 IA Histórico | **Foundation de toda IA** — Edge Function proxy Claude API | 2 sem | Jun/2026 |
-| **#2** | F5 Agentes (6/7) | Objetivo principal — reutiliza F2.1 direto | 3-4 sem | Jun-Jul |
-| **#3** | F3 Portal Responsável | Fecha F5 (7º agente) + habilita F4 | 2-3 sem | Jul |
+| ~~**#1**~~ | ~~F2.1/2.2/2.3 IA Histórico~~ | ~~Edge Function proxy + arquivo histórico + arquivo morto~~ | ~~2 sem~~ | ✅ Jun/2026 |
+| **#1** | F5 Agentes (6/7) | Objetivo principal — reutiliza F2.1 direto | 3-4 sem | Jun-Jul |
+| **#2** | F3 Portal Responsável | Fecha F5 (7º agente) + habilita F4 | 2-3 sem | Jul |
 | **#4** | F5 completo (7º ag.) | 1 semana após F3 estar no ar | 1 sem | Jul-Ago |
 | **#5** | F1.1 Multi-tenant | Antes da 2ª escola + antes de F4 (evita retrabalho Asaas) | 3-4 sem | Ago-Set |
 | **#6** | F1.3 Virada de ano | Deadline dez/2026 — testar com 2 meses de antecedência | 1-2 sem | Set-Out |
@@ -71,12 +73,12 @@ ADIADO
 
 | ID | Componente | Descrição | Issue | Risco |
 |---|---|---|---|:---:|
-| BUG-B001 | `fn_atualizar_media` | Fórmula errada para Presencial — AV3 ignorado e REC incorreta | #11 | 🟡 |
-| BUG-B002 | `total_alunos_ativos()` | Referencia tabela 'usuarios' inexistente | #12 | 🟢 |
-| BUG-B003 | `buscar_agenda_por_data` | 3 versões no banco, 2 quebradas | #13 | 🟡 |
-| BUG-B004 | `eh_admin()` | Não inclui gestor_geral — inconsistência de privilégios | #14 | 🟢 |
-| SEC-001 | `grade_horaria` | RLS USING(true) — qualquer usuário pode escrever | #10 | 🟢 |
-| IDX-001 | múltiplas tabelas | 9 indexes críticos ausentes | #15 | 🟢 |
+| ~~BUG-B001~~ | ~~`fn_atualizar_media`~~ | ~~Fórmula errada para Presencial — AV3 ignorado e REC incorreta~~ | ✅ #11 | — |
+| ~~BUG-B002~~ | ~~`total_alunos_ativos()`~~ | ~~Referencia tabela 'usuarios' inexistente~~ | ✅ #12 | — |
+| ~~BUG-B003~~ | ~~`buscar_agenda_por_data`~~ | ~~3 versões no banco, 2 quebradas~~ | ✅ #13 | — |
+| ~~BUG-B004~~ | ~~`eh_admin()`~~ | ~~Não inclui gestor_geral — inconsistência de privilégios~~ | ✅ #14 | — |
+| ~~SEC-001~~ | ~~`grade_horaria`~~ | ~~RLS USING(true) — qualquer usuário pode escrever~~ | ✅ #10 | — |
+| ~~IDX-001~~ | ~~múltiplas tabelas~~ | ~~9 indexes críticos ausentes~~ | ✅ #15 | — |
 
 ---
 
@@ -177,48 +179,76 @@ ADIADO
 
 ---
 
-### 🔴 #1 — F2.1 · IA — Histórico Escolar · Jun/2026 · ~2 semanas
+### ✅ F2.1/F2.2/F2.3 · IA Histórico Escolar + Arquivo Histórico + Arquivo Morto · Jun/2026
 
-> **Por que é o #1?** É a peça de infraestrutura que habilita TODA a IA do sistema.
-> Sem a Edge Function proxy + integração Claude API, o F5 (Agentes) não tem onde rodar.
-> Além disso, entrega valor imediato — histórico escolar em segundos vs. 60 dias na secretaria.
-> **Custo estimado: < R$ 0,10 por histórico.**
+> Concluído em 2026-06-02.
 
-**Tarefas:**
-- [ ] Edge Function Supabase `claude-proxy` — proxy seguro para Claude API (chave nunca no front)
-- [ ] Integrar em `EmissaoDocumentos.tsx` — botão "Gerar com IA"
-- [ ] Prompt estruturado com notas, frequência e dados completos do aluno
-- [ ] Texto gerado editável antes de imprimir / exportar PDF
-- [ ] Adicionar testes unitários do prompt builder em `src/__tests__/`
-- [ ] Log de emissões por escola (auditoria de uso da IA)
-
-**Entrega:** secretaria gera histórico em segundos, com revisão humana antes de imprimir.
+- [x] Edge Function `claude-proxy` — proxy seguro, chave nunca exposta no front
+- [x] `HistoricoIA.tsx` — extração de histórico externo com IA + revisão humana
+- [x] `ArquivoHistorico.tsx` — digitalização de ficha de matrícula + boletins com IA (3 etapas)
+- [x] `ArquivoMorto.tsx` — gestão de egressos, histórico retroativo unificado, pré-visualização editável
+- [x] Tabela unificada de disciplinas (mescla escolas anteriores + Conexão numa só tabela)
+- [x] Formato oficial do documento (timbre, dados do aluno, certificado, assinaturas, marca d'água)
+- [x] Modelo atualizado `claude-opus-4-5` → `claude-sonnet-4-6` + retry automático
+- [x] Normalizadores de JSON com coerção de tipos em todos os 3 fluxos de extração
 
 ---
 
-### 🔴 #2 — F5 · Agentes de IA — 6/7 perfis · Jun-Jul/2026 · ~3-4 semanas
+### 🔴 #1 — F5 · Agentes de IA — 6/7 perfis · Jun-Jul/2026 · ~3-4 semanas
 
-> **Por que é o #2?** Reutiliza diretamente a Edge Function criada em F2.1.
-> Nenhuma nova infraestrutura necessária — só o componente de chat e os prompts por perfil.
+> **Por que é o #1?** Reutiliza diretamente a Edge Function criada em F2.1.
 > O 7º agente (responsável) fica para após o Portal do Responsável (F3) existir.
 > **Nenhuma dependência de multi-tenant — funciona perfeitamente em single-tenant.**
+>
+> **Status do RAG:** Material didático (6º ano → 3ª série EM) disponível para indexação imediata.
+> Regimento escolar pendente — agentes que dependem do regimento sobem sem RAG documental
+> e são atualizados assim que o documento chegar.
 
-**Tarefas:**
-- [ ] Componente `ChatIA.tsx` — botão flutuante reutilizável (posição fixa, estilo consistente)
-- [ ] Hook `useChatIA(perfil)` — gerencia histórico da conversa + calls à Edge Function
-- [ ] **Agente 1 · Secretaria** — matrícula, documentos, alunos pendentes, fichas
-- [ ] **Agente 2 · Gestor** — indicadores gerais, inadimplência, desempenho por série
-- [ ] **Agente 3 · Coordenador** — agenda pendente, frequência da semana, atividades a corrigir
-- [ ] **Agente 4 · Professor** — boletins do dia, lançamento de frequência, agenda de hoje
-- [ ] **Agente 5 · Financeiro** — mensalidades em aberto, fluxo de caixa, relatórios
-- [ ] **Agente 6 · Aluno** — notas, frequência, atividades pendentes, próximas provas
-- [ ] Adicionar `ChatIA` nos dashboards dos 6 perfis acima
+#### F5 — Sub-etapas (cada uma = 1 issue)
+
+| Sub-etapa | Issue | Depende de | Bloqueado por regimento? |
+|---|:---:|---|:---:|
+| F5.0 · Infraestrutura base (claude-proxy v2 + SQL) | #19 | — | ❌ |
+| F5.1 · Pipeline indexação Pinecone (material didático) | #20 | F5.0 | ❌ |
+| F5.2 · `ChatIA.tsx` + `useChatIA` (componente base) | #21 | F5.0 | ❌ |
+| F5.3 · Agente Secretaria | #22 | F5.2 | ⚠️ parcial |
+| F5.4 · Agente Coordenador | #23 | F5.2 | ⚠️ parcial |
+| F5.5 · Agente Gestor | #24 | F5.2 | ⚠️ parcial |
+| F5.6 · Agente Professor (Pedagógico) | #25 | F5.1 + F5.2 | ❌ |
+| F5.7 · Agente Aluno (Pedagógico) | #26 | F5.1 + F5.2 | ❌ |
+| F5.8 · Agente Financeiro | #27 | F5.2 | ❌ |
+| F5.9 · Agente Admin Geral | #28 | F5.2 | ❌ |
+
+> ⚠️ parcial = funciona com dados ao vivo; apenas a consulta ao regimento fica pendente até o documento chegar.
+
+**Tarefas F5.0 (infra):**
+- [ ] `claude-proxy` v2 — JWT validation + controle de tokens + Tool Use loop
+- [ ] SQL: tabelas `agente_log`, `agente_uso_diario`, `agente_limites`
+
+**Tarefas F5.1 (Pinecone):**
+- [ ] Script de chunking dos PDFs (~400 palavras por chunk, metadados: `disciplina, serie, nome_arquivo, chunk_index`)
+- [ ] Embeddings via Voyage AI `voyage-3` → upsert no Pinecone
+- [ ] Utilitário de deleção + re-upsert para atualização futura de documentos
+
+**Tarefas F5.2 (componente base):**
+- [ ] `ChatIA.tsx` — botão flutuante reutilizável (posição fixa, estilo consistente)
+- [ ] `useChatIA(perfil)` — histórico da conversa (últimas 10 msgs) + calls à Edge Function
+
+**Tarefas F5.3–F5.9 (agentes):**
+- [ ] **Agente 1 · Secretaria** (#22) — matrícula, documentos, alunos pendentes, fichas
+- [ ] **Agente 2 · Coordenador** (#23) — agenda pendente, frequência da semana, atividades a corrigir
+- [ ] **Agente 3 · Gestor** (#24) — indicadores gerais, inadimplência, desempenho por série
+- [ ] **Agente 4 · Professor** (#25) — planos de aula, atividades, avaliações (RAG material didático)
+- [ ] **Agente 5 · Aluno** (#26) — notas, frequência, atividades pendentes, dúvidas pedagógicas
+- [ ] **Agente 6 · Financeiro** (#27) — mensalidades em aberto, fluxo de caixa, relatórios
+- [ ] **Agente 7 · Admin Geral** (#28) — status do sistema, consumo IA, logs de segurança
+- [ ] Adicionar `ChatIA` nos dashboards dos 6 perfis acima (7º entra no #4 com F3)
 
 **Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4.
 
 ---
 
-### 🟢 #3 — F3 · Portal do Responsável · Jul/2026 · ~2-3 semanas
+### 🟢 #2 — F3 · Portal do Responsável · Jul/2026 · ~2-3 semanas
 
 > **Por que é o #3?** Duas dependências simultâneas:
 > (a) fecha o F5 ao adicionar o 7º agente de IA;
@@ -234,7 +264,7 @@ ADIADO
 
 ---
 
-### 🟢 #4 — F5 completo · 7º Agente (Responsável) · Jul-Ago/2026 · ~1 semana
+### 🟢 #3 — F5 completo · 7º Agente (Responsável) · Jul-Ago/2026 · ~1 semana
 
 > **Por que é o #4?** Depende do F3 existir. Com o Portal do Responsável no ar,
 > adicionar o 7º agente é questão de escrever o prompt especializado e plugar o `ChatIA`.
@@ -245,7 +275,7 @@ ADIADO
 
 ---
 
-### 🔴 #5 — F1.1 · Multi-tenant · Ago-Set/2026 · ~3-4 semanas
+### 🔴 #4 — F1.1 · Multi-tenant · Ago-Set/2026 · ~3-4 semanas
 
 > **Por que é o #5 e não o #1?** A IA funciona perfeitamente em single-tenant.
 > Colocar F1.1 antes de F5 seria bloquear o objetivo principal sem nenhum ganho prático.
