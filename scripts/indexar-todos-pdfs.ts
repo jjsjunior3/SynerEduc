@@ -11,8 +11,11 @@
 //   npm run indexar:tudo                → reindexar todos
 
 import { createClient } from '@supabase/supabase-js'
-import pdfParse from 'pdf-parse'
+import { createRequire } from 'module'
 import * as dotenv from 'dotenv'
+
+const require = createRequire(import.meta.url)
+const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string }>
 
 dotenv.config({ path: '.env.local' })
 
