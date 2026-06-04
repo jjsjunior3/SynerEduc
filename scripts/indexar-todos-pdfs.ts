@@ -11,11 +11,8 @@
 //   npm run indexar:tudo                → reindexar todos
 
 import { createClient } from '@supabase/supabase-js'
-import { createRequire } from 'module'
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import * as dotenv from 'dotenv'
-
-const require = createRequire(import.meta.url)
-const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string }>
 
 dotenv.config({ path: '.env.local' })
 
@@ -40,19 +37,32 @@ async function sleep(ms: number) {
 }
 
 /**
- * Baixa o PDF via URL pública e extrai o texto com pdf-parse.
+ * Baixa o PDF via URL pública e extrai o texto com pdfjs-dist.
  * Sem uso de LLM — gratuito e sem rate limits.
  */
 async function extrairTextoPDF(url: string): Promise<string> {
   const resp = await fetch(url)
   if (!resp.ok) throw new Error(`Erro ao baixar PDF (${resp.status}): ${url}`)
 
-  const buffer = Buffer.from(await resp.arrayBuffer())
-  const dados  = await pdfParse(buffer)
+  const data     = new Uint8Array(await resp.arrayBuffer())
+  const loadTask = pdfjsLib.getDocument({ data, useWorkerFetch: false, isEvalSupported: false })
+  const pdfDoc   = await loadTask.promise
 
-  if (!dados.text?.trim()) throw new Error('PDF sem texto extraível (pode ser imagem escaneada sem OCR)')
+  const textosPaginas: string[] = []
+  for (let i = 1; i <= pdfDoc.numPages; i++) {
+    const page    = await pdfDoc.getPage(i)
+    const content = await page.getTextContent()
+    const texto   = content.items
+      .filter((item: any) => 'str' in item)
+      .map((item: any) => item.str)
+      .join(' ')
+    textosPaginas.push(texto)
+  }
 
-  return dados.text
+  const textoFinal = textosPaginas.join('\n').trim()
+  if (!textoFinal) throw new Error('PDF sem texto extraível (pode ser imagem escaneada sem OCR)')
+
+  return textoFinal
 }
 
 /**
