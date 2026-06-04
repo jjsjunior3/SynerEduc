@@ -44,7 +44,11 @@ async function indexarPDF(pdfId: string, nome: string): Promise<boolean> {
     })
 
     if (error) {
-      console.error(`  ❌ ${nome}: ${error.message}`)
+      // Tentar extrair o corpo do erro para mostrar a mensagem real
+      const detalhe = (error as any)?.context?.json?.erro
+        ?? (error as any)?.context?.text
+        ?? error.message
+      console.error(`  ❌ ${nome}: ${detalhe}`)
       return false
     }
 
