@@ -54,9 +54,11 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@types/pdf-parse": "^1.1.5",
     "@vitejs/plugin-react-swc": "^3.10.2",
     "@vitest/coverage-v8": "^4.1.7",
     "dotenv": "^16.6.1",
+    "pdf-parse": "^2.4.5",
     "tsx": "^4.22.4",
     "vite": "6.3.5",
     "vitest": "^4.1.7"

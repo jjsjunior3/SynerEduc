@@ -179,19 +179,12 @@ Regras:
 
       const textoResposta: string = data?.texto ?? ''
 
-      const jsonLimpo = textoResposta
-        .replace(/```json\s*/gi, '')
-        .replace(/```\s*/g, '')
-        .trim()
-
       let dadosExtraidos: HistoricoExterno
       try {
-        dadosExtraidos = JSON.parse(jsonLimpo)
-      } catch {
-        throw new Error('A IA retornou um formato inesperado. Tente novamente ou use um arquivo mais legível.')
+        dadosExtraidos = normalizarHistorico(JSON.parse(limparJson(textoResposta)))
+      } catch (e: any) {
+        throw new Error(e.message ?? 'A IA retornou um formato inesperado. Tente novamente ou use um arquivo mais legível.')
       }
-
-      if (!Array.isArray(dadosExtraidos.disciplinas)) dadosExtraidos.disciplinas = []
 
       setHistorico(dadosExtraidos)
 
@@ -613,7 +606,7 @@ Regras:
             </p>
             <button
               onClick={salvarHistorico}
-              disabled={!alunoVinculadoId && !alunoId}
+              disabled={!alunoVinculadoId && !alunoId && !alunoHistoricoId}
               className="flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium text-sm
                          bg-green-600 hover:bg-green-700 text-white transition-colors
                          disabled:opacity-50 disabled:cursor-not-allowed"
@@ -658,4 +651,48 @@ function CampoInput({ label, value, onChange, placeholder }: {
                         focus:outline-none focus:ring-2 focus:ring-blue-500" />
     </div>
   )
+}
+
+// ─── Utilitários de parsing ────────────────────────────────────────────────────
+
+function limparJson(texto: string): string {
+  let s = texto.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  const startObj = s.indexOf('{')
+  const endObj   = s.lastIndexOf('}')
+  if (startObj !== -1 && endObj > startObj) return s.slice(startObj, endObj + 1)
+  return s
+}
+
+function normalizarDisciplina(d: unknown): DisciplinaExtrada {
+  const obj = (typeof d === 'object' && d !== null ? d : {}) as Record<string, unknown>
+  const situacaoRaw = String(obj.situacao ?? '').toLowerCase()
+  const situacao = situacaoRaw.includes('reprov') ? 'Reprovado'
+    : situacaoRaw.includes('curs') ? 'Cursando'
+    : 'Aprovado'
+  return {
+    disciplina:    String(obj.disciplina ?? ''),
+    ano_letivo:    Number(obj.ano_letivo) || 0,
+    serie:         String(obj.serie ?? ''),
+    carga_horaria: Number(obj.carga_horaria) || 0,
+    media_final:   parseFloat(String(obj.media_final).replace(',', '.')) || 0,
+    faltas:        Number(obj.faltas) || 0,
+    situacao,
+  }
+}
+
+function normalizarHistorico(raw: unknown): HistoricoExterno {
+  if (typeof raw !== 'object' || raw === null)
+    throw new Error('A IA retornou um formato inesperado. Tente novamente ou use um arquivo mais legível.')
+  const obj = raw as Record<string, unknown>
+  return {
+    nome_aluno:           String(obj.nome_aluno ?? ''),
+    data_nascimento:      String(obj.data_nascimento ?? ''),
+    nome_escola_anterior: String(obj.nome_escola_anterior ?? ''),
+    municipio_escola:     String(obj.municipio_escola ?? ''),
+    uf_escola:            String(obj.uf_escola ?? '').toUpperCase().slice(0, 2),
+    cnpj_escola:          obj.cnpj_escola ? String(obj.cnpj_escola) : undefined,
+    nivel_ensino:         ['fundamental', 'medio'].includes(String(obj.nivel_ensino)) ? String(obj.nivel_ensino) : 'medio',
+    disciplinas:          Array.isArray(obj.disciplinas) ? obj.disciplinas.map(normalizarDisciplina) : [],
+    observacoes:          obj.observacoes ? String(obj.observacoes) : undefined,
+  }
 }

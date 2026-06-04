@@ -327,6 +327,13 @@ export default function FrequenciaProfessores({
     if (!prof) return;
     const seg = segmentoForcado ?? extraSegmento;
 
+    // Evita duplicate key: professor já tem registro para este dia/segmento
+    const jaExiste = registros.some(r => r.professor_id === extraProfId)
+    if (jaExiste) {
+      toast.error('Este professor já está na lista de frequência deste dia. Edite o registro existente.')
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('frequencia_professor')

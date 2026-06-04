@@ -208,7 +208,7 @@ serve(async (req: Request) => {
   const supabaseUrl  = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceKey   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-  let body: { pdf_id?: string; acao?: string }
+  let body: { pdf_id?: string; acao?: string; texto?: string }
   try {
     body = await req.json()
   } catch {
@@ -238,7 +238,7 @@ serve(async (req: Request) => {
     return json({ erro: `Secrets faltando: ${faltando.join(', ')}` }, 500)
   }
 
-  const { pdf_id, acao = 'indexar' } = body
+  const { pdf_id, acao = 'indexar', texto: textoRecebido } = body
   if (!pdf_id) return json({ erro: 'pdf_id obrigatório.' }, 400)
 
   // ── AÇÃO: Deletar ──────────────────────────────────────────────────────────
@@ -267,8 +267,14 @@ serve(async (req: Request) => {
   await atualizarStatus(pdf_id, { status_indexacao: 'indexando', erro_indexacao: null }, supabaseUrl, serviceKey)
 
   try {
-    // 3. Extrair texto
-    const texto = await extrairTextoPDF(pdf.url, anthropicKey)
+    // 3. Usar texto recebido do script Node.js (extraído com pdf-parse, sem rate limit)
+    //    Fallback: extrair via Anthropic (usado apenas se chamado sem texto pré-extraído)
+    let texto: string
+    if (textoRecebido?.trim()) {
+      texto = textoRecebido
+    } else {
+      texto = await extrairTextoPDF(pdf.url, anthropicKey)
+    }
     if (!texto.trim()) throw new Error('PDF sem conteúdo de texto extraível.')
 
     // 4. Chunking

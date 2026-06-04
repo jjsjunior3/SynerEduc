@@ -114,7 +114,7 @@ Se um campo não estiver visível, use string vazia ou 0.`
       })
       if (error || data?.erro) throw new Error(error?.message ?? data?.erro)
 
-      const json = JSON.parse(limparJson(data.texto))
+      const json = normalizarFicha(JSON.parse(limparJson(data.texto)))
       setDadosFicha(prev => ({ ...prev, ...json }))
       toast.success('Ficha digitalizada! Revise os dados antes de salvar.')
     } catch (err: any) {
@@ -208,17 +208,17 @@ Regras:
       }
 
       // Aceita tanto array direto quanto objeto { notas: [...] } ou { disciplinas: [...] }
-      let registros: BoletimsExtraido[]
+      let rawRegistros: unknown[]
       if (Array.isArray(parsed)) {
-        registros = parsed
+        rawRegistros = parsed
       } else if (typeof parsed === 'object' && parsed !== null) {
-        const chaves = Object.values(parsed as Record<string, unknown>)
-        const arr = chaves.find(v => Array.isArray(v)) as BoletimsExtraido[] | undefined
-        if (arr) registros = arr
+        const arr = Object.values(parsed as Record<string, unknown>).find(v => Array.isArray(v)) as unknown[] | undefined
+        if (arr) rawRegistros = arr
         else throw new Error('Formato inesperado: objeto JSON sem array interno.')
       } else {
         throw new Error('Formato inesperado. Tente um arquivo mais legível ou com melhor qualidade.')
       }
+      const registros: BoletimsExtraido[] = rawRegistros.map(normalizarBoletim)
 
       if (registros.length === 0) throw new Error('Nenhuma nota encontrada no documento. Verifique se o arquivo está legível.')
 
@@ -731,4 +731,38 @@ function limparJson(texto: string): string {
   }
 
   return s
+}
+
+function normalizarFicha(raw: unknown): Partial<AlunoHistorico> {
+  if (typeof raw !== 'object' || raw === null) throw new Error('Resposta inválida da IA ao digitalizar ficha.')
+  const obj = raw as Record<string, unknown>
+  const motivoRaw = String(obj.motivo_saida ?? '').toLowerCase().trim()
+  const motivo_saida = (['conclusao', 'transferencia', 'desistencia', 'outro'] as const)
+    .includes(motivoRaw as 'conclusao') ? motivoRaw as AlunoHistorico['motivo_saida'] : 'outro'
+  return {
+    nome:            obj.nome ? String(obj.nome).trim() : undefined,
+    data_nascimento: obj.data_nascimento ? String(obj.data_nascimento) : undefined,
+    cpf:             obj.cpf ? String(obj.cpf) : undefined,
+    filiacao:        obj.filiacao ? String(obj.filiacao) : undefined,
+    serie_saida:     obj.serie_saida ? String(obj.serie_saida) : undefined,
+    ano_saida:       Number(obj.ano_saida) || undefined,
+    motivo_saida,
+  }
+}
+
+function normalizarBoletim(d: unknown): BoletimsExtraido {
+  const obj = (typeof d === 'object' && d !== null ? d : {}) as Record<string, unknown>
+  const situacaoRaw = String(obj.situacao ?? '').toLowerCase()
+  const situacao: BoletimsExtraido['situacao'] =
+    situacaoRaw.includes('reprov') ? 'reprovado'
+    : situacaoRaw.includes('recup') ? 'recuperacao'
+    : situacaoRaw.includes('curs') ? 'cursando'
+    : 'aprovado'
+  return {
+    disciplina:  String(obj.disciplina ?? ''),
+    serie:       String(obj.serie ?? ''),
+    ano_letivo:  Number(obj.ano_letivo) || new Date().getFullYear() - 1,
+    media_final: parseFloat(String(obj.media_final).replace(',', '.')) || 0,
+    situacao,
+  }
 }

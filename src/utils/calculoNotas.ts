@@ -88,7 +88,7 @@ function calcularEAD(dados: DadosNota): ResultadoNota {
 // ── Presencial: (AV1 + AV2 + AV3) / 3 ───────────────────────────────────────
 // Regras:
 //   1. Média = (AV1 + AV2 + AV3) / 3
-//   2. REC substitui a MENOR entre AV1, AV2 e AV3 (somente se REC > menor nota)
+//   2. REC substitui a média diretamente (media_final = REC)
 //   3. Situação pós-REC: ≥ 7 aprovado, < 7 reprovado
 function calcularPresencial(dados: DadosNota): ResultadoNota {
   const { av1, av2, av3, recuperacao } = dados;
@@ -108,21 +108,8 @@ function calcularPresencial(dados: DadosNota): ResultadoNota {
     };
   }
 
-  let nota1 = av1;
-  let nota2 = av2;
-  let nota3 = av3;
-  const rec = recuperacao!;
-
-  const menorNota = Math.min(nota1, nota2, nota3);
-
-  if (rec > menorNota) {
-    // Substitui a menor das três
-    if (av1 <= av2 && av1 <= av3)      nota1 = rec;
-    else if (av2 <= av1 && av2 <= av3) nota2 = rec;
-    else                                nota3 = rec;
-  }
-
-  const mediaFinal = (nota1 + nota2 + nota3) / 3;
+  // REC substitui a média diretamente
+  const mediaFinal = recuperacao!;
 
   return {
     media:      +media.toFixed(2),

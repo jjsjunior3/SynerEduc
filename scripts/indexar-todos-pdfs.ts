@@ -1,26 +1,25 @@
 // scripts/indexar-todos-pdfs.ts
 // Indexa no Pinecone todos os PDFs existentes em pdfs_conteudista
-// que ainda não foram indexados (status_indexacao = 'nao_indexado' ou 'erro')
+//
+// Arquitetura correta:
+//   1. Node.js (este script): baixa o PDF + extrai texto com pdf-parse (gratuito, sem rate limit)
+//   2. Edge Function: recebe o texto já extraído + faz chunking + embeddings + Pinecone
 //
 // Uso:
-//   npx tsx scripts/indexar-todos-pdfs.ts
-//   npx tsx scripts/indexar-todos-pdfs.ts --reindexar-erros
-//   npx tsx scripts/indexar-todos-pdfs.ts --tudo   (reindexar todos, inclusive já indexados)
-//
-// Requer arquivo .env.local com:
-//   VITE_SUPABASE_URL=https://xxx.supabase.co
-//   SUPABASE_SERVICE_KEY=eyJ...
-//   (A Edge Function usa os outros secrets configurados no Supabase Dashboard)
+//   npm run indexar                     → indexa status = 'nao_indexado'
+//   npm run indexar:erros               → indexa status IN ('nao_indexado', 'erro')
+//   npm run indexar:tudo                → reindexar todos
 
 import { createClient } from '@supabase/supabase-js'
+import pdfParse from 'pdf-parse'
 import * as dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.local' })
 
-const SUPABASE_URL  = process.env.VITE_SUPABASE_URL  ?? process.env.SUPABASE_URL ?? ''
-const SERVICE_KEY   = process.env.SUPABASE_SERVICE_KEY ?? ''
-const CONCORRENCIA  = 3    // indexar N PDFs ao mesmo tempo (respeitar rate limits)
-const DELAY_MS      = 500  // delay entre batches
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? ''
+const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY ?? ''
+const CONCORRENCIA = 2     // 2 PDFs ao mesmo tempo (seguro para Voyage AI)
+const DELAY_MS     = 1000  // 1s entre batches
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('❌ SUPABASE_URL e SUPABASE_SERVICE_KEY são obrigatórios no .env.local')
@@ -29,7 +28,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 
-const args         = process.argv.slice(2)
+const args           = process.argv.slice(2)
 const reindexarErros = args.includes('--reindexar-erros')
 const reindexarTudo  = args.includes('--tudo')
 
@@ -37,14 +36,39 @@ async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-async function indexarPDF(pdfId: string, nome: string): Promise<boolean> {
+/**
+ * Baixa o PDF via URL pública e extrai o texto com pdf-parse.
+ * Sem uso de LLM — gratuito e sem rate limits.
+ */
+async function extrairTextoPDF(url: string): Promise<string> {
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error(`Erro ao baixar PDF (${resp.status}): ${url}`)
+
+  const buffer = Buffer.from(await resp.arrayBuffer())
+  const dados  = await pdfParse(buffer)
+
+  if (!dados.text?.trim()) throw new Error('PDF sem texto extraível (pode ser imagem escaneada sem OCR)')
+
+  return dados.text
+}
+
+/**
+ * Envia o texto já extraído para a Edge Function fazer
+ * chunking + embeddings + upsert no Pinecone.
+ */
+async function indexarPDF(pdfId: string, nome: string, url: string): Promise<boolean> {
   try {
+    // 1. Extrair texto localmente (sem LLM, sem rate limit)
+    const texto = await extrairTextoPDF(url)
+    const palavras = texto.split(/\s+/).length
+    process.stdout.write(`  📄 ${nome}: ${palavras.toLocaleString('pt-BR')} palavras → `)
+
+    // 2. Enviar texto para Edge Function (só embedding + Pinecone)
     const { data, error } = await supabase.functions.invoke('indexar-documento', {
-      body: { pdf_id: pdfId, acao: 'indexar' },
+      body: { pdf_id: pdfId, texto, acao: 'indexar' },
     })
 
     if (error) {
-      // Extrair mensagem real do erro da Edge Function
       let detalhe = error.message
       try {
         const ctx = (error as any)?.context
@@ -52,23 +76,22 @@ async function indexarPDF(pdfId: string, nome: string): Promise<boolean> {
           const txt = await ctx.text()
           const parsed = JSON.parse(txt)
           detalhe = parsed?.erro ?? parsed?.message ?? txt
-        } else if (ctx?.json?.erro) {
-          detalhe = ctx.json.erro
         }
       } catch { /* usa error.message */ }
-      console.error(`  ❌ ${nome}: ${detalhe}`)
+      console.log(`❌ ${detalhe}`)
       return false
     }
 
     if (data?.erro) {
-      console.error(`  ❌ ${nome}: ${data.erro}`)
+      console.log(`❌ ${data.erro}`)
       return false
     }
 
-    console.log(`  ✅ ${nome}: ${data.chunks} chunks indexados`)
+    console.log(`✅ ${data?.chunks ?? '?'} chunks`)
     return true
+
   } catch (err: any) {
-    console.error(`  ❌ ${nome}: ${err.message}`)
+    console.log(`❌ ${err.message}`)
     return false
   }
 }
@@ -76,12 +99,10 @@ async function indexarPDF(pdfId: string, nome: string): Promise<boolean> {
 async function main() {
   console.log('\n🔍 Buscando PDFs no banco de dados...\n')
 
-  // Montar filtro de status
   let query = supabase
     .from('pdfs_conteudista')
-    .select('id, nome, disciplina, serie, bimestre, status_indexacao')
-    .order('serie')
-    .order('disciplina')
+    .select('id, nome, disciplina, serie, url, status_indexacao')
+    .order('serie').order('disciplina')
 
   if (!reindexarTudo) {
     if (reindexarErros) {
@@ -98,7 +119,7 @@ async function main() {
     process.exit(1)
   }
 
-  if (!pdfs || pdfs.length === 0) {
+  if (!pdfs?.length) {
     console.log('✅ Nenhum PDF pendente de indexação.')
     return
   }
@@ -115,25 +136,21 @@ async function main() {
   })
   console.log()
 
-  // Processar em batches para respeitar rate limits
   let ok = 0
   let erro = 0
 
   for (let i = 0; i < pdfs.length; i += CONCORRENCIA) {
     const lote = pdfs.slice(i, i + CONCORRENCIA)
-
     console.log(`📦 Batch ${Math.floor(i / CONCORRENCIA) + 1}/${Math.ceil(pdfs.length / CONCORRENCIA)}:`)
 
     const resultados = await Promise.all(
-      lote.map(p => indexarPDF(p.id, `${p.serie} / ${p.disciplina} / ${p.nome}`))
+      lote.map(p => indexarPDF(p.id, `${p.serie} / ${p.disciplina} / ${p.nome}`, p.url))
     )
 
     ok   += resultados.filter(Boolean).length
     erro += resultados.filter(r => !r).length
 
-    if (i + CONCORRENCIA < pdfs.length) {
-      await sleep(DELAY_MS)
-    }
+    if (i + CONCORRENCIA < pdfs.length) await sleep(DELAY_MS)
   }
 
   console.log(`\n${'─'.repeat(50)}`)
