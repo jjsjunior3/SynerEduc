@@ -44,10 +44,18 @@ async function indexarPDF(pdfId: string, nome: string): Promise<boolean> {
     })
 
     if (error) {
-      // Tentar extrair o corpo do erro para mostrar a mensagem real
-      const detalhe = (error as any)?.context?.json?.erro
-        ?? (error as any)?.context?.text
-        ?? error.message
+      // Extrair mensagem real do erro da Edge Function
+      let detalhe = error.message
+      try {
+        const ctx = (error as any)?.context
+        if (ctx && typeof ctx.text === 'function') {
+          const txt = await ctx.text()
+          const parsed = JSON.parse(txt)
+          detalhe = parsed?.erro ?? parsed?.message ?? txt
+        } else if (ctx?.json?.erro) {
+          detalhe = ctx.json.erro
+        }
+      } catch { /* usa error.message */ }
       console.error(`  ❌ ${nome}: ${detalhe}`)
       return false
     }
