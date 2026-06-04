@@ -5,3 +5,5 @@ build/
 build.zip
 .env
 .claude/
+.env.local
+supabase/.temp/
