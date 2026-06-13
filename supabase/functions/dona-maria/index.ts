@@ -20,6 +20,22 @@ const CHAT_MODEL    = 'claude-sonnet-4-6'
 const LIMITE_PROFESSOR   = 5
 const LIMITE_COORDENADOR = 20
 
+// ─── Log assíncrono ───────────────────────────────────────────────────────────
+async function logIA(row: Record<string, unknown>) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/agente_ia_log`, {
+      method: 'POST',
+      headers: {
+        'apikey':        SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=minimal',
+      },
+      body: JSON.stringify(row),
+    })
+  } catch (_) {}
+}
+
 // ─── Semana ISO (ex: "2026-W24") ──────────────────────────────────────────────
 function semanaISO(data = new Date()): string {
   const d = new Date(Date.UTC(data.getFullYear(), data.getMonth(), data.getDate()))
@@ -301,6 +317,7 @@ serve(async (req) => {
         : buildPromptAtividadePronta(form)
 
     // Claude + DALL-E em paralelo no modo infantil
+    const t0 = Date.now()
     const [claudeResp, imagemUrl] = await Promise.all([
       fetch('https://api.anthropic.com/v1/messages', {
         method:  'POST',
@@ -325,11 +342,25 @@ serve(async (req) => {
 
     const data  = await claudeResp.json() as any
     const texto = (data.content?.[0]?.text ?? '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    const latencia = Date.now() - t0
 
     // Incrementar quota após sucesso
     if (isInfantil && usuarioId) {
       await incrementarQuota(usuarioId).catch(e => console.error('quota increment error:', e))
     }
+
+    // Log assíncrono
+    logIA({
+      agente:        'dona-maria',
+      contexto:      isInfantil ? 'infantil' : (form.modoSaida ?? 'padrao'),
+      pergunta:      (form.habilidadeAlvo ?? form.disciplina ?? '').slice(0, 300),
+      usuario_id:    usuarioId ?? null,
+      turns:         1,
+      input_tokens:  data.usage?.input_tokens  ?? 0,
+      output_tokens: data.usage?.output_tokens ?? 0,
+      latencia_ms:   latencia,
+      erro:          false,
+    })
 
     return new Response(
       JSON.stringify({
@@ -343,6 +374,7 @@ serve(async (req) => {
 
   } catch (err: any) {
     console.error('dona-maria error:', err)
+    logIA({ agente: 'dona-maria', erro: true, erro_msg: err.message?.slice(0, 500) })
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } }
