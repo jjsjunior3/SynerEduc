@@ -5,7 +5,7 @@ import {
   MessageSquare, BarChart3, UserPlus, School, FileText,
   Book, Users, Link2, Sun, Moon, TrendingUp, Activity,
   GraduationCap, BookOpen, Wifi, Clock, UserCheck, UserX,
-  ChevronRight, Zap, Shield,
+  ChevronRight, Zap, Shield, Brain,
 } from "lucide-react";
 import { PerfilUsuario } from "./PerfilUsuario";
 import { RelatoriosAdmin } from "./RelatoriosAdmin";
@@ -21,7 +21,9 @@ import { GestaoConteudoPDF } from "./GestaoConteudoPDF";
 import FrequenciaProfessores from "./FrequenciaProfessores";
 import ComunicadosPage from "./ComunicadosPage";
 import { GestaoVinculos } from "./GestaoVinculos";
+import { MonitoramentoIA } from "./MonitoramentoIA";
 import { supabase } from "../supabase/supabaseClient";
+// Agentes de IA: Administrador não utiliza Sofia nem Tia Maria José
 import { useTheme } from "../contexts/ThemeContext";
 // ✅ Importa as funções do novo hook baseado em sessoes_ativas
 import { contarOnline, listarOnline } from "../hooks/usePresence";
@@ -55,7 +57,7 @@ interface Metricas {
 type ViewType =
   | "dashboard" | "cadastrar-usuario" | "gestao" | "relatorios"
   | "admin-usuarios" | "gestao-conteudo" | "comunicados"
-  | "gestao-vinculos" | "frequencia-professores";
+  | "gestao-vinculos" | "frequencia-professores" | "monitoramento-ia";
 
 const tipoLabel: Record<string, string> = {
   aluno: "Aluno", professor: "Professor", coordenador: "Coordenador",
@@ -211,6 +213,7 @@ export function DashboardAdministrador({
     { id: "comunicados",            title: "Comunicados",             description: "Enviar comunicados",            icon: <MessageSquare className="w-5 h-5" />, gradient: "from-cyan-500/10  to-cyan-600/5    dark:from-cyan-500/20    dark:to-cyan-900/10",    iconBg: "bg-cyan-500" },
     { id: "gestao-vinculos",        title: "Gestão de Vínculos",      description: "Professores e disciplinas",     icon: <Link2       className="w-5 h-5" />, gradient: "from-slate-500/10   to-slate-600/5   dark:from-slate-500/20   dark:to-slate-900/10",   iconBg: "bg-slate-500" },
     { id: "frequencia-professores", title: "Frequência Professores",  description: "Controle diário de presença",   icon: <UserCheck   className="w-5 h-5" />, gradient: "from-rose-500/10    to-rose-600/5    dark:from-rose-500/20    dark:to-rose-900/10",    iconBg: "bg-rose-500" },
+    { id: "monitoramento-ia",       title: "Monitoramento de IA",    description: "Tokens, latência e custos",      icon: <Brain       className="w-5 h-5" />, gradient: "from-violet-500/10  to-violet-600/5  dark:from-violet-500/20  dark:to-violet-900/10",  iconBg: "bg-violet-600" },
   ];
 
   const saudacao = () => {
@@ -289,6 +292,7 @@ export function DashboardAdministrador({
             {viewAtual === "comunicados"            && <ComunicadosPage         onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "gestao-vinculos"        && <GestaoVinculos          onVoltar={() => setViewAtual("dashboard")} />}
             {viewAtual === "frequencia-professores" && <FrequenciaProfessores   onVoltar={() => setViewAtual("dashboard")} usuario={usuario} />}
+            {viewAtual === "monitoramento-ia"       && <MonitoramentoIA         onVoltar={() => setViewAtual("dashboard")} />}
           </>
         ) : (
           <div className="space-y-6">
