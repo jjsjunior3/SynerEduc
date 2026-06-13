@@ -475,7 +475,7 @@ serve(async (req) => {
       : JSON.stringify(ultimaMsg?.content).slice(0, 300)
 
     // Log assíncrono — não bloqueia resposta
-    supabaseInsert('agente_ia_log', {
+    await supabaseInsert('agente_ia_log', {
       agente:        'gabriela',
       contexto,
       pergunta,
@@ -493,7 +493,7 @@ serve(async (req) => {
 
   } catch (err: any) {
     console.error('agente-gabriela error:', err)
-    supabaseInsert('agente_ia_log', {
+    await supabaseInsert('agente_ia_log', {
       agente:   'gabriela',
       contexto: '',
       erro:     true,

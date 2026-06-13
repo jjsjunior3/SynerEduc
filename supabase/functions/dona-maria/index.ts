@@ -350,7 +350,7 @@ serve(async (req) => {
     }
 
     // Log assíncrono
-    logIA({
+    await logIA({
       agente:        'dona-maria',
       contexto:      isInfantil ? 'infantil' : (form.modoSaida ?? 'padrao'),
       pergunta:      (form.habilidadeAlvo ?? form.disciplina ?? '').slice(0, 300),
@@ -374,7 +374,7 @@ serve(async (req) => {
 
   } catch (err: any) {
     console.error('dona-maria error:', err)
-    logIA({ agente: 'dona-maria', erro: true, erro_msg: err.message?.slice(0, 500) })
+    await logIA({ agente: 'dona-maria', erro: true, erro_msg: err.message?.slice(0, 500) })
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } }

@@ -287,7 +287,7 @@ serve(async (req) => {
     const latencia = Date.now() - t0
 
     // Log assíncrono
-    logIA({
+    await logIA({
       agente:        'sofia',
       contexto:      disciplina ?? perfil.serie ?? null,
       pergunta:      pergunta.slice(0, 300),
@@ -307,7 +307,7 @@ serve(async (req) => {
 
   } catch (err: any) {
     console.error('chat-sofia error:', err)
-    logIA({ agente: 'sofia', erro: true, erro_msg: err.message?.slice(0, 500) })
+    await logIA({ agente: 'sofia', erro: true, erro_msg: err.message?.slice(0, 500) })
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } }
