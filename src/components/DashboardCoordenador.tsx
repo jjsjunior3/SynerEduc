@@ -17,6 +17,9 @@ import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../supabase/supabaseClient';
+// Sofia: apenas aluno e professor. Coordenador usa só Tia Maria José.
+import { AgenteInclusao }      from './ai/AgenteInclusao';
+import { FrequenciaRealtime }  from './FrequenciaRealtime';
 
 import { Notificacoes } from './Notificacoes';
 import { PerfilUsuario } from './PerfilUsuario';
@@ -640,6 +643,15 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
           </Card>
         </section>
 
+        {/* ── Faltas em Tempo Real ── */}
+        <section>
+          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <div className="w-1 h-6 bg-red-500 rounded-full" />
+            Monitoramento de Faltas
+          </h2>
+          <FrequenciaRealtime />
+        </section>
+
         {/* ── Módulos ── */}
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -679,6 +691,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
       </main>
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
+      <AgenteInclusao usuario={usuario} />
     </div>
   );
 }
