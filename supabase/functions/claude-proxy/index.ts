@@ -17,7 +17,6 @@
 //   SUPABASE_SERVICE_KEY = eyJ...  (service_role — para gravar logs)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { jwtVerify, createRemoteJWKSet } from 'https://deno.land/x/jose@v4.15.4/index.ts'
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -60,14 +59,6 @@ interface PayloadAgente {
 }
 
 type Payload = PayloadModo1 | PayloadAgente
-
-interface JWTPayload {
-  sub:          string
-  segmento?:    string
-  tipo_usuario?: string
-  email?:       string
-  user_metadata?: { nome?: string; tipo?: string; segmento?: string }
-}
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
 
@@ -132,27 +123,20 @@ serve(async (req: Request) => {
     return json({ erro: 'Token de autenticação ausente.' }, 401)
   }
 
-  let jwtPayload: JWTPayload
-  try {
-    // Supabase assina com HS256 usando SUPABASE_JWT_SECRET
-    // Em Edge Functions Deno, usamos o JWKS endpoint do próprio Supabase
-    const JWKS = createRemoteJWKSet(
-      new URL(`${supabaseUrl}/auth/v1/jwks`)
-    )
-    const { payload } = await jwtVerify(token, JWKS)
-    jwtPayload = payload as unknown as JWTPayload
-  } catch (err) {
+  // Valida token via endpoint de auth (mesmo padrão do chat-sofia)
+  const userAuthResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}`, apikey: serviceKey ?? '' },
+  })
+  if (!userAuthResp.ok) {
     return json({ erro: 'Token inválido ou expirado.' }, 401)
   }
+  const userAuth = await userAuthResp.json()
 
-  const userId   = jwtPayload.sub
-  const segmento = jwtPayload.segmento
-    ?? jwtPayload.user_metadata?.segmento
-    ?? 'nao_definido'
-  const perfil   = jwtPayload.tipo_usuario
-    ?? jwtPayload.user_metadata?.tipo
-    ?? 'aluno'
-  const nomeUsuario = jwtPayload.user_metadata?.nome ?? jwtPayload.email ?? 'Usuário'
+  const userId      = userAuth.id as string
+  const metadata    = userAuth.user_metadata ?? {}
+  const segmento    = metadata.segmento    ?? 'nao_definido'
+  const perfil      = metadata.tipo        ?? userAuth.role ?? 'aluno'
+  const nomeUsuario = metadata.nome        ?? userAuth.email ?? 'Usuário'
 
   // ── 2. Parse do payload ─────────────────────────────────────────────────────
   let payload: Payload
@@ -175,9 +159,16 @@ serve(async (req: Request) => {
 
     const mensagens = p.mensagens ?? [{ role: 'user', content: [bloco, { type: 'text', text: p.prompt }] }]
 
+    const hdrs: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    }
+    if (p.is_pdf) hdrs['anthropic-beta'] = 'pdfs-2024-09-25'
+
     const resposta = await fetchComRetry(ANTHROPIC_API_URL, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      headers: hdrs,
       body:    JSON.stringify({ model: modelo, max_tokens, messages: mensagens }),
     })
 

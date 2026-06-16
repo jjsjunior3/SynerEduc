@@ -27,6 +27,7 @@ interface Notificacao {
 interface NotificacoesProps {
   onClose: () => void;
   onCountChange?: (count: number) => void;
+  onNavegar?: (link: string) => void;
 }
 
 function getIcone(tipo: string) {
@@ -56,7 +57,7 @@ function formatarData(data: string) {
   return date.toLocaleDateString('pt-BR');
 }
 
-export function Notificacoes({ onClose, onCountChange }: NotificacoesProps) {
+export function Notificacoes({ onClose, onCountChange, onNavegar }: NotificacoesProps) {
   const { usuario } = useAuth();
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -210,7 +211,10 @@ export function Notificacoes({ onClose, onCountChange }: NotificacoesProps) {
                             onClick={e => {
                               e.stopPropagation();
                               marcarComoLida(notif.id);
-                              if (notif.acao_link) window.location.href = notif.acao_link;
+                              if (notif.acao_link) {
+                                if (onNavegar) { onClose(); onNavegar(notif.acao_link); }
+                                else window.open(notif.acao_link, '_blank');
+                              }
                             }}
                             className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
                           >

@@ -7,6 +7,7 @@ import { X, Send, Minimize2, Loader2, Mic, MicOff } from 'lucide-react'
 import { AvatarSofia } from './AvatarSofia'
 import { Button } from '../ui/button'
 import { supabase } from '../../supabase/supabaseClient'
+import { useAuth } from '../../contexts/AuthContext'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -18,46 +19,85 @@ interface Mensagem {
 }
 
 interface Props {
-  serie?:      string  // ex: "1ª série", "6º ano"
-  disciplina?: string  // ex: "Biologia" — pré-filtra o Pinecone
-  nomeAluno?:  string
+  disciplina?: string  // contexto opcional — professor pode passar a disciplina atual
 }
 
-// ─── Prompt da Professora Sofia ───────────────────────────────────────────────
+// ─── Mensagem de boas-vindas por tipo ────────────────────────────────────────
 
-function buildSystemPrompt(serie?: string, disciplina?: string, nomeAluno?: string): string {
-  return `Você é a Professora Sofia, assistente de estudos do Colégio Conexão Maranhense.
-Você é jovem, animada, paciente e fala de forma clara e acolhedora com os alunos.
-Use linguagem simples, emojis ocasionais e sempre incentive o aluno.
+function boasVindas(tipo: string, nome?: string): string {
+  const primeiroNome = nome?.split(' ')[0] ?? ''
+  const saudacao     = primeiroNome ? `, ${primeiroNome}` : ''
 
-${nomeAluno ? `Você está conversando com ${nomeAluno}.` : ''}
-${serie ? `O aluno está na ${serie}.` : ''}
-${disciplina ? `O contexto atual é a disciplina de ${disciplina}.` : ''}
+  if (tipo === 'professor' || tipo === 'professor_conteudista') {
+    return `Olá${saudacao}! 👋 Sou a **Professora Sofia**, sua assistente pedagógica aqui no Conexão! 📚✨
 
-Ao responder:
-- Use os trechos do material didático fornecidos no contexto quando relevantes
-- Se a pergunta não tiver relação com o material escolar, responda brevemente e redirecione para os estudos
-- Nunca invente conteúdo — se não souber, diga que vai buscar nos livros
-- Sempre termine com uma pergunta de curiosidade ou incentivo`
-}
+Posso te ajudar a preparar aulas, explicar conteúdos curriculares e sugerir estratégias didáticas com base no material das suas turmas. O que precisa hoje?`
+  }
 
-// ─── Mensagem de boas-vindas ─────────────────────────────────────────────────
+  if (tipo === 'coordenador') {
+    return `Olá${saudacao}! 👋 Sou a **Professora Sofia**, assistente pedagógica do Conexão! 📚✨
 
-function boasVindas(nomeAluno?: string): string {
-  const nome = nomeAluno ? `, ${nomeAluno.split(' ')[0]}` : ''
-  return `Oi${nome}! 👋 Sou a **Professora Sofia**, sua assistente de estudos aqui no Conexão! 📚✨
+Tenho acesso ao material didático de todas as séries e disciplinas. Posso ajudar com análises curriculares, conteúdos programáticos e planejamento pedagógico. Como posso ajudar?`
+  }
+
+  // aluno (padrão)
+  return `Oi${saudacao}! 👋 Sou a **Professora Sofia**, sua assistente de estudos aqui no Conexão! 📚✨
 
 Pode me perguntar qualquer coisa sobre os conteúdos dos seus livros — estou aqui pra te ajudar a entender melhor. O que você quer estudar hoje? 😊`
 }
 
+function placeholderPorTipo(tipo: string): string {
+  if (tipo === 'professor' || tipo === 'professor_conteudista')
+    return 'Pergunte sobre conteúdos ou peça sugestões de aula...'
+  if (tipo === 'coordenador')
+    return 'Pergunte sobre qualquer conteúdo curricular...'
+  return 'Pergunte algo sobre os livros...'
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export function ChatFlutuante({ serie, disciplina, nomeAluno }: Props) {
+export function ChatFlutuante({ disciplina }: Props) {
+  const { usuario } = useAuth()
+  const tipo = usuario?.tipo ?? 'aluno'
   const [aberto,     setAberto]     = useState(false)
   const [minimizado, setMinimizado] = useState(false)
-  const [mensagens,  setMensagens]  = useState<Mensagem[]>([
-    { id: '0', role: 'sofia', texto: boasVindas(nomeAluno) },
-  ])
+  const [mensagens,  setMensagens]  = useState<Mensagem[]>([])
+  const greetingUserIdRef = useRef<string | null>(null)
+
+  // Carrega histórico do sessionStorage ou inicializa saudação quando usuário carrega.
+  useEffect(() => {
+    if (!usuario) return
+    if (greetingUserIdRef.current === usuario.id) return
+    greetingUserIdRef.current = usuario.id
+
+    const chave = `sofia-chat-${usuario.id}`
+    const salvo = sessionStorage.getItem(chave)
+    if (salvo) {
+      try {
+        const parsed = JSON.parse(salvo) as Mensagem[]
+        if (parsed.length > 0) { setMensagens(parsed); return }
+      } catch { /* ignora */ }
+    }
+    setMensagens([{ id: '0', role: 'sofia', texto: boasVindas(usuario.tipo, usuario.nome) }])
+  }, [usuario?.id, usuario?.tipo])
+
+  // Persiste histórico no sessionStorage após cada mensagem.
+  useEffect(() => {
+    if (!usuario?.id || mensagens.length === 0) return
+    const chave = `sofia-chat-${usuario.id}`
+    sessionStorage.setItem(chave, JSON.stringify(mensagens))
+  }, [mensagens, usuario?.id])
+
+  // Limpa histórico do usuário anterior quando desloga.
+  const prevUserIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (prevUserIdRef.current && !usuario) {
+      sessionStorage.removeItem(`sofia-chat-${prevUserIdRef.current}`)
+      greetingUserIdRef.current = null
+      setMensagens([])
+    }
+    prevUserIdRef.current = usuario?.id ?? null
+  }, [usuario?.id])
   const [input,    setInput]    = useState('')
   const [enviando, setEnviando] = useState(false)
   const [gravando, setGravando] = useState(false)
@@ -129,7 +169,7 @@ export function ChatFlutuante({ serie, disciplina, nomeAluno }: Props) {
 
     try {
       // Busca no RAG via Edge Function do Supabase
-      const resposta = await buscarRAG(texto, serie, disciplina, mensagens)
+      const resposta = await buscarRAG(texto, disciplina, mensagens)
       setMensagens(prev => prev
         .filter(m => m.id !== 'loading')
         .concat({ id: Date.now().toString(), role: 'sofia', texto: resposta })
@@ -289,7 +329,7 @@ export function ChatFlutuante({ serie, disciplina, nomeAluno }: Props) {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Pergunte algo sobre os livros..."
+                placeholder={placeholderPorTipo(tipo)}
                 className="flex-1 min-h-[42px] max-h-[120px] resize-none text-sm rounded-xl border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-500 px-3 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 overflow-y-auto"
                 rows={1}
               />
@@ -412,14 +452,12 @@ function MarkdownSimples({ texto }: { texto: string }) {
 
 async function buscarRAG(
   pergunta:    string,
-  serie?:      string,
   disciplina?: string,
   historico?:  Mensagem[],
 ): Promise<string> {
   const { data, error } = await supabase.functions.invoke('chat-sofia', {
     body: {
       pergunta,
-      serie,
       disciplina,
       historico: (historico ?? [])
         .filter(m => !m.loading)

@@ -121,7 +121,7 @@ export default function BoletimCoordenador({ onVoltar }: BoletimCoordenadorProps
       try {
         const { data } = await supabase
           .from('users').select('serie')
-          .eq('tipo', 'aluno').eq('segmento', segmento).not('serie', 'is', null);
+          .eq('tipo', 'aluno').eq('status', 'ativo').eq('segmento', segmento).not('serie', 'is', null);
         const unicas = Array.from(new Set((data || []).map((s: any) => s.serie).filter(Boolean))).sort() as string[];
         setSeries(unicas);
       } catch { /* silencioso */ }
@@ -135,7 +135,7 @@ export default function BoletimCoordenador({ onVoltar }: BoletimCoordenadorProps
     setCarregandoAlunos(true);
     setAlunoSelecionado(null); setNotas([]); setBusca('');
     supabase.from('users').select('id, nome, serie')
-      .eq('tipo', 'aluno').eq('serie', serieSelecionada).eq('segmento', segmento).order('nome')
+      .eq('tipo', 'aluno').eq('status', 'ativo').eq('serie', serieSelecionada).eq('segmento', segmento).order('nome')
       .then(({ data }) => { setAlunosDaSerie(data || []); setCarregandoAlunos(false); })
       .catch(() => setCarregandoAlunos(false));
   }, [serieSelecionada, segmento]);

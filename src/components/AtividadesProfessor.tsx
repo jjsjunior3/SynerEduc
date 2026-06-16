@@ -64,6 +64,7 @@ export function AtividadesProfessor({ disciplina, serie }: AtividadesProfessorPr
           .from('users')
           .select('*', { count: 'exact', head: true })
           .eq('tipo', 'aluno')
+          .eq('status', 'ativo')
           .eq('serie', serie.nome);
         setTotalAlunos(count || 0);
       } catch { setTotalAlunos(0); }

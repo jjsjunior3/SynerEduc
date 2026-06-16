@@ -59,7 +59,7 @@ export function FrequenciaRealtime() {
       .from('frequencia_diaria')
       .select(`
         id, aluno_id, criado_em, status, notificado_em, justificada,
-        users!frequencia_diaria_aluno_id_fkey ( nome ),
+        users!frequencia_diaria_aluno_id_fkey ( nome, status ),
         turmas!frequencia_diaria_turma_id_fkey ( nome, segmento, series ( nome ) ),
         disciplinas!frequencia_diaria_disciplina_id_fkey ( nome )
       `)
@@ -69,7 +69,10 @@ export function FrequenciaRealtime() {
 
     if (!data) { setCarregando(false); return }
 
-    const filtrado = data.filter((f: any) => !segmento || f.turmas?.segmento === segmento)
+    const filtrado = data.filter((f: any) =>
+      (!segmento || f.turmas?.segmento === segmento) &&
+      f.users?.status === 'ativo'
+    )
 
     const alunoIds = [...new Set(filtrado.map((f: any) => f.aluno_id))]
     let fichasMap: Record<string, { nome_responsavel: string | null; telefone: string | null }> = {}

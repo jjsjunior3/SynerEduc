@@ -1,11 +1,11 @@
-// supabase/functions/chat-sofia/index.ts  v6
+// supabase/functions/chat-sofia/index.ts  v7
+// Suporta aluno, professor e coordenador com contextos distintos.
 // Fluxo:
-//   1. Valida JWT → busca perfil do aluno (nome, série, turma)
-//   2. Busca agenda de hoje para a série/turma/disciplina do aluno
-//   3. Gera embedding via Pinecone Inference (multilingual-e5-large)
-//   4. Busca chunks relevantes no Pinecone (filtra por série/disciplina)
-//   5. Monta contexto com <aula_de_hoje> + <material_didatico> + histórico
-//   6. Chama Claude Haiku → resposta contextualizada
+//   1. Valida JWT → busca perfil (nome, tipo, serie, segmento)
+//   2. Para professor: busca disciplinas/series vinculadas
+//   3. Busca agenda de hoje (escopo depende do tipo)
+//   4. Gera embedding + busca Pinecone (filtro depende do tipo)
+//   5. Monta contexto e chama Claude Haiku com system prompt adaptado
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
@@ -15,17 +15,17 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')        ?? ''
-const PINECONE_KEY  = Deno.env.get('PINECONE_API_KEY')         ?? ''
-const PINECONE_HOST = Deno.env.get('PINECONE_HOST')            ?? ''
-const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')             ?? ''
-const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_KEY') ?? ''
+const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')             ?? ''
+const PINECONE_KEY  = Deno.env.get('PINECONE_API_KEY')              ?? ''
+const PINECONE_HOST = Deno.env.get('PINECONE_HOST')                 ?? ''
+const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')                  ?? ''
+const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')     ?? Deno.env.get('SUPABASE_SERVICE_KEY') ?? ''
 
 const PINECONE_EMBED_MODEL = 'multilingual-e5-large'
 const CHAT_MODEL           = 'claude-haiku-4-5-20251001'
 const TOP_K                = 6
 
-// ─── Log ────────────────────────────────────────────────────────────────────
+// ─── Log ─────────────────────────────────────────────────────────────────────
 
 async function logIA(row: Record<string, unknown>) {
   try {
@@ -42,29 +42,136 @@ async function logIA(row: Record<string, unknown>) {
   } catch (_) {}
 }
 
-// ─── System prompt ───────────────────────────────────────────────────────────
+// ─── Perfil unificado ─────────────────────────────────────────────────────────
 
-function systemPrompt(
-  nomeAluno?: string,
-  serie?:     string,
-  disciplina?: string,
-): string {
-  return `Você é a Professora Sofia, assistente de estudos do Colégio Conexão Maranhense.
-Você é jovem, animada, paciente e fala de forma clara e acolhedora com os alunos.
+interface Perfil {
+  userId:      string
+  nome:        string | null
+  tipo:        string        // 'aluno' | 'professor' | 'coordenador' | ...
+  serie:       string | null // aluno: sua série
+  segmento:    string | null
+  disciplinas: string[]      // professor: disciplinas vinculadas
+  series:      string[]      // professor: séries que leciona
+}
+
+async function buscarPerfil(authHeader: string): Promise<Perfil> {
+  const token = authHeader.slice(7)
+
+  // 1. Valida JWT e obtém userId
+  const userResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_KEY },
+  })
+  if (!userResp.ok) throw new Error('JWT inválido')
+  const { id: userId } = await userResp.json()
+
+  // 2. Busca perfil na tabela users
+  const perfilResp = await fetch(
+    `${SUPABASE_URL}/rest/v1/users?id=eq.${userId}&select=nome,tipo,serie,segmento&limit=1`,
+    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+  )
+  if (!perfilResp.ok) throw new Error('Erro ao buscar perfil')
+  const [usuario] = await perfilResp.json()
+  if (!usuario) throw new Error('Perfil não encontrado')
+
+  const tipo     = usuario.tipo     ?? 'aluno'
+  const nome     = usuario.nome     ?? null
+  const serie    = usuario.serie    ?? null
+  const segmento = usuario.segmento ?? null
+
+  // 3. Para professor: busca disciplinas e séries vinculadas
+  let disciplinas: string[] = []
+  let series:      string[] = []
+
+  if (tipo === 'professor' || tipo === 'professor_conteudista') {
+    const vinculoResp = await fetch(
+      `${SUPABASE_URL}/rest/v1/professores_disciplinas_series`
+      + `?professor_id=eq.${userId}`
+      + `&select=disciplinas(nome),series(nome)`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+    )
+    if (vinculoResp.ok) {
+      const vinculos = await vinculoResp.json()
+      disciplinas = [...new Set(vinculos.map((v: any) => v.disciplinas?.nome).filter(Boolean))] as string[]
+      series      = [...new Set(vinculos.map((v: any) => v.series?.nome).filter(Boolean))]      as string[]
+    }
+  }
+
+  return { userId, nome, tipo, serie, segmento, disciplinas, series }
+}
+
+// ─── System prompt por tipo de usuário ───────────────────────────────────────
+
+function systemPrompt(perfil: Perfil, agenda: AgendaAula[], disciplinaAtual?: string): string {
+  const { nome, tipo, serie, disciplinas, series } = perfil
+
+  // Bloco de agenda formatado para o system prompt
+  let agendaBlock = ''
+  if (agenda.length > 0) {
+    const aulas = agenda.map(a => {
+      const linhas: string[] = []
+      if (a.serie)          linhas.push(`Série: ${a.serie}`)
+      if (a.disciplina)     linhas.push(`Disciplina: ${a.disciplina}`)
+      if (a.titulo_unidade) linhas.push(`Título da aula: ${a.titulo_unidade}`)
+      if (a.conteudo_sala)  linhas.push(`Conteúdo trabalhado em sala: ${a.conteudo_sala}`)
+      if (a.atividade_casa) linhas.push(`Atividade para casa: ${a.atividade_casa}`)
+      return linhas.join('\n')
+    }).join('\n\n')
+    agendaBlock = `\n\n<agenda_de_hoje>\n${aulas}\n</agenda_de_hoje>`
+  }
+
+  if (tipo === 'aluno') {
+    return `Você é a Professora Sofia, assistente de estudos do Colégio Conexão Maranhense.
+Você é jovem, animada, paciente e fala de forma clara e acolhedora.
 Use linguagem simples e incentivadora. Emojis são bem-vindos com moderação.
 
-${nomeAluno ? `Você está conversando com ${nomeAluno}.` : ''}
-${serie     ? `O aluno está na ${serie}.`                : ''}
-${disciplina ? `O foco atual é ${disciplina}.`           : ''}
+Você está conversando com ${nome ?? 'um aluno'}${serie ? `, aluno(a) da ${serie}` : ''}.
+${disciplinaAtual ? `O foco atual é a disciplina de ${disciplinaAtual}.` : ''}${agendaBlock}
 
 <regras>
-- Se houver uma tag <aula_de_hoje>, use esse contexto como referência principal para explicar o conteúdo do dia
-- Use os trechos do material didático fornecidos em <material_didatico> para aprofundar a explicação
-- Se o aluno disser "não entendi a aula de hoje" ou similar, explique baseando-se no título e conteúdo da aula registrada
-- NUNCA invente conteúdo que não está no contexto — se não souber, diga que vai buscar nos livros
-- Respostas curtas e diretas (máx. 3 parágrafos) — o aluno está no celular
+- Responda SOMENTE sobre o conteúdo escolar da série do aluno
+- Use <agenda_de_hoje> para responder perguntas sobre aulas e tarefas do dia — NÃO a mencione proativamente em toda resposta
+- Use os trechos em <material_didatico> para aprofundar explicações
+- NUNCA invente conteúdo — se não souber, diga que vai buscar nos livros
+- Respostas curtas e diretas (máx. 3 parágrafos) — o aluno pode estar no celular
 - Sempre termine com uma pergunta de curiosidade ou incentivo
-- Se a pergunta não tiver relação com estudos escolares, responda brevemente e redirecione
+- Não comente sobre outros alunos ou informações de terceiros
+</regras>`
+  }
+
+  if (tipo === 'professor' || tipo === 'professor_conteudista') {
+    const discStr   = disciplinas.length ? disciplinas.join(', ')    : 'suas disciplinas'
+    const seriesStr = series.length      ? series.join(', ')         : 'suas turmas'
+    return `Você é a Professora Sofia, assistente pedagógica do Colégio Conexão Maranhense.
+Você auxilia professores com planejamento de aulas, explicações de conteúdo e sugestões didáticas.
+Tom profissional mas acolhedor.
+
+Você está conversando com ${nome ?? 'um professor'}, professor(a) de ${discStr} nas séries ${seriesStr}.
+${disciplinaAtual ? `O contexto atual é a disciplina de ${disciplinaAtual}.` : ''}${agendaBlock}
+
+<regras>
+- Responda sobre o material didático das disciplinas e séries vinculadas ao professor
+- Use <agenda_de_hoje> para contextualizar o planejamento quando perguntado — não repita em toda resposta
+- Use <material_didatico> para embasar sugestões pedagógicas
+- Pode sugerir estratégias de ensino, exercícios e explicações para os alunos
+- Não forneça informações sobre alunos específicos (notas, frequência) — esses dados ficam em outros módulos
+- NUNCA invente conteúdo curricular — baseie-se no material indexado
+</regras>`
+  }
+
+  // coordenador (e outros papéis privilegiados)
+  return `Você é a Professora Sofia, assistente pedagógica do Colégio Conexão Maranhense.
+Você apoia a coordenação com visão ampla do conteúdo escolar, planejamento e acompanhamento curricular.
+Tom profissional, objetivo e completo.
+
+Você está conversando com ${nome ?? 'a coordenação'}, coordenador(a) pedagógico(a).${agendaBlock}
+
+<regras>
+- Você tem acesso ao material didático de TODAS as séries e disciplinas
+- Use <agenda_de_hoje> para contextualizar discussões curriculares quando perguntado — não repita em toda resposta
+- Use <material_didatico> para embasar análises e recomendações
+- Pode responder sobre qualquer série, disciplina ou aspecto pedagógico
+- Mantenha foco em conteúdo curricular e gestão pedagógica
+- NUNCA invente dados — baseie-se no material indexado
 </regras>`
 }
 
@@ -89,7 +196,7 @@ async function gerarEmbedding(texto: string): Promise<number[]> {
   return data.data?.[0]?.values as number[]
 }
 
-// ─── Busca Pinecone ──────────────────────────────────────────────────────────
+// ─── Busca Pinecone ───────────────────────────────────────────────────────────
 
 interface ChunkResultado {
   texto:      string
@@ -98,13 +205,22 @@ interface ChunkResultado {
 }
 
 async function buscarPinecone(
-  vetor:       number[],
-  serie?:      string,
+  vetor:      number[],
+  perfil:     Perfil,
   disciplina?: string,
 ): Promise<ChunkResultado[]> {
   const filter: Record<string, unknown> = {}
-  if (serie)      filter['serie']      = { '$eq': serie }
-  if (disciplina) filter['disciplina'] = { '$eq': disciplina }
+
+  if (perfil.tipo === 'aluno') {
+    // Aluno só vê material da sua série
+    if (perfil.serie)  filter['serie']      = { '$eq': perfil.serie }
+    if (disciplina)    filter['disciplina'] = { '$eq': disciplina }
+  } else if (perfil.tipo === 'professor' || perfil.tipo === 'professor_conteudista') {
+    // Professor filtra pela disciplina atual (se informada)
+    if (disciplina)    filter['disciplina'] = { '$eq': disciplina }
+    // Sem filtro de série — o professor pode lecionar várias séries
+  }
+  // Coordenador: sem filtro — vê todo o material
 
   const body: Record<string, unknown> = {
     vector: vetor, topK: TOP_K, includeMetadata: true,
@@ -129,50 +245,6 @@ async function buscarPinecone(
     .filter((c: ChunkResultado) => c.texto)
 }
 
-// ─── Perfil do aluno ─────────────────────────────────────────────────────────
-
-interface PerfilAluno {
-  userId: string | null
-  nome:   string | null
-  serie:  string | null
-  turma:  string | null
-}
-
-async function buscarPerfilAluno(authHeader: string): Promise<PerfilAluno> {
-  const token = authHeader.slice(7)
-
-  const userResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_KEY },
-  })
-  if (!userResp.ok) throw new Error('JWT inválido')
-  const { id: userId } = await userResp.json()
-
-  const perfilResp = await fetch(
-    `${SUPABASE_URL}/rest/v1/users?id=eq.${userId}&select=nome,role`,
-    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
-  )
-  if (!perfilResp.ok) return { userId, nome: null, serie: null, turma: null }
-
-  const [usuario] = await perfilResp.json()
-  if (!usuario) return { userId, nome: null, serie: null, turma: null }
-
-  // Busca série e nome da turma
-  const turmaResp = await fetch(
-    `${SUPABASE_URL}/rest/v1/alunos_turmas?user_id=eq.${userId}&select=turmas(nome,series(nome))&limit=1`,
-    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
-  )
-
-  let serie: string | null = null
-  let turma: string | null = null
-  if (turmaResp.ok) {
-    const [at] = await turmaResp.json()
-    serie = at?.turmas?.series?.nome ?? null
-    turma = at?.turmas?.nome         ?? null
-  }
-
-  return { userId, nome: usuario.nome ?? null, serie, turma }
-}
-
 // ─── Agenda de hoje ───────────────────────────────────────────────────────────
 
 interface AgendaAula {
@@ -180,22 +252,26 @@ interface AgendaAula {
   conteudo_sala:  string | null
   atividade_casa: string | null
   disciplina:     string | null
+  serie:          string | null
 }
 
-async function buscarAgendaHoje(
-  serie:       string,
-  turma?:      string | null,
-  disciplina?: string,
-): Promise<AgendaAula[]> {
-  const hoje = new Date().toISOString().split('T')[0] // YYYY-MM-DD
-
+async function buscarAgendaHoje(perfil: Perfil, disciplina?: string): Promise<AgendaAula[]> {
+  const hoje = new Date().toISOString().split('T')[0]
   let url = `${SUPABASE_URL}/rest/v1/agenda_professor`
     + `?data_aula=eq.${hoje}`
-    + `&serie=eq.${encodeURIComponent(serie)}`
-    + `&select=titulo_unidade,conteudo_sala,atividade_casa,disciplinas(nome)`
+    + `&select=titulo_unidade,conteudo_sala,atividade_casa,serie,disciplinas(nome)`
 
-  if (turma)      url += `&turma=eq.${encodeURIComponent(turma)}`
-  if (disciplina) url += `&disciplinas.nome=eq.${encodeURIComponent(disciplina)}`
+  if (perfil.tipo === 'aluno') {
+    // Aluno vê somente a agenda da sua série
+    if (!perfil.serie) return []
+    url += `&serie=eq.${encodeURIComponent(perfil.serie)}`
+    if (disciplina) url += `&disciplina_id=not.is.null` // filtro extra opcional
+  } else if (perfil.tipo === 'professor' || perfil.tipo === 'professor_conteudista') {
+    // Professor vê apenas as aulas que ele próprio registrou
+    url += `&professor_id=eq.${perfil.userId}`
+    if (disciplina) url += `&disciplinas.nome=eq.${encodeURIComponent(disciplina)}`
+  }
+  // Coordenador: sem filtro adicional — vê todas as aulas de hoje
 
   const resp = await fetch(url, {
     headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
@@ -208,6 +284,7 @@ async function buscarAgendaHoje(
     conteudo_sala:  r.conteudo_sala  ?? null,
     atividade_casa: r.atividade_casa ?? null,
     disciplina:     r.disciplinas?.nome ?? null,
+    serie:          r.serie ?? null,
   }))
 }
 
@@ -220,34 +297,19 @@ interface RespostaClaude {
 }
 
 async function chamarClaude(
-  pergunta:    string,
-  chunks:      ChunkResultado[],
-  agenda:      AgendaAula[],
-  historico:   { role: string; content: string }[],
-  serie?:      string,
+  pergunta:   string,
+  chunks:     ChunkResultado[],
+  agenda:     AgendaAula[],
+  historico:  { role: string; content: string }[],
+  perfil:     Perfil,
   disciplina?: string,
-  nomeAluno?:  string,
 ): Promise<RespostaClaude> {
-  // Bloco da aula de hoje
-  let aulaBlock = ''
-  if (agenda.length > 0) {
-    const aulas = agenda.map(a => {
-      const linhas = []
-      if (a.disciplina)    linhas.push(`Disciplina: ${a.disciplina}`)
-      if (a.titulo_unidade) linhas.push(`Título da aula: ${a.titulo_unidade}`)
-      if (a.conteudo_sala)  linhas.push(`Conteúdo trabalhado em sala: ${a.conteudo_sala}`)
-      if (a.atividade_casa) linhas.push(`Atividade para casa: ${a.atividade_casa}`)
-      return linhas.join('\n')
-    }).join('\n\n')
-
-    aulaBlock = `<aula_de_hoje>\n${aulas}\n</aula_de_hoje>\n\n`
-  }
-
-  // Bloco do material didático (Pinecone)
+  // Bloco do material didático (vai na mensagem do usuário, por ser dinâmico por pergunta)
   const materialBlock = chunks.length > 0
     ? `<material_didatico>\n${chunks.map((c, i) => {
         const ref = c.pagina ? ` (pág. ${c.pagina})` : ''
-        return `[Trecho ${i + 1}${ref}]\n${c.texto}`
+        const disc = c.disciplina ? ` [${c.disciplina}]` : ''
+        return `[Trecho ${i + 1}${ref}${disc}]\n${c.texto}`
       }).join('\n\n')}\n</material_didatico>`
     : ''
 
@@ -255,7 +317,7 @@ async function chamarClaude(
     ...historico.map(h => ({ role: h.role, content: h.content })),
     {
       role:    'user',
-      content: `${aulaBlock}${materialBlock}${aulaBlock || materialBlock ? '\n\n' : ''}${pergunta}`,
+      content: `${materialBlock}${materialBlock ? '\n\n' : ''}${pergunta}`,
     },
   ]
 
@@ -269,7 +331,7 @@ async function chamarClaude(
     body: JSON.stringify({
       model:      CHAT_MODEL,
       max_tokens: 1024,
-      system:     systemPrompt(nomeAluno, serie, disciplina),
+      system:     systemPrompt(perfil, agenda, disciplina),
       messages:   mensagens,
     }),
   })
@@ -287,7 +349,7 @@ async function chamarClaude(
   }
 }
 
-// ─── Handler ─────────────────────────────────────────────────────────────────
+// ─── Handler ──────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -301,7 +363,7 @@ serve(async (req) => {
       )
     }
 
-    const perfil = await buscarPerfilAluno(auth)
+    const perfil = await buscarPerfil(auth)
     const { pergunta, disciplina, historico = [] } = await req.json()
 
     if (!pergunta?.trim()) {
@@ -311,33 +373,23 @@ serve(async (req) => {
       )
     }
 
-    // Busca agenda de hoje (paralelo com embedding)
+    // Busca agenda e embedding em paralelo
     const [vetor, agenda] = await Promise.all([
       gerarEmbedding(pergunta),
-      perfil.serie
-        ? buscarAgendaHoje(perfil.serie, perfil.turma, disciplina)
-        : Promise.resolve([]),
+      buscarAgendaHoje(perfil, disciplina),
     ])
 
-    // Busca chunks no Pinecone
-    const chunks = await buscarPinecone(vetor, perfil.serie ?? undefined, disciplina)
+    // Busca chunks no Pinecone (filtro por tipo)
+    const chunks = await buscarPinecone(vetor, perfil, disciplina)
 
     // Resposta do Claude
     const t0 = Date.now()
-    const resultado = await chamarClaude(
-      pergunta,
-      chunks,
-      agenda,
-      historico,
-      perfil.serie      ?? undefined,
-      disciplina,
-      perfil.nome       ?? undefined,
-    )
-    const latencia = Date.now() - t0
+    const resultado = await chamarClaude(pergunta, chunks, agenda, historico, perfil, disciplina)
+    const latencia  = Date.now() - t0
 
     await logIA({
       agente:        'sofia',
-      contexto:      disciplina ?? perfil.serie ?? null,
+      contexto:      disciplina ?? perfil.serie ?? perfil.tipo,
       pergunta:      pergunta.slice(0, 300),
       turns:         1,
       input_tokens:  resultado.input_tokens,

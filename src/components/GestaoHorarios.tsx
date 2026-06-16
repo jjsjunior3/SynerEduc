@@ -104,14 +104,20 @@ export default function GestaoHorario({ onVoltar }: GestaoHorarioProps) {
       const { data, error } = await query;
       if (error) throw error;
 
+      const gradeCompleta = inicializarGradeVazia();
       if (data && data.length > 0) {
-        setGrade(data);
-        setGradeOriginal(data);
+        const gradePreenchida = gradeCompleta.map(celula => {
+          const salva = data.find(
+            d => d.dia_semana === celula.dia_semana && Number(d.ordem) === celula.ordem
+          );
+          return salva ? { ...celula, ...salva, ordem: celula.ordem } : celula;
+        });
+        setGrade(gradePreenchida);
+        setGradeOriginal(gradePreenchida);
         toast.success('Grade carregada!');
       } else {
-        const vazia = inicializarGradeVazia();
-        setGrade(vazia);
-        setGradeOriginal(vazia);
+        setGrade(gradeCompleta);
+        setGradeOriginal(gradeCompleta);
         toast.info('Nenhuma grade encontrada. Preencha e salve.');
       }
     } catch { toast.error('Erro ao carregar grade.'); }

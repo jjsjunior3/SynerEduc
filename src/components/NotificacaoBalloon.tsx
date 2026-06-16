@@ -43,9 +43,10 @@ export function NotificacaoBalloon({ onAbrirNotificacoes }: Props) {
     setTimeout(() => { setVisivel(false); setFechando(false) }, 300)
   }, [])
 
-  // Ao logar — carrega pendentes e mostra balão se houver
+  // Ao logar — carrega pendentes e mostra balão se houver (uma vez por sessão)
   useEffect(() => {
     if (!usuario?.id) return
+    if (sessionStorage.getItem(`balloon-shown-${usuario.id}`)) return
 
     async function verificarPendentes() {
       const { count } = await supabase
@@ -55,6 +56,7 @@ export function NotificacaoBalloon({ onAbrirNotificacoes }: Props) {
         .eq('lida', false)
 
       if (!count || count === 0) return
+      sessionStorage.setItem(`balloon-shown-${usuario!.id}`, '1')
 
       // Pega a mais recente não lida
       const { data } = await supabase
@@ -108,8 +110,8 @@ export function NotificacaoBalloon({ onAbrirNotificacoes }: Props) {
 
   return (
     <div
-      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] transition-all duration-300 ${
-        fechando ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'
+      className={`fixed top-16 right-4 z-[9999] transition-all duration-300 ${
+        fechando ? 'opacity-0 -translate-y-2' : 'opacity-100 translate-y-0'
       }`}
       style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }}
     >
@@ -187,8 +189,8 @@ export function NotificacaoBalloon({ onAbrirNotificacoes }: Props) {
           </button>
         </div>
 
-        {/* Ponteiro do balão (embaixo, no centro) */}
-        <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-white dark:bg-gray-900 border-b-2 border-r-2 border-blue-200 dark:border-blue-700 rotate-45" />
+        {/* Ponteiro do balão (em cima, alinhado com o sino à direita) */}
+        <div className="absolute -top-2.5 right-3 w-5 h-5 bg-white dark:bg-gray-900 border-t-2 border-l-2 border-blue-200 dark:border-blue-700 rotate-45" />
       </div>
     </div>
   )

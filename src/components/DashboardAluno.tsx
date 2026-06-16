@@ -93,9 +93,11 @@ function HeaderPadrao({
   notificacoesNaoLidas,
   mostrarMenuUsuario,
   setMostrarMenuUsuario,
+  mostrarNotificacoes,
   setMostrarNotificacoes,
   setMostrarPerfil,
   logout,
+  onNavegar,
 }: any) {
   const avatarRef = useRef<HTMLButtonElement>(null);
 
@@ -122,7 +124,7 @@ function HeaderPadrao({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setMostrarNotificacoes(true)}
+              onClick={() => setMostrarNotificacoes((v: boolean) => !v)}
               className="hover:bg-accent"
             >
               <Bell className="w-5 h-5 text-muted-foreground" />
@@ -130,6 +132,12 @@ function HeaderPadrao({
                 <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-background" />
               )}
             </Button>
+            {mostrarNotificacoes && (
+              <Notificacoes
+                onClose={() => setMostrarNotificacoes(false)}
+                onNavegar={onNavegar}
+              />
+            )}
           </div>
 
           <div className="flex items-center gap-3 pl-4 border-l border-border">
@@ -262,7 +270,20 @@ export default function DashboardAluno() {
   const headerProps = {
     usuario, turma, notificacoesNaoLidas,
     mostrarMenuUsuario, setMostrarMenuUsuario,
-    setMostrarNotificacoes, setMostrarPerfil, logout,
+    mostrarNotificacoes, setMostrarNotificacoes, setMostrarPerfil, logout,
+    onNavegar: (link: string) => {
+      setMostrarNotificacoes(false);
+      // Formato: /aluno/disciplina/{nome}/atividades
+      const matchDisciplina = link.match(/\/disciplina\/([^/]+)/);
+      if (matchDisciplina && turma) {
+        const nomeDisciplina = decodeURIComponent(matchDisciplina[1]);
+        const disc = turma.disciplinas?.find((d: any) =>
+          d.nome.toLowerCase() === nomeDisciplina.toLowerCase()
+        );
+        if (disc) { setDisciplinaSelecionada(disc); setViewAtual('disciplina' as any); return; }
+      }
+      setViewAtual(link as any);
+    },
   };
 
   // ---- Carregar turma ----
@@ -475,8 +496,6 @@ export default function DashboardAluno() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Boletim turma={turma} usuario={usuario} />
         </main>
-        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
-        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -494,8 +513,6 @@ export default function DashboardAluno() {
             disciplinasDoAluno={turma.disciplinas}
           />
         </main>
-        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
-        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -509,8 +526,6 @@ export default function DashboardAluno() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <HorarioEscolar turmaSelecionada={turma?.serieNome || ""} />
         </main>
-        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
-        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -528,8 +543,6 @@ export default function DashboardAluno() {
             usuario={usuario}
           />
         </main>
-        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
-        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -543,8 +556,6 @@ export default function DashboardAluno() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <ComunicadosPage onVoltar={handleVoltar} />
         </main>
-        {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
-        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -557,8 +568,7 @@ export default function DashboardAluno() {
     <div className="min-h-screen bg-background text-foreground">
       <HeaderPadrao {...headerProps} />
 
-      {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
-        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
+      <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
@@ -810,10 +820,7 @@ export default function DashboardAluno() {
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
 
       {/* ── Professora Sofia — Chat flutuante ── */}
-      <ChatFlutuante
-        serie={turma?.serie}
-        nomeAluno={usuario?.nome?.split(' ')[0]}
-      />
+      <ChatFlutuante />
     </div>
   );
 }

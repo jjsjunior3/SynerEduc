@@ -64,6 +64,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data) {
+        // Bloqueia acesso de usuários inativos, transferidos, formados ou evadidos
+        const statusesAtivos = ['ativo', 'pendente', undefined, null, ''];
+        if (!statusesAtivos.includes(data.status)) {
+          console.warn('[Auth] Usuário inativo, bloqueando acesso:', data.status);
+          await supabase.auth.signOut();
+          setUsuario(null);
+          setSession(null);
+          setLoading(false);
+          return;
+        }
+
         setUsuario({
           id: user.id,
           email: user.email || data.email || "",

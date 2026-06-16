@@ -876,7 +876,7 @@ export function DashboardProfessor() {
       </main>
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
-      <ChatFlutuante nomeAluno={usuario?.nome?.split(' ')[0]} />
+      <ChatFlutuante />
       <AgenteInclusao usuario={usuario} />
     </div>
   );

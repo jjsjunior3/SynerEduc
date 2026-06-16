@@ -204,7 +204,7 @@ export default function AtividadesCoordenador({ tabInicial = 'enviadas' }: Props
       // 2. Submissões + todos os alunos das séries (paralelo)
       const [{ data: dadosSubs, error: errSubs }, { data: dadosAlunos }] = await Promise.all([
         supabase.from('atividades_alunos').select('*').in('atividade_id', ativIds),
-        supabase.from('users').select('id, nome, serie').eq('tipo', 'aluno').in('serie', seriesUniq),
+        supabase.from('users').select('id, nome, serie').eq('tipo', 'aluno').eq('status', 'ativo').in('serie', seriesUniq),
       ]);
       if (errSubs) throw errSubs;
 

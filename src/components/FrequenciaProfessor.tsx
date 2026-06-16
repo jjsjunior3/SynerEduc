@@ -104,7 +104,7 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
     try {
       let query = supabase
         .from('users').select('id, nome')
-        .eq('tipo', 'aluno').order('nome');
+        .eq('tipo', 'aluno').eq('status', 'ativo').order('nome');
       if (serieNome) query = query.eq('serie', serieNome);
       const { data: alunosData, error } = await query;
       if (error) throw error;

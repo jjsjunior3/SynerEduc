@@ -161,7 +161,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
     async function carregarSeries() {
       const { data } = await supabase
         .from('users').select('serie')
-        .eq('tipo', 'aluno').eq('segmento', segmento).not('serie', 'is', null);
+        .eq('tipo', 'aluno').eq('status', 'ativo').eq('segmento', segmento).not('serie', 'is', null);
       const unicas = Array.from(new Set((data || []).map((s: any) => s.serie))).sort() as string[];
       setSeriesDisponiveis(unicas);
     }
@@ -176,7 +176,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
     try {
       let usersQuery = supabase
         .from('users').select('id, nome, serie')
-        .eq('tipo', 'aluno').eq('segmento', segmento).limit(500);
+        .eq('tipo', 'aluno').eq('status', 'ativo').eq('segmento', segmento).limit(500);
       if (busca.trim())            usersQuery = usersQuery.ilike('nome', `%${busca.trim()}%`);
       if (filtroSerie !== 'todas') usersQuery = usersQuery.eq('serie', filtroSerie);
 
@@ -344,6 +344,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
         .from('users')
         .select('id, serie')
         .eq('tipo', 'aluno')
+        .eq('status', 'ativo')
         .eq('segmento', segmento)
         .in('serie', seriesUnicas)
         .limit(2000);

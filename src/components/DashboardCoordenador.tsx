@@ -118,6 +118,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
       const { data: alunos } = await supabase
         .from('users').select('id, serie')
         .eq('tipo', 'aluno')
+        .eq('status', 'ativo')
         .eq('segmento', segmento);
       const alunoIds = (alunos || []).map((a: any) => a.id);
 
@@ -702,7 +703,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
       <AgenteInclusao usuario={usuario} />
-      <ChatFlutuante nomeAluno={usuario?.nome?.split(' ')[0]} />
+      <ChatFlutuante />
     </div>
   );
 }

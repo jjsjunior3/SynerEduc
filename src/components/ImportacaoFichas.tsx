@@ -241,9 +241,9 @@ export function ImportacaoFichas({ onVoltar }: Props) {
     try {
       const { data } = await supabase
         .from('users')
-        .select('id, nome, email')
+        .select('id, nome, email, serie')
         .ilike('nome', `%${termo}%`)
-        .eq('role', 'aluno')
+        .eq('tipo', 'aluno')
         .limit(8)
       setResultadosAluno(data ?? [])
     } finally {
@@ -296,10 +296,8 @@ export function ImportacaoFichas({ onVoltar }: Props) {
         endereco:         ficha.responsavel.endereco || null,
         telefone:         ficha.responsavel.telefone || null,
         email_responsavel:ficha.responsavel.email || null,
-        documentos_entregues: Object.entries(checklist)
-          .filter(([, v]) => v).map(([k]) => k),
+        docs_pendentes:   Object.values(checklist).some(v => !v),
         status_matricula: 'ativo',
-        updated_at:       new Date().toISOString(),
       }
 
       const { error: fichaErr } = await supabase

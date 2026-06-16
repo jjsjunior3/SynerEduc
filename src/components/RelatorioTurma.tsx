@@ -103,7 +103,7 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
     async function carregarSeries() {
       const { data } = await supabase
         .from('users').select('serie')
-        .eq('tipo', 'aluno').eq('segmento', segmento).not('serie', 'is', null);
+        .eq('tipo', 'aluno').eq('status', 'ativo').eq('segmento', segmento).not('serie', 'is', null);
       setSeries(['todas', ...Array.from(new Set((data || []).map((i: any) => i.serie))).sort() as string[]]);
     }
     carregarSeries();
@@ -115,7 +115,7 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
       if (serieSelecionada === 'todas') { setAlunosDisponiveis([]); return; }
       const { data } = await supabase
         .from('users').select('id, nome')
-        .eq('tipo', 'aluno').eq('segmento', segmento)
+        .eq('tipo', 'aluno').eq('status', 'ativo').eq('segmento', segmento)
         .eq('serie', serieSelecionada).order('nome');
       setAlunosDisponiveis(data || []);
     }
@@ -143,7 +143,7 @@ export default function RelatorioTurma({ onVoltar }: RelatorioTurmaProps) {
     try {
       // 1. Alunos (filtrado por série e/ou aluno)
       let q = supabase.from('users').select('id, nome, serie')
-        .eq('tipo', 'aluno').eq('segmento', segmento);
+        .eq('tipo', 'aluno').eq('status', 'ativo').eq('segmento', segmento);
       if (serieSelecionada !== 'todas') q = q.eq('serie', serieSelecionada);
       if (alunoSelecionado !== 'todos') q = q.eq('id', alunoSelecionado);
       const { data: alunosData, error: alunosErr } = await q;

@@ -109,6 +109,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
         .from('users')
         .select('id, nome')
         .eq('tipo', 'aluno')
+        .eq('status', 'ativo')
         .eq('serie', serieNome)
         .order('nome', { ascending: true });
 

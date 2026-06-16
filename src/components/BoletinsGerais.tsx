@@ -68,6 +68,7 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
           .from('users')
           .select('serie')
           .eq('tipo', 'aluno')
+          .eq('status', 'ativo')
           .eq('segmento', segmento)
           .not('serie', 'is', null);
         if (error) throw error;
@@ -135,6 +136,7 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
         .from('users')
         .select('id, nome, email, serie')
         .eq('tipo', 'aluno')
+        .eq('status', 'ativo')
         .eq('segmento', segmento)
         .order('nome');
       if (filtroSerie !== 'todas') queryAlunos = queryAlunos.eq('serie', filtroSerie);

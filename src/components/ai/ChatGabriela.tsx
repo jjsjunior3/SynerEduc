@@ -202,7 +202,7 @@ export function ChatGabriela({ contexto }: Props) {
     return ReactDOM.createPortal(
       <button
         onClick={() => setAberto(true)}
-        className={`fixed bottom-5 right-5 z-[9999] flex items-center gap-2 ${cor.bg} ${cor.hover} text-white rounded-full shadow-lg ${cor.sombra} transition-all duration-300 hover:scale-105 sm:pr-4 sm:pl-1 sm:py-1 p-1`}
+        className={`fixed bottom-5 left-5 z-[9999] flex items-center gap-2 ${cor.bg} ${cor.hover} text-white rounded-full shadow-lg ${cor.sombra} transition-all duration-300 hover:scale-105 sm:pr-4 sm:pl-1 sm:py-1 p-1`}
         aria-label="Abrir assistente Gabriela"
       >
         <div className="rounded-full bg-white p-0.5">
@@ -223,7 +223,7 @@ export function ChatGabriela({ contexto }: Props) {
 
   // ── Chat aberto ─────────────────────────────────────────────────────────────
   return ReactDOM.createPortal(
-    <div className={`fixed bottom-5 right-5 z-[9999] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 transition-all duration-300 ${minimizado ? 'h-16' : 'h-[520px]'} w-[calc(100vw-2.5rem)] max-w-[380px]`}>
+    <div className={`fixed bottom-5 left-5 z-[9999] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 transition-all duration-300 ${minimizado ? 'h-16' : 'h-[520px]'} w-[calc(100vw-2.5rem)] max-w-[380px]`}>
 
       {/* Header */}
       <div className={`${cor.bg} px-4 py-3 rounded-t-2xl flex items-center gap-3 shrink-0`}>
