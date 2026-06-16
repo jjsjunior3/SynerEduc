@@ -18,10 +18,13 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../supabase/supabaseClient';
 // Sofia: apenas aluno e professor. Coordenador usa só Tia Maria José.
-import { AgenteInclusao }      from './ai/AgenteInclusao';
-import { FrequenciaRealtime }  from './FrequenciaRealtime';
+import { AgenteInclusao }          from './ai/AgenteInclusao';
+import { FrequenciaRealtime }      from './FrequenciaRealtime';
+import { ChatFlutuante }           from './ai/ChatFlutuante';
+import { PlanosAulaCoordenador }   from './PlanosAulaCoordenador';
 
-import { Notificacoes } from './Notificacoes';
+import { Notificacoes, useNotificacoesCount } from './Notificacoes';
+import { NotificacaoBalloon } from './NotificacaoBalloon';
 import { PerfilUsuario } from './PerfilUsuario';
 import { SchoolHeader } from './SchoolHeader';
 import { Usuario } from '../types/auth';
@@ -85,6 +88,7 @@ function BarTooltip({ active, payload }: any) {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DashboardCoordenador({ onBackToSite, usuario, logout }: DashboardCoordenadorProps) {
   const { theme, toggleTheme } = useTheme();
+  const { count: notifCount } = useNotificacoesCount();
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
   const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
@@ -364,12 +368,16 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
           <div className="relative">
             <Button variant="ghost" size="icon" onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}>
               <Bell className="w-5 h-5 text-muted-foreground" />
+              {notifCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                  {notifCount > 99 ? '99+' : notifCount}
+                </span>
+              )}
             </Button>
             {mostrarNotificacoes && (
-              <div className="absolute right-0 top-12 w-80 z-50">
-                <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
-              </div>
+              <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
             )}
+            <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
           </div>
           <button ref={avatarRef} onClick={() => setMostrarMenuUsuario(!mostrarMenuUsuario)} className="focus:outline-none">
             <Avatar className="w-9 h-9 border-2 border-border cursor-pointer">
@@ -445,31 +453,28 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {/* ── Banner ── */}
-        <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg overflow-hidden">
-          <div className="relative z-10 p-5 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-xl sm:text-3xl font-bold mb-1">
-                Olá, {usuario?.nome?.split(' ')[0]}! 👋
-              </h1>
-              <p className="text-blue-100 text-sm sm:text-base">
-                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                {' · '}Segmento <span className="font-semibold">{labelSeg}</span>
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={carregarMetricas}
-              disabled={carregandoMetricas}
-              className="text-white hover:bg-white/20 border border-white/30 self-start sm:self-auto gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${carregandoMetricas ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
+        {/* ── Header contextual ── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-border">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-semibold text-foreground">
+              Olá, {usuario?.nome?.split(' ')[0]}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5 capitalize">
+              {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {' · '}Segmento <span className="font-medium">{labelSeg}</span>
+            </p>
           </div>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
-        </section>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={carregarMetricas}
+            disabled={carregandoMetricas}
+            className="self-start sm:self-auto gap-2 text-muted-foreground"
+          >
+            <RefreshCw className={`w-4 h-4 ${carregandoMetricas ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
+        </div>
 
         {/* ── Visão Geral — 6 cards ── */}
         <section>
@@ -652,6 +657,11 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
           <FrequenciaRealtime />
         </section>
 
+        {/* ── Planos de Aula ── */}
+        <section>
+          <PlanosAulaCoordenador segmento={usuario?.segmento ?? 'presencial'} />
+        </section>
+
         {/* ── Módulos ── */}
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -692,6 +702,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
       <AgenteInclusao usuario={usuario} />
+      <ChatFlutuante nomeAluno={usuario?.nome?.split(' ')[0]} />
     </div>
   );
 }

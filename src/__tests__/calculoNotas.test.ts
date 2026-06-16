@@ -71,11 +71,10 @@ describe('calcularNota — Presencial', () => {
     expect(r.situacao).toBe('recuperacao');
   });
 
-  it('REC substitui a menor das 3 notas e aprova', () => {
-    // AV1=4, AV2=7, AV3=8 → menor=4 (AV1), REC=9
-    // nova AV1=9 → (9+7+8)/3 = 8
+  it('REC substitui a média do bimestre diretamente e aprova', () => {
+    // AV1=4, AV2=7, AV3=8 → média=6.33, REC=9 → mediaFinal=9
     const r = calcularNota({ av1: 4, av2: 7, av3: 8, recuperacao: 9 }, 'presencial');
-    expect(r.mediaFinal).toBeCloseTo(8, 2);
+    expect(r.mediaFinal).toBeCloseTo(9, 2);
     expect(r.situacao).toBe('aprovado');
   });
 });

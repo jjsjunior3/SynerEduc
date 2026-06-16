@@ -2,15 +2,15 @@
 
 :root {
   --font-size: 14px;
-  --background: #ffffff;
-  --foreground: oklch(0.145 0 0);
+  --background: #f8fafc;
+  --foreground: #0f0f12;
   --card: #ffffff;
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --card-foreground: #0f0f12;
+  --popover: #ffffff;
+  --popover-foreground: #0f0f12;
   --primary: #030213;
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0.0058 264.53);
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f5;
   --secondary-foreground: #030213;
   --muted: #ececf0;
   --muted-foreground: #717182;
@@ -24,66 +24,66 @@
   --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --ring: #b3b3b3;
+  --chart-1: #e8733a;
+  --chart-2: #3ab8a0;
+  --chart-3: #3a6fa8;
+  --chart-4: #d4b84a;
+  --chart-5: #d4884a;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar: #fafafa;
+  --sidebar-foreground: #0f0f12;
   --sidebar-primary: #030213;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #1f1f1f;
+  --sidebar-border: #e8e8e8;
+  --sidebar-ring: #b3b3b3;
 }
 
-/* RESTAURANDO AS VARIÁVEIS DO MODO ESCURO */
+/* TEMA ESCURO — valores em hsl/hex para máxima compatibilidade (Chrome Android < 111 não suporta oklch) */
 .dark {
-  --background: oklch(14.757% 0.05448 292.04);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(21.864% 0.05173 291.771);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(30.869% 0.04657 281.613);
-  --accent-foreground: oklch(42.297% 0.16728 28.428 / 0.562);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
-  /* Correção dos cards coloridos no dark mode */
-  --green-card-bg: oklch(15% 0.05 150);
-  --green-card-text: oklch(85% 0.1 150);
-  --amber-card-bg: oklch(15% 0.05 80);
-  --amber-card-text: oklch(85% 0.1 80);
-  --blue-card-bg: oklch(15% 0.05 240);
-  --blue-card-text: oklch(85% 0.1 240);
-  --purple-card-bg: oklch(15% 0.05 300);
-  --purple-card-text: oklch(85% 0.1 300);
+  --background: #14101f;
+  --foreground: #f5f5f5;
+  --card: #1e1830;
+  --card-foreground: #f5f5f5;
+  --popover: #14101f;
+  --popover-foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-foreground: #1f1f1f;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f5f5f5;
+  --muted: #2a2a2a;
+  --muted-foreground: #b3b3b3;
+  --accent: #252040;
+  --accent-foreground: rgba(180, 100, 60, 0.56);
+  --destructive: #5a1a1a;
+  --destructive-foreground: #e06060;
+  --border: #2a2a2a;
+  --input: #2a2a2a;
+  --ring: #555555;
+  --chart-1: #4a7adf;
+  --chart-2: #4ab88a;
+  --chart-3: #d4884a;
+  --chart-4: #9a4ad4;
+  --chart-5: #d44a4a;
+  --sidebar: #1f1f1f;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #4a7adf;
+  --sidebar-primary-foreground: #f5f5f5;
+  --sidebar-accent: #2a2a2a;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: #2a2a2a;
+  --sidebar-ring: #555555;
+  /* Cards coloridos no dark mode */
+  --green-card-bg: #0d2018;
+  --green-card-text: #86efac;
+  --amber-card-bg: #1f1500;
+  --amber-card-text: #fcd34d;
+  --blue-card-bg: #0d1a2e;
+  --blue-card-text: #93c5fd;
+  --purple-card-bg: #1a0d2e;
+  --purple-card-text: #d8b4fe;
   /* Força texto escuro nos cards coloridos — independente do dark mode */
   .card-green p { color: #166534 !important; }
   .card-amber p { color: #92400e !important; }
@@ -165,3 +165,8 @@ html {
   font-size: var(--font-size);
 }
 
+/* ── Barras de áudio do chat IA ─────────────────────────────────────────────── */
+@keyframes audioBar {
+  from { height: 20%; }
+  to   { height: 100%; }
+}

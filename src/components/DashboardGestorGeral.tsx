@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { PerfilUsuario } from './PerfilUsuario';
+import { ChatGabriela }  from './ai/ChatGabriela';
 import {
   LayoutDashboard, Users, DollarSign, Settings,
   Search, FileText, Plus, GraduationCap,
@@ -17,7 +18,7 @@ import {
   XCircle, CreditCard, LogOut, Menu, X,
   RefreshCw, AlertCircle, Building2, BarChart3,
   Upload, BookOpen, Sun, Moon, ArrowRight,
-  Stamp, History, Archive,
+  Stamp, History, Archive, FileUp,
 } from 'lucide-react';
 import logoEscola from '../assets/e339c695d5503d560f7e53d2039456d52fd95ea5.png';
 import { useAlunosPendencias } from '../hooks/useAlunosPendencias';
@@ -33,6 +34,7 @@ import BoletimCoordenador       from './BoletimCoordenador';
 import EmissaoDocumentos        from './EmissaoDocumentos';
 import HistoricoIA              from './HistoricoIA';
 import ArquivoMorto             from './ArquivoMorto';
+import { ImportacaoFichas }    from './ImportacaoFichas';
 
 // ─── Tipos ───────────────────────────────────────────────
 type SecaoAtiva =
@@ -48,6 +50,7 @@ type SecaoAtiva =
   | 'emissao-documentos'
   | 'historico-ia'
   | 'arquivo-morto'
+  | 'importacao-fichas'
   | 'configuracoes';
 
 // Estado de navegação contextual — passado como prop para os filhos
@@ -130,6 +133,7 @@ export default function DashboardGestorGeral() {
         { id: 'emissao-contratos',    label: 'Contratos',        icon: <FileText       className="w-4 h-4" /> },
         { id: 'boletins',             label: 'Boletins',         icon: <BookOpen       className="w-4 h-4" /> },
         { id: 'emissao-documentos',   label: 'Emitir Documentos',icon: <Stamp          className="w-4 h-4" /> },
+        { id: 'importacao-fichas',    label: 'Importar Fichas IA', icon: <FileUp       className="w-4 h-4" /> },
         { id: 'historico-ia',         label: 'Histórico c/ IA',  icon: <History        className="w-4 h-4" /> },
         { id: 'arquivo-morto',        label: 'Arquivo Morto',    icon: <Archive        className="w-4 h-4" /> },
       ],
@@ -179,16 +183,37 @@ export default function DashboardGestorGeral() {
           </Card>
         )}
 
-        {/* Alunos */}
+        {/* Alunos — 3 cards sem redundância */}
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-            Alunos
+            Alunos — {segmentoLabel}
           </p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             {[
-              { label: 'Total Ativos',  valor: resumoAlunos?.total ?? 0,     sub: segmentoLabel,            icon: <Users         className="w-6 h-6 text-white" />, cor: 'from-blue-500 to-blue-600',     borda: 'border-blue-200 dark:border-blue-800' },
-              { label: segmentoLabel,   valor: resumoAlunos?.total ?? 0,     sub: segmentoGestor === 'ead' ? 'A distância' : 'Em sala', icon: <GraduationCap className="w-6 h-6 text-white" />, cor: segmentoGestor === 'ead' ? 'from-indigo-500 to-indigo-600' : 'from-violet-500 to-violet-600', borda: segmentoGestor === 'ead' ? 'border-indigo-200 dark:border-indigo-800' : 'border-violet-200 dark:border-violet-800' },
-              { label: 'Pendentes',     valor: resumoAlunos?.pendentes ?? 0, sub: 'Aguardando confirmação', icon: <Clock         className="w-6 h-6 text-white" />, cor: 'from-orange-500 to-orange-600', borda: 'border-orange-200 dark:border-orange-800' },
+              {
+                label: 'Matrículas Ativas',
+                valor: resumoAlunos?.total ?? 0,
+                sub:   segmentoGestor === 'ead' ? 'Alunos a distância' : 'Alunos em sala',
+                icon:  <Users className="w-6 h-6 text-white" />,
+                cor:   'from-blue-500 to-blue-600',
+                borda: 'border-blue-200 dark:border-blue-800',
+              },
+              {
+                label: 'Sem Ficha/Contrato',
+                valor: (pendencias?.resumo?.sem_ficha ?? 0) + (pendencias?.resumo?.sem_contrato ?? 0),
+                sub:   'Pendências da secretaria',
+                icon:  <AlertCircle className="w-6 h-6 text-white" />,
+                cor:   'from-orange-500 to-orange-600',
+                borda: 'border-orange-200 dark:border-orange-800',
+              },
+              {
+                label: 'Docs Incompletos',
+                valor: pendencias?.resumo?.docs_pendentes ?? 0,
+                sub:   'Documentação pendente',
+                icon:  <FileText className="w-6 h-6 text-white" />,
+                cor:   'from-violet-500 to-violet-600',
+                borda: 'border-violet-200 dark:border-violet-800',
+              },
             ].map(c => (
               <Card key={c.label} className={`border-2 ${c.borda} bg-card`}>
                 <CardContent className="p-5">
@@ -210,6 +235,86 @@ export default function DashboardGestorGeral() {
           </div>
         </div>
 
+        {/* Secretaria — tarefas a fazer */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+            Secretaria — o que está pendente
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {/* Alunos sem ficha */}
+            <button
+              onClick={() => setSecaoAtiva('alunos')}
+              className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 hover:shadow-sm transition-all text-left group"
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${(pendencias?.resumo?.sem_ficha ?? 0) > 0 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                <FileText className={`w-5 h-5 ${(pendencias?.resumo?.sem_ficha ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">Fichas de Matrícula</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {loading ? '…' : (pendencias?.resumo?.sem_ficha ?? 0) === 0
+                    ? '✅ Todos os alunos com ficha'
+                    : `${pendencias?.resumo?.sem_ficha} aluno(s) sem ficha`}
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
+            </button>
+
+            {/* Alunos sem contrato */}
+            <button
+              onClick={() => setSecaoAtiva('alunos')}
+              className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 hover:shadow-sm transition-all text-left group"
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${(pendencias?.resumo?.sem_contrato ?? 0) > 0 ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                <BookOpen className={`w-5 h-5 ${(pendencias?.resumo?.sem_contrato ?? 0) > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">Contratos</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {loading ? '…' : (pendencias?.resumo?.sem_contrato ?? 0) === 0
+                    ? '✅ Todos os contratos emitidos'
+                    : `${pendencias?.resumo?.sem_contrato} aluno(s) sem contrato`}
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
+            </button>
+
+            {/* Documentos incompletos */}
+            <button
+              onClick={() => setSecaoAtiva('documentos-recebidos')}
+              className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 hover:shadow-sm transition-all text-left group"
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${(pendencias?.resumo?.docs_pendentes ?? 0) > 0 ? 'bg-violet-100 dark:bg-violet-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                <Upload className={`w-5 h-5 ${(pendencias?.resumo?.docs_pendentes ?? 0) > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-green-600 dark:text-green-400'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">Documentação</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {loading ? '…' : (pendencias?.resumo?.docs_pendentes ?? 0) === 0
+                    ? '✅ Documentação em dia'
+                    : `${pendencias?.resumo?.docs_pendentes} aluno(s) com docs pendentes`}
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
+            </button>
+
+            {/* Importar fichas com IA */}
+            <button
+              onClick={() => setSecaoAtiva('importacao-fichas')}
+              className="flex items-center gap-4 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 hover:shadow-sm transition-all text-left group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0">
+                <FileUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">Importar Fichas com IA</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Digitalizar fichas em segundos</p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
+            </button>
+          </div>
+        </div>
+
         {/* Financeiro */}
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
@@ -217,9 +322,9 @@ export default function DashboardGestorGeral() {
           </p>
           <div className="grid sm:grid-cols-3 gap-4">
             {[
-              { label: 'Recebido no Mês', valor: resumoFinanceiro?.recebidoMes ?? 0, sub: `${resumoFinanceiro?.qtdPagos ?? 0} pagamentos`,      icon: <CheckCircle className="w-6 h-6 text-white" />, cor: 'from-green-500 to-green-600',  borda: 'border-green-200 dark:border-green-800' },
-              { label: 'A Receber',       valor: resumoFinanceiro?.aReceber ?? 0,    sub: `${resumoFinanceiro?.qtdPendentes ?? 0} pendentes`,    icon: <Clock       className="w-6 h-6 text-white" />, cor: 'from-yellow-500 to-yellow-600', borda: 'border-yellow-200 dark:border-yellow-800' },
-              { label: 'Em Atraso',       valor: resumoFinanceiro?.emAtraso ?? 0,    sub: `${resumoFinanceiro?.qtdAtrasados ?? 0} inadimplentes`, icon: <XCircle    className="w-6 h-6 text-white" />, cor: 'from-red-500 to-red-600',      borda: 'border-red-200 dark:border-red-800' },
+              { label: 'Recebido no Mês', valor: resumoFinanceiro?.recebidoMes ?? 0, sub: `${resumoFinanceiro?.qtdPagos ?? 0} pagamentos`,       icon: <CheckCircle className="w-6 h-6 text-white" />, cor: 'from-green-500 to-green-600',  borda: 'border-green-200 dark:border-green-800' },
+              { label: 'A Receber',       valor: resumoFinanceiro?.aReceber ?? 0,    sub: `${resumoFinanceiro?.qtdPendentes ?? 0} pendentes`,     icon: <Clock       className="w-6 h-6 text-white" />, cor: 'from-yellow-500 to-yellow-600', borda: 'border-yellow-200 dark:border-yellow-800' },
+              { label: 'Em Atraso',       valor: resumoFinanceiro?.emAtraso ?? 0,    sub: `${resumoFinanceiro?.qtdAtrasados ?? 0} inadimplentes`, icon: <XCircle     className="w-6 h-6 text-white" />, cor: 'from-red-500 to-red-600',      borda: 'border-red-200 dark:border-red-800' },
             ].map(c => (
               <Card key={c.label} className={`border-2 ${c.borda} bg-card`}>
                 <CardContent className="p-5">
@@ -239,6 +344,24 @@ export default function DashboardGestorGeral() {
               </Card>
             ))}
           </div>
+          {/* Taxa de adimplência */}
+          {!loading && (resumoFinanceiro?.recebidoMes ?? 0) + (resumoFinanceiro?.aReceber ?? 0) > 0 && (
+            <div className="mt-3 px-4 py-3 rounded-xl bg-muted/50 border border-border flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Taxa de adimplência do mês</span>
+              <span className={`text-sm font-bold ${
+                (() => {
+                  const total = (resumoFinanceiro?.recebidoMes ?? 0) + (resumoFinanceiro?.aReceber ?? 0) + (resumoFinanceiro?.emAtraso ?? 0)
+                  const pct   = total > 0 ? Math.round(((resumoFinanceiro?.recebidoMes ?? 0) / total) * 100) : 0
+                  return pct >= 80 ? 'text-green-600 dark:text-green-400' : pct >= 60 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
+                })()
+              }`}>
+                {(() => {
+                  const total = (resumoFinanceiro?.recebidoMes ?? 0) + (resumoFinanceiro?.aReceber ?? 0) + (resumoFinanceiro?.emAtraso ?? 0)
+                  return total > 0 ? `${Math.round(((resumoFinanceiro?.recebidoMes ?? 0) / total) * 100)}%` : '—'
+                })()}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Atalhos */}
@@ -670,6 +793,9 @@ export default function DashboardGestorGeral() {
       case 'emissao-documentos':
         return <EmissaoDocumentos usuario={usuario!} />;
 
+      case 'importacao-fichas':
+        return <ImportacaoFichas onVoltar={() => setSecaoAtiva('dashboard')} />;
+
       case 'historico-ia':
         return (
           <div className="p-6">
@@ -824,6 +950,7 @@ export default function DashboardGestorGeral() {
       </div>
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
+      <ChatGabriela contexto="gestor" />
     </div>
   );
 }

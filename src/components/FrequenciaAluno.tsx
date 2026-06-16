@@ -19,7 +19,7 @@ import { SCHOOL_CONFIG } from '../config/school';
 interface FrequenciaAlunosProps { onVoltar: () => void; }
 type Situacao  = 'regular' | 'atencao' | 'critica';
 type Aba       = 'alunos' | 'professores';
-type StatusFreq = 'presente' | 'ausente' | 'atrasado' | 'evadido';
+type StatusFreq = 'presente' | 'ausente' | 'atrasado' | 'evadido' | 'justificada' | 'notificado';
 
 const STATUS_CONFIG: Record<StatusFreq, { label: string; cor: string; peso: number }> = {
   presente: { label: 'Presente', cor: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200',   peso: 1   },
@@ -31,7 +31,7 @@ const STATUS_CONFIG: Record<StatusFreq, { label: string; cor: string; peso: numb
 interface ResumoDisciplina {
   disciplina: string;
   totalAulas: number; presencas: number; faltas: number;
-  atrasados: number; evadidos: number;
+  atrasados: number; evadidos: number; justificadas: number;
   percentual: number; percentualAtrasado: number; percentualEvadido: number;
   situacao: Situacao;
 }
@@ -39,7 +39,7 @@ interface ResumoDisciplina {
 interface AlunoFrequencia {
   id: string; nome: string; serie: string;
   totalAulas: number; presencas: number; faltas: number;
-  atrasados: number; evadidos: number;
+  atrasados: number; evadidos: number; justificadas: number;
   percentualFrequencia: number; percentualAtrasado: number; percentualEvadido: number;
   ultimasFaltas: string[];
   situacao: Situacao;
@@ -227,19 +227,21 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
 
         const mapa: Record<string, {
           totalAulas: number; presencas: number; faltas: number;
-          atrasados: number; evadidos: number; datas: string[];
+          atrasados: number; evadidos: number; justificadas: number; datas: string[];
         }> = {};
 
         for (const row of registros) {
           const key = row.disciplina_id ?? '__sem__';
-          if (!mapa[key]) mapa[key] = { totalAulas: 0, presencas: 0, faltas: 0, atrasados: 0, evadidos: 0, datas: [] };
+          if (!mapa[key]) mapa[key] = { totalAulas: 0, presencas: 0, faltas: 0, atrasados: 0, evadidos: 0, justificadas: 0, datas: [] };
           mapa[key].totalAulas++;
 
           const st: StatusFreq = row.status ?? (row.presente ? 'presente' : 'ausente');
           if (st === 'presente')      mapa[key].presencas++;
           else if (st === 'atrasado') { mapa[key].atrasados++; mapa[key].presencas++; }
           else if (st === 'evadido')  { mapa[key].evadidos++; }
-          else                        { mapa[key].faltas++; if (row.data_aula) mapa[key].datas.push(row.data_aula); }
+          else if (st === 'justificada') { mapa[key].faltas++; mapa[key].justificadas++; if (row.data_aula) mapa[key].datas.push(row.data_aula); }
+          else if (st === 'notificado')  { mapa[key].faltas++; if (row.data_aula) mapa[key].datas.push(row.data_aula); }
+          else                           { mapa[key].faltas++; if (row.data_aula) mapa[key].datas.push(row.data_aula); }
         }
 
         const resumoDisciplinas: ResumoDisciplina[] = Object.entries(mapa).map(([id, m]) => {
@@ -249,7 +251,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
           return {
             disciplina:         id === '__sem__' ? 'Sem disciplina' : (nomeMap[id] || id),
             totalAulas:         m.totalAulas, presencas: m.presencas,
-            faltas:             m.faltas, atrasados: m.atrasados, evadidos: m.evadidos,
+            faltas:             m.faltas, atrasados: m.atrasados, evadidos: m.evadidos, justificadas: m.justificadas,
             percentual:         Number(pct.toFixed(1)),
             percentualAtrasado: Number(pctAt.toFixed(1)),
             percentualEvadido:  Number(pctEv.toFixed(1)),
@@ -257,17 +259,18 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
           };
         }).sort((a, b) => a.disciplina.localeCompare(b.disciplina));
 
-        const totalAulas = resumoDisciplinas.reduce((s, d) => s + d.totalAulas, 0);
-        const presencas  = resumoDisciplinas.reduce((s, d) => s + d.presencas, 0);
-        const faltas     = resumoDisciplinas.reduce((s, d) => s + d.faltas, 0);
-        const atrasados  = resumoDisciplinas.reduce((s, d) => s + d.atrasados, 0);
-        const evadidos   = resumoDisciplinas.reduce((s, d) => s + d.evadidos, 0);
+        const totalAulas   = resumoDisciplinas.reduce((s, d) => s + d.totalAulas, 0);
+        const presencas    = resumoDisciplinas.reduce((s, d) => s + d.presencas, 0);
+        const faltas       = resumoDisciplinas.reduce((s, d) => s + d.faltas, 0);
+        const atrasados    = resumoDisciplinas.reduce((s, d) => s + d.atrasados, 0);
+        const evadidos     = resumoDisciplinas.reduce((s, d) => s + d.evadidos, 0);
+        const justificadas = resumoDisciplinas.reduce((s, d) => s + d.justificadas, 0);
         const pct        = totalAulas > 0 ? (presencas / totalAulas) * 100 : 0;
         const ultimasFaltas = Object.values(mapa).flatMap(m => m.datas).sort().slice(-3).map(d => formatarData(d));
 
         resultado.push({
           id: aluno.id, nome: aluno.nome, serie: aluno.serie ?? 'Sem série',
-          totalAulas, presencas, faltas, atrasados, evadidos,
+          totalAulas, presencas, faltas, atrasados, evadidos, justificadas,
           percentualFrequencia:  pct,
           percentualAtrasado:    totalAulas > 0 ? (atrasados / totalAulas) * 100 : 0,
           percentualEvadido:     totalAulas > 0 ? (evadidos  / totalAulas) * 100 : 0,
@@ -450,6 +453,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
             <td style="padding:7px;text-align:center;border-bottom:1px solid #e2e8f0;color:#b45309">${d.atrasados}</td>
             <td style="padding:7px;text-align:center;border-bottom:1px solid #e2e8f0;color:#ea580c">${d.evadidos}</td>
             <td style="padding:7px;text-align:center;border-bottom:1px solid #e2e8f0;color:#dc2626;font-weight:600">${d.faltas}</td>
+            <td style="padding:7px;text-align:center;border-bottom:1px solid #e2e8f0;color:#2563eb;font-weight:600">${d.justificadas > 0 ? d.justificadas : '—'}</td>
             <td style="padding:7px;text-align:center;border-bottom:1px solid #e2e8f0;font-weight:700;color:${corFreq}">${d.percentual.toFixed(1)}%</td>
             <td style="padding:7px;text-align:center;border-bottom:1px solid #e2e8f0">
               <span style="padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;
@@ -537,7 +541,8 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
       <div><span class="label">Série: </span><strong>${aluno.serie}</strong></div>
       <div><span class="label">Total de Aulas: </span><strong>${aluno.totalAulas}</strong></div>
       <div><span class="label">Presenças: </span><strong style="color:#15803d">${aluno.presencas}</strong>
-           &nbsp;|&nbsp;<span class="label">Faltas: </span><strong style="color:#dc2626">${aluno.faltas}</strong></div>
+           &nbsp;|&nbsp;<span class="label">Faltas: </span><strong style="color:#dc2626">${aluno.faltas}</strong>
+           ${aluno.justificadas > 0 ? `&nbsp;|&nbsp;<span class="label">Justificadas: </span><strong style="color:#2563eb">${aluno.justificadas}</strong>` : ''}</div>
       ${aluno.atrasados > 0 ? `<div><span class="label">Atrasados: </span><strong style="color:#b45309">${aluno.atrasados} (${aluno.percentualAtrasado.toFixed(1)}%)</strong></div>` : '<div></div>'}
       ${aluno.evadidos > 0  ? `<div><span class="label">Evadidos: </span><strong style="color:#ea580c">${aluno.evadidos} (${aluno.percentualEvadido.toFixed(1)}%)</strong></div>` : '<div></div>'}
     </div>
@@ -563,6 +568,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
           <th>Atrasados</th>
           <th>Evadidos</th>
           <th>Faltas</th>
+          <th>Justif.</th>
           <th>Freq.%</th>
           <th>Situação</th>
         </tr>
@@ -576,6 +582,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
           <td style="text-align:center">${aluno.atrasados}</td>
           <td style="text-align:center">${aluno.evadidos}</td>
           <td style="text-align:center">${aluno.faltas}</td>
+          <td style="text-align:center">${aluno.justificadas > 0 ? aluno.justificadas : '—'}</td>
           <td style="text-align:center">${pctGeral}%</td>
           <td style="text-align:center">${getSituacaoTexto(aluno.situacao)}</td>
         </tr>
@@ -588,6 +595,7 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
       <div class="legenda-item"><div class="legenda-dot" style="background:#b45309"></div>Atrasado: conta como presença parcial</div>
       <div class="legenda-item"><div class="legenda-dot" style="background:#ea580c"></div>Evadido: saiu antes do fim (não conta)</div>
       <div class="legenda-item"><div class="legenda-dot" style="background:#dc2626"></div>Ausente: falta</div>
+      <div class="legenda-item"><div class="legenda-dot" style="background:#2563eb"></div>Justificada: falta com justificativa registrada (ainda conta para o percentual)</div>
     </div>
 
     <!-- Assinatura -->
@@ -793,6 +801,9 @@ export default function FrequenciaAlunosCoordenador({ onVoltar }: FrequenciaAlun
                             <span className="text-muted-foreground">Total: <span className="font-semibold text-foreground">{aluno.totalAulas}</span></span>
                             <span className="text-muted-foreground">Presenças: <span className="font-semibold text-green-600 dark:text-green-400">{aluno.presencas}</span></span>
                             <span className="text-muted-foreground">Faltas: <span className="font-semibold text-red-600 dark:text-red-400">{aluno.faltas}</span></span>
+                            {aluno.justificadas > 0 && (
+                              <span className="text-muted-foreground">Justificadas: <span className="font-semibold text-blue-600 dark:text-blue-400">{aluno.justificadas}</span></span>
+                            )}
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {aluno.atrasados > 0 && (

@@ -14,7 +14,7 @@ import {
   Search, FileText, Plus, GraduationCap,
   CheckCircle, Clock, XCircle, AlertCircle,
   LogOut, Menu, X, RefreshCw, Upload,
-  BookOpen, Sun, Moon, ArrowRight, Stamp, History, Archive,
+  BookOpen, Sun, Moon, ArrowRight, Stamp, History, Archive, FileUp,
 } from 'lucide-react';
 import logoEscola from '../assets/e339c695d5503d560f7e53d2039456d52fd95ea5.png';
 import { useAlunosPendencias } from '../hooks/useAlunosPendencias';
@@ -26,8 +26,10 @@ import { DocumentosRecebidos }  from './DocumentosRecebidos';
 import { EmissaoContratos }     from './EmissaoContratos';
 import BoletimCoordenador       from './BoletimCoordenador';
 import EmissaoDocumentos        from './EmissaoDocumentos';
+import { ChatGabriela }         from './ai/ChatGabriela';
 import HistoricoIA              from './HistoricoIA';
 import ArquivoMorto             from './ArquivoMorto';
+import { ImportacaoFichas }    from './ImportacaoFichas';
 
 // ─── Tipos ───────────────────────────────────────────────
 type SecaoAtiva =
@@ -40,6 +42,7 @@ type SecaoAtiva =
   | 'emissao-documentos'
   | 'historico-ia'
   | 'arquivo-morto'
+  | 'importacao-fichas'
   | 'configuracoes';
 
 type AcaoContextual =
@@ -115,6 +118,7 @@ export default function DashboardSecretaria() {
         { id: 'emissao-contratos',    label: 'Contratos',         icon: <FileText      className="w-4 h-4" /> },
         { id: 'boletins',             label: 'Boletins',          icon: <BookOpen      className="w-4 h-4" /> },
         { id: 'emissao-documentos',   label: 'Emitir Documentos', icon: <Stamp         className="w-4 h-4" /> },
+        { id: 'importacao-fichas',    label: 'Importar Fichas IA', icon: <FileUp       className="w-4 h-4" /> },
         { id: 'historico-ia',         label: 'Histórico c/ IA',   icon: <History       className="w-4 h-4" /> },
         { id: 'arquivo-morto',        label: 'Arquivo Morto',     icon: <Archive       className="w-4 h-4" /> },
       ],
@@ -645,6 +649,11 @@ export default function DashboardSecretaria() {
       case 'emissao-documentos':
         return <EmissaoDocumentos usuario={usuario!} />;
 
+      case 'importacao-fichas':
+        return (
+          <ImportacaoFichas onVoltar={() => setSecaoAtiva('dashboard')} />
+        );
+
       case 'historico-ia':
         return (
           <div className="p-6">
@@ -798,6 +807,7 @@ export default function DashboardSecretaria() {
       </div>
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
+      <ChatGabriela contexto="secretaria" />
     </div>
   );
 }

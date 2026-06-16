@@ -1,6 +1,6 @@
 # ROADMAP — Portal Conexão AVA · SynerEduc
-> Backlog priorizado por dependência estrutural · Atualizado em: 2026-06-03  
-> Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · ⏸ Adiado · 🚫 Descartado
+> Backlog priorizado por dependência estrutural · Atualizado em: 2026-06-13  
+> Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · 🔄 Em andamento · ⏸ Adiado · 🚫 Descartado
 
 ---
 
@@ -31,6 +31,19 @@ DEPENDÊNCIA ESTRUTURAL PARA IA
               ▼
  #1  F5   → Agentes de IA — 6/7 perfis  ← reutiliza F2.1 imediatamente
               │   (secretaria, gestor, coord, prof, financeiro, aluno)
+              │   ┌─────────────────────────────────────────────────────────┐
+              │   │  ENTREGUES NA SESSÃO 2026-06-06                        │
+              │   │  ✅ F5.1 Pinecone pipeline — 🔄 indexando (~60/465 imgs) │
+              │   │  ✅ F5.2 ChatFlutuante — Professora Sofia (RAG chat)    │
+              │   │  ✅ F5.3/5.5/5.8 Agente Secretaria/Gestor/Financeiro   │
+              │   │       → Gabriela v7 (Tool Use) — em produção           │
+              │   │  ✅ F5.6/5.7 Sofia v6 — agenda de hoje + turma + RAG   │
+              │   │       Sofia adicionada ao Dashboard Coordenador         │
+              │   │  ✅ F5.11 Monitoramento de IA (admin) — em produção     │
+              │   │  ✅ F8.3 FrequenciaRealtime — Realtime Supabase         │
+              │   │  ✅ F8.4 WhatsApp MVP (wa.me) — notif. responsável      │
+              │   │  ✅ agente_ia_log — observabilidade todos os agentes    │
+              │   └─────────────────────────────────────────────────────────┘
               │
  #3  F3   → Portal do Responsável  ← novo perfil, RLS isolado
               │
@@ -49,6 +62,22 @@ DEADLINE SAZONAL (independente, mas tem data limite)
 PRODUTO ESTABILIZADO
  #8  F6  → Mobile PWA → React Native  ← critério: < 2 bugs críticos/mês
 
+AGENTE DE INCLUSÃO — módulo independente / futuro SaaS
+ F7  → Tia Maria José — Agente Psicopedagógico de Inclusão
+              │   ← homenagem a Maria José, neuropsicopedagoga (40 anos de experiência)
+              │   ┌─────────────────────────────────────────────────────────────┐
+              │   │  ENTREGUES NA SESSÃO 2026-06-06                            │
+              │   │  ✅ F7.2 UI completa (AgenteInclusao.tsx) — 4 etapas       │
+              │   │  ✅ Dois modos: Atividade Pronta + Roteiro Inclusivo        │
+              │   │  ✅ Edge Function dona-maria — em produção                  │
+              │   │  ✅ Impressão: cabeçalho escola, marca d'água, page-break   │
+              │   │  ⏳ F7.1 Acervo clínico — aguardando material da especialista│
+              │   └─────────────────────────────────────────────────────────────┘
+              │
+              ├──► F7.1 → Indexação do acervo (pesquisas + atividades da especialista)
+              ├──► F7.3 → Agente do Responsável (orientações para casa)
+              └──► F7.4 → SaaS independente (venda por escola)
+
 ADIADO
  ⏸  F1.2 → Liberar acesso portal  ← dez/2026 (matrículas do ano seguinte)
 ```
@@ -59,13 +88,251 @@ ADIADO
 |:---:|---|---|:---:|---|
 | ~~**#1**~~ | ~~F2.1/2.2/2.3 IA Histórico~~ | ~~Edge Function proxy + arquivo histórico + arquivo morto~~ | ~~2 sem~~ | ✅ Jun/2026 |
 | **#1** | F5 Agentes (6/7) | Objetivo principal — reutiliza F2.1 direto | 3-4 sem | Jun-Jul |
-| **#2** | F3 Portal Responsável | Fecha F5 (7º agente) + habilita F4 | 2-3 sem | Jul |
-| **#4** | F5 completo (7º ag.) | 1 semana após F3 estar no ar | 1 sem | Jul-Ago |
-| **#5** | F1.1 Multi-tenant | Antes da 2ª escola + antes de F4 (evita retrabalho Asaas) | 3-4 sem | Ago-Set |
+| **#2** | F1.1 Multi-tenant | Férias escolares — sistema pode sair do ar · Colégio Ariane entra pós-migração | 3-4 sem | **Jul** |
+| **#3** | F10 Plano de Aula IA | Esqueleto na demo Ariane (jun/17) · completo após indexação | 1-2 sem | Jun-Jul |
 | **#6** | F1.3 Virada de ano | Deadline dez/2026 — testar com 2 meses de antecedência | 1-2 sem | Set-Out |
 | **#7** | F4 Financeiro+Asaas | Após F3 (portal) + F1.1 (multi-tenant) = zero retrabalho | 2-3 sem | Out-Nov |
 | **#8** | F6 PWA | Produto estável — após tudo acima consolidado | 1-2 sem | Nov-Dez |
+| **#9** | F7 Agente de Inclusão | Produto independente — acervo especialista pronto | 4-6 sem | 2027 |
 | **⏸** | F1.2 Liberar acesso | Todos os alunos já cadastrados — retomar nas matrículas | — | Dez/2026 |
+
+---
+
+## F10 — Plano de Aula com IA · Professor
+> Ideia capturada em 2026-06-12 — diferencial pedagógico de alto impacto
+
+### F10.1 · Gerador de Plano de Aula com IA 🟡
+
+**O que é:** Componente exclusivo no Dashboard do Professor para geração assistida de planos de aula usando o material didático já indexado no Pinecone como contexto.
+
+**Problema resolvido:** Professor precisa pegar o material didático, planejar e entregar o plano para o coordenador — processo trabalhoso e frequentemente atrasado. Com o material no Pinecone, a IA pode gerar o planejamento com base nas respostas do professor a um formulário estruturado.
+
+**Fluxo:**
+1. Professor preenche formulário (disciplina, série, bimestre/volume, tema, duração, tipo de aula, recursos disponíveis, projetos interdisciplinares)
+2. Edge Function busca conteúdo relevante no Pinecone (mesmo livro/volume do professor)
+3. Claude gera rascunho completo do plano (objetivos, BNCC, metodologia, avaliação, referências do livro)
+4. Professor revisa, edita ou descarta o rascunho
+5. Salva no banco + gera PDF com logo e marca d'água da escola → envia para coordenador
+
+**Perguntas do formulário (a refinar com o modelo da escola):**
+- Disciplina / Série / Turma (pré-preenchido do perfil)
+- Bimestre / Volume e tema/conteúdo específico
+- Duração (1 aula, 2 aulas, semana?)
+- Tipo de aula (expositiva, prática, avaliação, revisão, projeto)
+- Recursos disponíveis (quadro, datashow, laboratório, etc.)
+- Projetos interdisciplinares envolvidos?
+- Necessidades especiais na turma?
+
+**Output do plano de aula:**
+- Cabeçalho com logo da escola + dados da turma
+- Objetivos de aprendizagem
+- Competências BNCC relacionadas
+- Sequência didática (início, desenvolvimento, fechamento)
+- Avaliação sugerida
+- Referências do material didático (volume/página)
+- Marca d'água da escola
+- PDF pronto para impressão
+
+**Componente coordenador (F10.2):** Painel de entrega de planos — quem entregou, quem está pendente, por disciplina e período.
+
+**Configuração por escola (coordenador define):**
+- Periodicidade do plano: `semanal` | `mensal` | `bimestral`
+- Essa variável determina quantas linhas a IA gera na tabela e qual o recorte temporal do plano
+- Salva em `configuracoes_escola` (tabela de settings por escola, reutilizável em F1.1 multi-tenant)
+
+**Template base:** Colégio Ariane (modelo recebido em 2026-06-12) — adotado como padrão universal do sistema. Logo do cabeçalho troca dinamicamente pelo `escola_id`.
+
+**Dependências:** F5.1 (Pinecone indexado), F1.1 (multi-tenant para `escola_id` — pode ser antecipado com `segmento` como chave provisória)
+**Status:** 🔄 **Implementando agora** — esqueleto para demo Colégio Ariane em 2026-06-17
+
+---
+
+## F8 — Voz, Automação e Comunicação em Tempo Real
+> Ideias capturadas em 2026-06-10 — alta prioridade para experiência do professor e coordenador
+
+### F8.1 · Lançamento por voz — Professor 🟡
+**O que é:** Botão fixo no centro inferior do painel do professor. O professor fala e o sistema interpreta o comando, abre o componente correto já preenchido e aguarda confirmação.
+
+**Status atual:**
+- ✅ **Agenda por voz — funcionando em produção** (`AgendaProfessor`)
+- ⚠️ **Frequência por voz — testes não foram satisfatórios** (pausado para revisão)
+
+**Exemplos de comando:**
+- *"Lançar agenda de geografia — assunto: Movimento da Terra, aula de hoje: Translação, atividade para casa na página 10"* → abre `AgendaProfessor` pré-preenchida ✅
+- *"Lançar frequência da turma 3B"* → `FrequenciaProfessor` — ⚠️ em revisão
+- *"Observação: João estava agitado hoje, conversar com coordenador"* → cria entrada no diário de sala (F8.2)
+
+**Como implementa:**
+- Edge Function `interpretar-voz` (já existe no projeto!) → enviar áudio → Claude extrai intent + campos
+- Frontend: `VoiceCommandButton.tsx` (FAB circular, pulsa quando ativo)
+- Retorna JSON: `{ intent: "agenda" | "frequencia" | "observacao", fields: {...} }`
+- Componente destino abre em modal com campos pré-preenchidos para revisão e confirmação
+
+**Dependências:** `interpretar-voz` Edge Function (já criada), Web Speech API ou MediaRecorder
+
+---
+
+### F8.2 · Diário de Sala por Voz — Professor 🟡
+**O que é:** Botão de microfone fixo no dashboard do professor. Com um toque, o professor fala um registro rápido — ocorrência, lembrete ou recado para coordenação — sem precisar digitar nada.
+
+**Por que voz faz sentido aqui (e não na frequência):**
+- Texto livre sem nomes próprios específicos → reconhecimento de voz muito mais confiável
+- Professor está em sala, com as mãos ocupadas — voz é o canal mais natural
+- Frequência por voz foi descartada: nomes de alunos são pronunciados de formas variadas por cada professor, risco de erro alto demais
+
+**Exemplos de uso real:**
+- *"Registrar no diário de aula, o aluno Fulano está se comportando mal, informar a coordenação"*
+- *"Registrar no diário de aula, trazer para amanhã cartolina para atividade"*
+- *"Registrar no diário de aula, preparar avaliação adaptada do aluno tal"*
+- *"Registrar no diário de aula, conteúdo de hoje não foi concluído, continua amanhã"*
+
+**Fluxo:**
+1. Professor toca o ícone de microfone (FAB ou botão no dashboard)
+2. Fala o registro (transcrição em tempo real via Web Speech API)
+3. IA categoriza automaticamente: `comportamento` | `lembrete` | `coordenacao` | `conteudo` | `outro`
+4. Se categoria = `coordenacao` → entrada fica visível no painel do coordenador com badge de atenção
+5. Registro salvo com data/turma/hora — professor vê histórico do dia na tela
+
+**Tabela nova:** `diario_sala` (professor_id, turma_id, aluno_id nullable, texto, categoria, data, visivel_coordenador, origem: 'voz' | 'texto')
+
+**Dependências:** Edge Function `interpretar-voz` (já existe), Web Speech API
+
+---
+
+### ✅ F8.3 · Frequência em Tempo Real — Coordenador
+**O que é:** Quando o professor lança uma falta ou atraso, o evento aparece imediatamente no dashboard do coordenador — sem precisar recarregar.
+
+**Fluxo completo:**
+1. Professor lança falta → `frequencias` inserida no Supabase
+2. Supabase Realtime emite evento para o coordenador (já usa Realtime em outros lugares)
+3. Dashboard do coordenador mostra notificação ao vivo: *"Ana Lima — faltou — Matemática 3B — 10:15"*
+4. Coordenador vê painel consolidado: quantas faltas por turma hoje, quais professores ainda não lançaram
+
+**Ações do coordenador no painel:**
+- ✅ **Marcar como justificada** — muda status da falta, registra motivo
+- 📲 **Notificar responsável** → dispara mensagem pelo sistema (portal do aluno/responsável)
+- 💬 **Notificar responsável via WhatsApp** → ver F8.4
+
+**Entregue em 2026-06-13:** `FrequenciaRealtime.tsx` + Supabase Realtime em `frequencia_diaria` + coluna `notificado_em` + DashboardCoordenador integrado.
+
+---
+
+### ✅ F8.4 · Notificação WhatsApp — MVP entregue
+**O que é:** Coordenador clica "Notificar via WhatsApp" e o responsável recebe mensagem automática no celular.
+
+**Mensagem padrão (personalizável por escola):**
+> *"Olá [Nome do Responsável], informamos que [Nome do Aluno] faltou à aula de [Disciplina] em [Data]. Acesse o portal para mais informações ou entre em contato com a escola."*
+
+**Como implementar:**
+- API: **WhatsApp Business Cloud API** (Meta) — gratuita até 1.000 conversas/mês por número
+- Edge Function `notificar-whatsapp` → recebe payload → chama API Meta
+- Custo: ~R$ 0,08 por mensagem após limite gratuito (baixo para o volume de uma escola)
+- Número da escola cadastrado no painel do gestor
+- Log de todas as mensagens enviadas por aluno
+
+**MVP entregue em 2026-06-13:** link `wa.me/55NUMERO?text=MENSAGEM_CODIFICADA` integrado ao `FrequenciaRealtime` — zero custo, funciona no botão "Notificar Responsável". WhatsApp Business API (Meta) fica para F8.4 full quando o volume justificar.
+
+**Dependência:** F8.3 ✅
+
+---
+
+## F9 — Comunicação Avançada com Responsáveis
+> Capturado em 2026-06-11 — features exibidas no site synereduc.com, ainda não implementadas
+
+### F9.1 · Notificações automáticas — faltas, notas e comunicados 🟡
+**O que é:** Quando uma falta é registrada, uma nota é lançada ou um comunicado é publicado, o responsável recebe notificação automática — sem ação manual da escola.
+
+**Canais planejados:**
+- Push notification via portal do responsável (PWA)
+- E-mail (SendGrid ou Resend — low cost)
+- WhatsApp → ver F8.4 (já documentado)
+
+**Eventos que disparam notificação:**
+- Falta registrada → notifica responsável imediatamente
+- Nota lançada/atualizada → notifica ao final do período
+- Comunicado publicado → notifica todos os responsáveis da turma
+- Atividade com nota abaixo de 5,0 → alerta especial
+
+**Dependências:** F3 (Portal Responsável), F8.4 (WhatsApp)
+
+---
+
+### F9.2 · Chatbot de atendimento — pais e responsáveis 🟢
+**O que é:** Canal de atendimento assíncrono dentro do portal do responsável. Responsável envia mensagem → escola responde (ou IA responde perguntas simples automaticamente).
+
+**Fluxo:**
+- Responsável pergunta: *"Qual a nota da Ana em Matemática?"* → IA responde com os dados reais
+- Perguntas sobre agenda, faltas, comunicados → respondidas pela IA automaticamente
+- Perguntas complexas (reunião, problema comportamental) → encaminha para secretaria ou coordenação
+
+**Arquitetura:**
+- Tabela `mensagens_responsavel` (já existe — `agenda_mensagens_privadas.sql` criado em 2026-06-05)
+- Edge Function → Claude com contexto do aluno (notas, frequência, agenda)
+- Painel da escola: fila de mensagens não respondidas pela IA
+
+**Dependências:** F3 (Portal Responsável), F5.3 (Agente Secretaria com Tool Use)
+
+---
+
+### F9.3 · Histórico completo de interações por aluno 🟢
+**O que é:** Timeline unificada de tudo que aconteceu com um aluno — faltas, notas, atividades, comunicados recebidos, mensagens do responsável, observações do professor — acessível para coordenação e responsável.
+
+**Casos de uso:**
+- Coordenador consulta histórico antes de reunião com responsável
+- Responsável vê tudo que a escola comunicou sobre seu filho
+- Evidência para relatório pedagógico ou AEE
+
+**Tabela:** `historico_aluno` (aluno_id, tipo, descricao, origem, data, usuario_id) — view ou tabela materializada
+
+**Dependências:** F9.1 (notificações), F9.2 (chatbot), F8.2 (diário de sala)
+
+---
+
+## F4 expandido — Financeiro Inteligente
+> Features do financeiro exibidas no site synereduc.com — ainda não implementadas (2026-06-11)
+> Complementam o F4 (Financeiro Avançado + Asaas) já no roadmap
+
+### F4.1 · Painel de inadimplência com IA 🔴
+**O que é:** Dashboard financeiro com visão de inadimplência por turma, aluno e período. IA prevê probabilidade de recebimento com base no histórico.
+
+**KPIs do painel:**
+- A receber no mês
+- Recebido até hoje
+- Inadimplente (valor + lista de alunos)
+- Taxa de adimplência (%)
+- Previsão de fechamento do mês pela IA
+
+**Implementação:**
+- Integração Asaas (já planejado em F4)
+- Edge Function → Claude analisa histórico de pagamentos → gera previsão
+- Alert: turmas com maior concentração de inadimplência
+
+---
+
+### F4.2 · Cobrança automatizada + régua de comunicação 🟡
+**O que é:** Sequência configurável de ações automáticas quando um pagamento vence sem baixa.
+
+**Régua padrão (configurável por escola):**
+- D+1: notificação push no portal do responsável
+- D+3: e-mail automático
+- D+7: WhatsApp (via F8.4)
+- D+15: alerta para secretaria no painel
+
+**Dependências:** F4.1, F9.1 (notificações), F8.4 (WhatsApp)
+
+---
+
+### F4.3 · Relatório mensal automático para diretoria 🟢
+**O que é:** No primeiro dia útil de cada mês, a IA gera automaticamente um relatório financeiro completo do mês anterior — sem ação manual.
+
+**Conteúdo do relatório:**
+- Receita total prevista vs. realizada
+- Inadimplência por turma
+- Evolução mês a mês (últimos 6 meses)
+- Insights da IA: anomalias, tendências, recomendações
+- PDF pronto para apresentar na reunião de diretoria
+
+**Dependências:** F4.1, F4.2, integração Asaas
 
 ---
 
@@ -194,7 +461,7 @@ ADIADO
 
 ---
 
-### 🔴 #1 — F5 · Agentes de IA — 6/7 perfis · Jun-Jul/2026 · ~3-4 semanas
+### 🔄 #1 — F5 · Agentes de IA — 6/7 perfis · Jun-Jul/2026 · ~3-4 semanas
 
 > **Por que é o #1?** Reutiliza diretamente a Edge Function criada em F2.1.
 > O 7º agente (responsável) fica para após o Portal do Responsável (F3) existir.
@@ -224,68 +491,44 @@ ADIADO
 > ⚠️ parcial = funciona com dados ao vivo; apenas a consulta ao regimento fica pendente até o documento chegar.
 
 **Tarefas F5.0 (infra):**
-- [ ] `claude-proxy` v2 — JWT validation + controle de tokens + Tool Use loop
 - [ ] SQL: tabelas `agente_log`, `agente_uso_diario`, `agente_limites`
 
 **Tarefas F5.1 (Pinecone):**
-- [ ] Script de chunking dos PDFs (~400 palavras por chunk, metadados: `disciplina, serie, nome_arquivo, chunk_index`)
-- [ ] Embeddings via Voyage AI `voyage-3` → upsert no Pinecone
-- [ ] Utilitário de deleção + re-upsert para atualização futura de documentos
+- [x] ~~Script de indexação PNG via Ollama gemma3:4b (OCR) + multilingual-e5-large → Pinecone~~
+- [x] ~~1ª série / Biologia / 1º bimestre — primeiros vetores indexados e funcionando~~
+- [ ] 🔄 **Completar indexação demais séries e disciplinas** — rodando em background (~60/465 imagens)
+- [ ] Utilitário de deleção + re-upsert para atualização futura
 
 **Tarefas F5.2 (componente base):**
-- [ ] `ChatIA.tsx` — botão flutuante reutilizável (posição fixa, estilo consistente)
-- [ ] `useChatIA(perfil)` — histórico da conversa (últimas 10 msgs) + calls à Edge Function
+- [x] ~~`ChatFlutuante.tsx` — Professora Sofia (botão flutuante inferior direito, chat completo)~~
+- [x] ~~Edge Function `chat-sofia` v6 — RAG + agenda de hoje + turma do aluno, em produção~~
+- [x] ~~Sofia adicionada ao DashboardCoordenador~~
 
-**Tarefas F5.3–F5.9 (agentes):**
-- [ ] **Agente 1 · Secretaria** (#22) — matrícula, documentos, alunos pendentes, fichas
-- [ ] **Agente 2 · Coordenador** (#23) — agenda pendente, frequência da semana, atividades a corrigir
-- [ ] **Agente 3 · Gestor** (#24) — indicadores gerais, inadimplência, desempenho por série
-- [ ] **Agente 4 · Professor** (#25) — planos de aula, atividades, avaliações (RAG material didático)
-- [ ] **Agente 5 · Aluno** (#26) — notas, frequência, atividades pendentes, dúvidas pedagógicas
-- [ ] **Agente 6 · Financeiro** (#27) — mensalidades em aberto, fluxo de caixa, relatórios
-- [ ] **Agente 7 · Admin Geral** (#28) — status do sistema, consumo IA, logs de segurança
-- [ ] Adicionar `ChatIA` nos dashboards dos 6 perfis acima (7º entra no #4 com F3)
-- [ ] **F5.10** (#29) — DashboardConteudista adaptado como interface de gestão do RAG (upload + status de indexação)
-- [ ] **F5.11** (#30) — Painel de monitoramento de IA no Admin SynerEduc (consumo, custo, logs, limites)
+**Tarefas F5.3/5.5/5.8 — Agente Gabriela (Secretaria · Gestor · Financeiro):**
+- [x] ~~Edge Function `agente-gabriela` v7 — Tool Use loop (MAX_TURNS=5), em produção~~
+- [x] ~~Tools: busca alunos, documentos pendentes, inadimplentes, resumo financeiro, indicadores~~
+- [x] ~~`ChatGabriela.tsx` — widget flutuante plugado nos 3 dashboards administrativos~~
+- [x] ~~Observabilidade: agente_ia_log (tokens, latência, turns)~~
+
+**Tarefas restantes F5 (agentes pedagógicos):**
+- [x] ~~**Agente Pedagógico · Professor/Aluno** — Sofia v6 (RAG + agenda de hoje)~~
+- [ ] **Agente Coordenador** — sem novo balão flutuante; Sofia detecta role=coordenador e recebe contexto adicional (agenda pendente, frequência semanal, atividades a corrigir) automaticamente
+- [ ] **Agente Admin Geral "NEXUS"** (#28) — status do sistema, consumo IA, logs de segurança · plugado no DashboardAdministrador
+- [ ] **F5.10** (#29) — Interface de gestão do RAG integrada ao painel do Professor Conteudista (mesma pessoa que alimenta o sistema)
 
 **Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4.
 
 ---
 
-### 🟢 #2 — F3 · Portal do Responsável · Jul/2026 · ~2-3 semanas
+### 🚫 F3 · Portal do Responsável — DESCARTADO
 
-> **Por que é o #3?** Duas dependências simultâneas:
-> (a) fecha o F5 ao adicionar o 7º agente de IA;
-> (b) é pré-requisito do F4 (o self-service de boletos precisa do portal para existir).
-> **Valor de mercado estimado: + R$ 300/mês por escola.**
-
-**Tarefas:**
-- [ ] Novo tipo de usuário `responsavel` com RLS isolado (vê apenas filhos vinculados)
-- [ ] `DashboardResponsavel.tsx` — frequência, notas, comunicados, horário do filho
-- [ ] Vinculação `responsavel_id → aluno_id` na ficha de matrícula
-- [ ] Chat com coordenação (integrado ao sistema de notificações existente)
-- [ ] Confirmação de leitura de comunicados
+> **Decisão 2026-06-13:** Ambas as escolas (Conexão Maranhense e Colégio Ariane) têm parceria com **Isaac**, que já oferece portal financeiro e contratos para os responsáveis. Criar um portal próprio duplicaria funcionalidade já disponível sem agregar valor. O painel do aluno já expõe notas, frequência e comunicados — suficiente.
 
 ---
 
-### 🟢 #3 — F5 completo · 7º Agente (Responsável) · Jul-Ago/2026 · ~1 semana
+### 🔴 #2 — F1.1 · Multi-tenant · **Jul/2026** · ~3-4 semanas
 
-> **Por que é o #4?** Depende do F3 existir. Com o Portal do Responsável no ar,
-> adicionar o 7º agente é questão de escrever o prompt especializado e plugar o `ChatIA`.
-
-**Tarefas:**
-- [ ] **Agente 7 · Responsável** — situação do filho (notas, frequência, pendências financeiras, próximas provas)
-- [ ] Adicionar `ChatIA` no `DashboardResponsavel.tsx`
-
----
-
-### 🔴 #4 — F1.1 · Multi-tenant · Ago-Set/2026 · ~3-4 semanas
-
-> **Por que é o #5 e não o #1?** A IA funciona perfeitamente em single-tenant.
-> Colocar F1.1 antes de F5 seria bloquear o objetivo principal sem nenhum ganho prático.
-> **Por que está no #5 e não no final?** F4 (Asaas) feito sem multi-tenant = retrabalho
-> garantido em todas as tabelas financeiras. E a 2ª escola (Ariane Maria) precisa estar
-> pronta para ser onboardada por volta de nov/2026.
+> **Janela:** Julho/2026 — férias escolares. Sistema pode ficar fora do ar para atualização sem impacto nos usuários. Colégio Ariane previsto para entrar no sistema após esta migração.
 
 **Tarefas:**
 - [ ] Tabela `escolas` (`id`, `nome`, `cnpj`, `segmentos_ativos`, `dominio`)

@@ -1,20 +1,11 @@
-// supabase/functions/chat-sofia/index.ts
-// Edge Function — Professora Sofia: RAG sobre material didático
-//
+// supabase/functions/chat-sofia/index.ts  v6
 // Fluxo:
-//   1. Valida JWT do usuário
-//   2. Gera embedding da pergunta via BGE-M3 (Ollama local) ← ou Pinecone inference
-//   3. Busca chunks relevantes no Pinecone (filtro: serie, disciplina)
-//   4. Monta contexto + histórico
-//   5. Chama Claude Haiku para gerar resposta amigável
-//
-// Secrets necessários:
-//   ANTHROPIC_API_KEY
-//   PINECONE_API_KEY
-//   PINECONE_HOST
-//   OLLAMA_URL          ← URL do Ollama acessível pela Edge Function
-//   SUPABASE_URL
-//   SUPABASE_SERVICE_KEY
+//   1. Valida JWT → busca perfil do aluno (nome, série, turma)
+//   2. Busca agenda de hoje para a série/turma/disciplina do aluno
+//   3. Gera embedding via Pinecone Inference (multilingual-e5-large)
+//   4. Busca chunks relevantes no Pinecone (filtra por série/disciplina)
+//   5. Monta contexto com <aula_de_hoje> + <material_didatico> + histórico
+//   6. Chama Claude Haiku → resposta contextualizada
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
@@ -24,26 +15,22 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const ANTHROPIC_KEY  = Deno.env.get('ANTHROPIC_API_KEY')  ?? ''
-const PINECONE_KEY   = Deno.env.get('PINECONE_API_KEY')   ?? ''
-const PINECONE_HOST  = Deno.env.get('PINECONE_HOST')      ?? ''
-const OLLAMA_URL     = Deno.env.get('OLLAMA_URL')         ?? 'http://localhost:11434'
-const SUPABASE_URL   = Deno.env.get('SUPABASE_URL')       ?? ''
-// SUPABASE_SERVICE_ROLE_KEY é um secret padrão do Supabase — não precisa configurar manualmente
-const SERVICE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_KEY') ?? ''
+const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')        ?? ''
+const PINECONE_KEY  = Deno.env.get('PINECONE_API_KEY')         ?? ''
+const PINECONE_HOST = Deno.env.get('PINECONE_HOST')            ?? ''
+const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')             ?? ''
+const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_KEY') ?? ''
 
-// Pinecone inference API — multilingual-e5-large (1024 dims, compatível com BGE-M3)
-// Não depende do Ollama local: funciona direto nos servidores do Supabase
 const PINECONE_EMBED_MODEL = 'multilingual-e5-large'
 const CHAT_MODEL           = 'claude-haiku-4-5-20251001'
-const TOP_K                = 6   // chunks recuperados do Pinecone
+const TOP_K                = 6
 
-// ─── Log assíncrono ───────────────────────────────────────────────────────────
+// ─── Log ────────────────────────────────────────────────────────────────────
 
 async function logIA(row: Record<string, unknown>) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/agente_ia_log`, {
-      method: 'POST',
+      method:  'POST',
       headers: {
         'apikey':        SERVICE_KEY,
         'Authorization': `Bearer ${SERVICE_KEY}`,
@@ -55,40 +42,45 @@ async function logIA(row: Record<string, unknown>) {
   } catch (_) {}
 }
 
-// ─── System prompt da Professora Sofia ───────────────────────────────────────
+// ─── System prompt ───────────────────────────────────────────────────────────
 
-function systemPrompt(serie?: string, disciplina?: string, nomeAluno?: string): string {
+function systemPrompt(
+  nomeAluno?: string,
+  serie?:     string,
+  disciplina?: string,
+): string {
   return `Você é a Professora Sofia, assistente de estudos do Colégio Conexão Maranhense.
 Você é jovem, animada, paciente e fala de forma clara e acolhedora com os alunos.
 Use linguagem simples e incentivadora. Emojis são bem-vindos com moderação.
 
 ${nomeAluno ? `Você está conversando com ${nomeAluno}.` : ''}
-${serie ? `O aluno está na ${serie}.` : ''}
-${disciplina ? `O foco atual é ${disciplina}.` : ''}
+${serie     ? `O aluno está na ${serie}.`                : ''}
+${disciplina ? `O foco atual é ${disciplina}.`           : ''}
 
 <regras>
-- Use os trechos do material didático fornecidos em <contexto> para embasar sua resposta
-- Se a pergunta não tiver relação com estudos escolares, responda brevemente e redirecione
+- Se houver uma tag <aula_de_hoje>, use esse contexto como referência principal para explicar o conteúdo do dia
+- Use os trechos do material didático fornecidos em <material_didatico> para aprofundar a explicação
+- Se o aluno disser "não entendi a aula de hoje" ou similar, explique baseando-se no título e conteúdo da aula registrada
 - NUNCA invente conteúdo que não está no contexto — se não souber, diga que vai buscar nos livros
 - Respostas curtas e diretas (máx. 3 parágrafos) — o aluno está no celular
 - Sempre termine com uma pergunta de curiosidade ou incentivo
+- Se a pergunta não tiver relação com estudos escolares, responda brevemente e redirecione
 </regras>`
 }
 
-// ─── Geração de embedding via Pinecone Inference API ─────────────────────────
-// multilingual-e5-large → 1024 dims, compatível com BGE-M3 indexado localmente
+// ─── Embedding ───────────────────────────────────────────────────────────────
 
 async function gerarEmbedding(texto: string): Promise<number[]> {
   const resp = await fetch('https://api.pinecone.io/embed', {
     method:  'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Api-Key':      PINECONE_KEY,
+      'Content-Type':           'application/json',
+      'Api-Key':                PINECONE_KEY,
       'X-Pinecone-API-Version': '2024-10',
     },
     body: JSON.stringify({
-      model:  PINECONE_EMBED_MODEL,
-      inputs: [{ text: texto }],
+      model:      PINECONE_EMBED_MODEL,
+      inputs:     [{ text: texto }],
       parameters: { input_type: 'query', truncate: 'END' },
     }),
   })
@@ -97,7 +89,7 @@ async function gerarEmbedding(texto: string): Promise<number[]> {
   return data.data?.[0]?.values as number[]
 }
 
-// ─── Busca no Pinecone ────────────────────────────────────────────────────────
+// ─── Busca Pinecone ──────────────────────────────────────────────────────────
 
 interface ChunkResultado {
   texto:      string
@@ -106,8 +98,8 @@ interface ChunkResultado {
 }
 
 async function buscarPinecone(
-  vetor: number[],
-  serie?: string,
+  vetor:       number[],
+  serie?:      string,
   disciplina?: string,
 ): Promise<ChunkResultado[]> {
   const filter: Record<string, unknown> = {}
@@ -115,9 +107,7 @@ async function buscarPinecone(
   if (disciplina) filter['disciplina'] = { '$eq': disciplina }
 
   const body: Record<string, unknown> = {
-    vector:          vetor,
-    topK:            TOP_K,
-    includeMetadata: true,
+    vector: vetor, topK: TOP_K, includeMetadata: true,
   }
   if (Object.keys(filter).length > 0) body['filter'] = filter
 
@@ -126,7 +116,6 @@ async function buscarPinecone(
     headers: { 'Content-Type': 'application/json', 'Api-Key': PINECONE_KEY },
     body: JSON.stringify(body),
   })
-
   if (!resp.ok) throw new Error(`Pinecone query: ${resp.status}`)
   const data = await resp.json()
 
@@ -140,6 +129,88 @@ async function buscarPinecone(
     .filter((c: ChunkResultado) => c.texto)
 }
 
+// ─── Perfil do aluno ─────────────────────────────────────────────────────────
+
+interface PerfilAluno {
+  userId: string | null
+  nome:   string | null
+  serie:  string | null
+  turma:  string | null
+}
+
+async function buscarPerfilAluno(authHeader: string): Promise<PerfilAluno> {
+  const token = authHeader.slice(7)
+
+  const userResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_KEY },
+  })
+  if (!userResp.ok) throw new Error('JWT inválido')
+  const { id: userId } = await userResp.json()
+
+  const perfilResp = await fetch(
+    `${SUPABASE_URL}/rest/v1/users?id=eq.${userId}&select=nome,role`,
+    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+  )
+  if (!perfilResp.ok) return { userId, nome: null, serie: null, turma: null }
+
+  const [usuario] = await perfilResp.json()
+  if (!usuario) return { userId, nome: null, serie: null, turma: null }
+
+  // Busca série e nome da turma
+  const turmaResp = await fetch(
+    `${SUPABASE_URL}/rest/v1/alunos_turmas?user_id=eq.${userId}&select=turmas(nome,series(nome))&limit=1`,
+    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+  )
+
+  let serie: string | null = null
+  let turma: string | null = null
+  if (turmaResp.ok) {
+    const [at] = await turmaResp.json()
+    serie = at?.turmas?.series?.nome ?? null
+    turma = at?.turmas?.nome         ?? null
+  }
+
+  return { userId, nome: usuario.nome ?? null, serie, turma }
+}
+
+// ─── Agenda de hoje ───────────────────────────────────────────────────────────
+
+interface AgendaAula {
+  titulo_unidade: string | null
+  conteudo_sala:  string | null
+  atividade_casa: string | null
+  disciplina:     string | null
+}
+
+async function buscarAgendaHoje(
+  serie:       string,
+  turma?:      string | null,
+  disciplina?: string,
+): Promise<AgendaAula[]> {
+  const hoje = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+
+  let url = `${SUPABASE_URL}/rest/v1/agenda_professor`
+    + `?data_aula=eq.${hoje}`
+    + `&serie=eq.${encodeURIComponent(serie)}`
+    + `&select=titulo_unidade,conteudo_sala,atividade_casa,disciplinas(nome)`
+
+  if (turma)      url += `&turma=eq.${encodeURIComponent(turma)}`
+  if (disciplina) url += `&disciplinas.nome=eq.${encodeURIComponent(disciplina)}`
+
+  const resp = await fetch(url, {
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+  })
+  if (!resp.ok) return []
+
+  const rows = await resp.json()
+  return rows.map((r: any) => ({
+    titulo_unidade: r.titulo_unidade ?? null,
+    conteudo_sala:  r.conteudo_sala  ?? null,
+    atividade_casa: r.atividade_casa ?? null,
+    disciplina:     r.disciplinas?.nome ?? null,
+  }))
+}
+
 // ─── Claude Haiku ─────────────────────────────────────────────────────────────
 
 interface RespostaClaude {
@@ -151,26 +222,40 @@ interface RespostaClaude {
 async function chamarClaude(
   pergunta:    string,
   chunks:      ChunkResultado[],
+  agenda:      AgendaAula[],
   historico:   { role: string; content: string }[],
   serie?:      string,
   disciplina?: string,
   nomeAluno?:  string,
 ): Promise<RespostaClaude> {
-  const contextBlock = chunks.length > 0
-    ? `<contexto>\n${chunks.map((c, i) => {
-        const ref = c.pagina ? ` (página ${c.pagina})` : ''
+  // Bloco da aula de hoje
+  let aulaBlock = ''
+  if (agenda.length > 0) {
+    const aulas = agenda.map(a => {
+      const linhas = []
+      if (a.disciplina)    linhas.push(`Disciplina: ${a.disciplina}`)
+      if (a.titulo_unidade) linhas.push(`Título da aula: ${a.titulo_unidade}`)
+      if (a.conteudo_sala)  linhas.push(`Conteúdo trabalhado em sala: ${a.conteudo_sala}`)
+      if (a.atividade_casa) linhas.push(`Atividade para casa: ${a.atividade_casa}`)
+      return linhas.join('\n')
+    }).join('\n\n')
+
+    aulaBlock = `<aula_de_hoje>\n${aulas}\n</aula_de_hoje>\n\n`
+  }
+
+  // Bloco do material didático (Pinecone)
+  const materialBlock = chunks.length > 0
+    ? `<material_didatico>\n${chunks.map((c, i) => {
+        const ref = c.pagina ? ` (pág. ${c.pagina})` : ''
         return `[Trecho ${i + 1}${ref}]\n${c.texto}`
-      }).join('\n\n')}\n</contexto>`
-    : '<contexto>Nenhum trecho específico encontrado para esta pergunta.</contexto>'
+      }).join('\n\n')}\n</material_didatico>`
+    : ''
 
   const mensagens = [
-    ...historico.map(h => ({
-      role:    h.role,
-      content: h.content,
-    })),
+    ...historico.map(h => ({ role: h.role, content: h.content })),
     {
       role:    'user',
-      content: `${contextBlock}\n\n${pergunta}`,
+      content: `${aulaBlock}${materialBlock}${aulaBlock || materialBlock ? '\n\n' : ''}${pergunta}`,
     },
   ]
 
@@ -184,7 +269,7 @@ async function chamarClaude(
     body: JSON.stringify({
       model:      CHAT_MODEL,
       max_tokens: 1024,
-      system:     systemPrompt(serie, disciplina, nomeAluno),
+      system:     systemPrompt(nomeAluno, serie, disciplina),
       messages:   mensagens,
     }),
   })
@@ -202,55 +287,10 @@ async function chamarClaude(
   }
 }
 
-// ─── Busca perfil do aluno no banco ──────────────────────────────────────────
-
-interface PerfilAluno {
-  nome:  string | null
-  serie: string | null
-}
-
-async function buscarPerfilAluno(authHeader: string): Promise<PerfilAluno> {
-  const token = authHeader.slice(7)
-
-  // Busca usuário autenticado
-  const userResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_KEY },
-  })
-  if (!userResp.ok) throw new Error('JWT inválido')
-
-  const { id: userId } = await userResp.json()
-
-  // Busca nome e série do aluno na tabela users + alunos_turmas
-  const perfilResp = await fetch(
-    `${SUPABASE_URL}/rest/v1/users?id=eq.${userId}&select=nome,role`,
-    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
-  )
-  if (!perfilResp.ok) return { nome: null, serie: null }
-
-  const [usuario] = await perfilResp.json()
-  if (!usuario) return { nome: null, serie: null }
-
-  // Busca a série atual do aluno (turma ativa)
-  const turmaResp = await fetch(
-    `${SUPABASE_URL}/rest/v1/alunos_turmas?user_id=eq.${userId}&select=turmas(series(nome))&limit=1`,
-    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
-  )
-
-  let serie: string | null = null
-  if (turmaResp.ok) {
-    const [at] = await turmaResp.json()
-    serie = at?.turmas?.series?.nome ?? null
-  }
-
-  return { nome: usuario.nome ?? null, serie }
-}
-
-// ─── Handler principal ────────────────────────────────────────────────────────
+// ─── Handler ─────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
     const auth = req.headers.get('Authorization')
@@ -261,9 +301,7 @@ serve(async (req) => {
       )
     }
 
-    // Busca perfil do aluno no banco (nome + série reais)
     const perfil = await buscarPerfilAluno(auth)
-
     const { pergunta, disciplina, historico = [] } = await req.json()
 
     if (!pergunta?.trim()) {
@@ -273,20 +311,30 @@ serve(async (req) => {
       )
     }
 
-    // 1. Embedding da pergunta
-    const vetor = await gerarEmbedding(pergunta)
+    // Busca agenda de hoje (paralelo com embedding)
+    const [vetor, agenda] = await Promise.all([
+      gerarEmbedding(pergunta),
+      perfil.serie
+        ? buscarAgendaHoje(perfil.serie, perfil.turma, disciplina)
+        : Promise.resolve([]),
+    ])
 
-    // 2. Busca no Pinecone (filtra pela série real do banco)
+    // Busca chunks no Pinecone
     const chunks = await buscarPinecone(vetor, perfil.serie ?? undefined, disciplina)
 
-    // 3. Resposta do Claude
+    // Resposta do Claude
     const t0 = Date.now()
     const resultado = await chamarClaude(
-      pergunta, chunks, historico, perfil.serie ?? undefined, disciplina, perfil.nome ?? undefined
+      pergunta,
+      chunks,
+      agenda,
+      historico,
+      perfil.serie      ?? undefined,
+      disciplina,
+      perfil.nome       ?? undefined,
     )
     const latencia = Date.now() - t0
 
-    // Log assíncrono
     await logIA({
       agente:        'sofia',
       contexto:      disciplina ?? perfil.serie ?? null,
@@ -301,7 +349,12 @@ serve(async (req) => {
     const paginas = [...new Set(chunks.map(c => c.pagina).filter(p => p !== null))] as number[]
 
     return new Response(
-      JSON.stringify({ resposta: resultado.texto, chunks_usados: chunks.length, paginas }),
+      JSON.stringify({
+        resposta:      resultado.texto,
+        chunks_usados: chunks.length,
+        aula_hoje:     agenda.length > 0,
+        paginas,
+      }),
       { headers: { ...CORS, 'Content-Type': 'application/json' } }
     )
 

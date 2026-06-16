@@ -12,13 +12,23 @@ export default defineConfig({
     },
   },
   build: {
-    target: 'esnext',
+    target: ['es2020', 'chrome80', 'safari13'],
     outDir: 'build',
     rollupOptions: {
       output: {
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
+        manualChunks: {
+          'vendor-react':    ['react', 'react-dom'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-charts':   ['recharts'],
+          'vendor-pdf':      ['jspdf', 'jspdf-autotable'],
+          'vendor-icons':    ['lucide-react'],
+          'vendor-theme':    ['next-themes'],
+          'vendor-notify':   ['sonner'],
+          'vendor-utils':    ['clsx', 'tailwind-merge', 'class-variance-authority'],
+        },
       },
     },
   },

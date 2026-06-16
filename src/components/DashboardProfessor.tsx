@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../supabase/supabaseClient";
+import { ChatFlutuante } from "./ai/ChatFlutuante";
+import { AgenteInclusao } from "./ai/AgenteInclusao";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 
@@ -15,10 +17,11 @@ import {
   Bell, Calendar, ArrowLeft, FileEdit, BarChart3, Users,
   Loader2, BookOpen, Video, LogOut, Clock, Megaphone,
   AlertCircle, Info, ChevronRight, Inbox, Book, User,
-  Sun, Moon, Paperclip, CheckCircle2,
+  Sun, Moon, Paperclip, CheckCircle2, Sparkles,
 } from "lucide-react";
 
-import { Notificacoes } from "./Notificacoes";
+import { Notificacoes, useNotificacoesCount } from "./Notificacoes";
+import { NotificacaoBalloon } from "./NotificacaoBalloon";
 import { PerfilUsuario } from "./PerfilUsuario";
 import HorarioEscolar from "./HorarioEscolar";
 import { AgendamentoAulasVivo } from "./AgendamentoAulasVivo";
@@ -28,10 +31,11 @@ import { AgendaProfessor } from "./AgendaProfessor";
 import { AtividadesRecebidas } from "./AtividadesRecebidas";
 import { SchoolHeader } from "./SchoolHeader";
 import ComunicadosPage from "./ComunicadosPage";
+import { PlanoDeAula } from "./PlanoDeAula";
 import { useSegmento } from '../hooks/useSegmento';
 
 
-type ViewType = "dashboard" | "atividades" | "boletim" | "agenda" | "horarios" | "aulas-vivo" | "disciplina" | "comunicados";
+type ViewType = "dashboard" | "atividades" | "boletim" | "agenda" | "horarios" | "aulas-vivo" | "disciplina" | "comunicados" | "plano-aula";
 
 interface SerieTurmaResumo {
   id: string;
@@ -54,11 +58,15 @@ interface Comunicado {
   imagem_url?: string | null;
 }
 
-function formatarData(dataISO: string) {
+function formatarData(dataISO: string | null | undefined) {
+  if (!dataISO) return '—';
   try {
-    return new Date(dataISO + 'T12:00:00').toLocaleDateString("pt-BR");
+    // Evita duplicar 'T' se já for ISO completo (ex: "2026-06-09T10:30:00")
+    const d = new Date(dataISO.includes('T') ? dataISO : dataISO + 'T12:00:00');
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString("pt-BR");
   } catch {
-    return dataISO;
+    return '—';
   }
 }
 
@@ -85,7 +93,7 @@ export function DashboardProfessor() {
 
   const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
-  const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
+  const { count: notificacoesNaoLidas } = useNotificacoesCount();
   const [mostrarMenuUsuario, setMostrarMenuUsuario] = useState(false);
   const { segmento } = useSegmento();
   const avatarRef = useRef<HTMLButtonElement>(null);
@@ -107,29 +115,9 @@ export function DashboardProfessor() {
       carregarComunicados();
       carregarContadoresAtividades();
       carregarResumoHoje();
-      fetchNotificacoesCount();
-
-      const channel = supabase
-        .channel("public:notificacoes")
-        .on("postgres_changes", {
-          event: "INSERT", schema: "public", table: "notificacoes",
-          filter: `user_id=eq.${usuario.id}`,
-        }, () => fetchNotificacoesCount())
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); };
     }
   }, [usuario, segmento]);
 
-  const fetchNotificacoesCount = async () => {
-    if (!usuario) return;
-    const { count } = await supabase
-      .from("notificacoes")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", usuario.id)
-      .eq("lida", false);
-    setNotificacoesNaoLidas(count || 0);
-  };
 
   const carregarComunicados = async () => {
   try {
@@ -160,15 +148,7 @@ export function DashboardProfessor() {
   const carregarContadoresAtividades = async () => {
     if (!usuario?.id) return;
     try {
-      // Total de atividades enviadas pelo professor
-      const { count: enviadas } = await supabase
-        .from("atividades")
-        .select("*", { count: "exact", head: true })
-        .eq("professor_id", usuario.id);
-      setTotalAtividadesEnviadas(enviadas || 0);
-
-      // Atividades pendentes de correção:
-      // Buscar IDs das atividades do professor, depois contar entregas com status 'entregue'
+      // Buscar IDs das atividades do professor
       const { data: atividadesProf } = await supabase
         .from("atividades")
         .select("id")
@@ -176,13 +156,23 @@ export function DashboardProfessor() {
 
       if (atividadesProf && atividadesProf.length > 0) {
         const ids = atividadesProf.map((a: any) => a.id);
+
+        // Total de entregas recebidas (todas as submissões dos alunos)
+        const { count: enviadas } = await supabase
+          .from("atividades_alunos")
+          .select("*", { count: "exact", head: true })
+          .in("atividade_id", ids);
+        setTotalAtividadesEnviadas(enviadas || 0);
+
+        // Pendentes de correção: aluno enviou (entregue ou atrasado) mas professor ainda não corrigiu
         const { count: pendentes } = await supabase
           .from("atividades_alunos")
           .select("*", { count: "exact", head: true })
           .in("atividade_id", ids)
-          .eq("status", "entregue");
+          .in("status", ["entregue", "atrasado"]);
         setTotalPendentesCorrecao(pendentes || 0);
       } else {
+        setTotalAtividadesEnviadas(0);
         setTotalPendentesCorrecao(0);
       }
     } catch {
@@ -305,14 +295,15 @@ export function DashboardProfessor() {
               <Button variant="ghost" size="icon" onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}>
                 <Bell className="w-5 h-5 text-muted-foreground" />
                 {notificacoesNaoLidas > 0 && (
-                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-background" />
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                    {notificacoesNaoLidas > 99 ? '99+' : notificacoesNaoLidas}
+                  </span>
                 )}
               </Button>
               {mostrarNotificacoes && (
-                <div className="absolute right-0 top-12 w-80 z-50">
-                  <Notificacoes onClose={() => setMostrarNotificacoes(false)} onUpdate={fetchNotificacoesCount} />
-                </div>
+                <Notificacoes onClose={() => setMostrarNotificacoes(false)} />
               )}
+              <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
             </div>
 
             <button
@@ -549,6 +540,23 @@ export function DashboardProfessor() {
     );
   }
 
+  if (viewAtual === "plano-aula") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <BarraAzul titulo="Plano de Aula com IA" onVoltar={() => setViewAtual("dashboard")} />
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <PlanoDeAula
+            turmas={turmas}
+            nomeProfessor={usuario?.nome ?? 'Professor(a)'}
+            segmento={segmento ?? 'presencial'}
+          />
+        </main>
+        <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
+      </div>
+    );
+  }
+
   if (viewAtual === "aulas-vivo") {
     return (
       <div className="min-h-screen bg-background">
@@ -593,14 +601,18 @@ export function DashboardProfessor() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {/* Banner */}
-        <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-8 md:p-10 overflow-hidden">
-          <div className="relative z-10">
-            <h1 className="text-3xl font-bold mb-2">Olá, {usuario?.nome?.split(" ")[0]}! 👋</h1>
-            <p className="text-blue-100 text-lg max-w-xl">Bem-vindo ao seu painel de controle.</p>
+        {/* Header contextual */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-border">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-semibold text-foreground">
+              Olá, {usuario?.nome?.split(" ")[0]}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5 capitalize">
+              {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {' · '}Painel do Professor
+            </p>
           </div>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
-        </section>
+        </div>
 
         {/* ── Resumo do Dia ── */}
         {!carregando && (
@@ -701,13 +713,14 @@ export function DashboardProfessor() {
             <div className="w-1 h-6 bg-blue-600 rounded-full" />
             Acesso Rápido
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {[
               { view: "boletim" as ViewType, icon: <BarChart3 className="w-5 h-5 text-green-600 dark:text-green-400" />, label: "Lançar Notas", iconBg: "bg-green-100 dark:bg-green-900/30" },
               { view: "atividades" as ViewType, icon: <Inbox className="w-5 h-5 text-orange-600 dark:text-orange-400" />, label: "Atividades Recebidas", iconBg: "bg-orange-100 dark:bg-orange-900/30" },
               { view: "horarios" as ViewType, icon: <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />, label: "Meu Horário", iconBg: "bg-blue-100 dark:bg-blue-900/30" },
               { view: "agenda" as ViewType, icon: <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />, label: "Agenda", iconBg: "bg-purple-100 dark:bg-purple-900/30" },
               { view: "comunicados" as ViewType, icon: <Megaphone className="w-5 h-5 text-rose-600 dark:text-rose-400" />, label: "Comunicados", iconBg: "bg-rose-100 dark:bg-rose-900/30" },
+              { view: "plano-aula" as ViewType, icon: <BookOpen className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />, label: "Plano de Aula IA", iconBg: "bg-indigo-100 dark:bg-indigo-900/30" },
             ].map((item) => (
               <Button
                 key={item.view}
@@ -863,6 +876,8 @@ export function DashboardProfessor() {
       </main>
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
+      <ChatFlutuante nomeAluno={usuario?.nome?.split(' ')[0]} />
+      <AgenteInclusao usuario={usuario} />
     </div>
   );
 }

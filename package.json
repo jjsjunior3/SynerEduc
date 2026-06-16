@@ -59,6 +59,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@vitejs/plugin-react-swc": "^3.10.2",
     "@vitest/coverage-v8": "^4.1.7",
+    "cross-env": "^10.1.0",
     "dotenv": "^16.6.1",
     "pdf-parse": "^2.4.5",
     "tsx": "^4.22.4",
@@ -71,8 +72,12 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "indexar": "tsx scripts/indexar-todos-pdfs.ts",
-    "indexar:erros": "tsx scripts/indexar-todos-pdfs.ts --reindexar-erros",
-    "indexar:tudo": "tsx scripts/indexar-todos-pdfs.ts --tudo"
+    "build:worker": "esbuild scripts/indexar-pdf-worker.ts --bundle --platform=node --outfile=scripts/indexar-pdf-worker.mjs --format=esm --external:@supabase/supabase-js --external:dotenv",
+    "indexar": "npm run build:worker && tsx scripts/indexar-todos-pdfs.ts",
+    "indexar:erros": "npm run build:worker && tsx scripts/indexar-todos-pdfs.ts --reindexar-erros",
+    "indexar:tudo": "npm run build:worker && tsx scripts/indexar-todos-pdfs.ts --tudo",
+    "indexar:imagens": "tsx scripts/indexar-imagens-locais.ts",
+    "indexar:imagens:dry": "tsx scripts/indexar-imagens-locais.ts --dry-run",
+    "indexar:imagens:reset": "tsx scripts/indexar-imagens-locais.ts --reset"
   }
 }

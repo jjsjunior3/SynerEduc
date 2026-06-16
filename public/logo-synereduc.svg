@@ -1,0 +1,46 @@
+<svg width="200" height="54" viewBox="0 0 200 54" fill="none" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>SynerEduc</title>
+  <defs>
+    <linearGradient id="gVC" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Hexágono outline -->
+  <polygon points="27,5 46,16 46,38 27,49 8,38 8,16"
+    fill="none" stroke="url(#gVC)" stroke-width="1.5" stroke-linejoin="round"/>
+
+  <!-- Nós nos vértices -->
+  <circle cx="27" cy="5"  r="2.5" fill="#8b5cf6"/>
+  <circle cx="46" cy="16" r="2.5" fill="#8b5cf6"/>
+  <circle cx="46" cy="38" r="2.5" fill="#7c3aed"/>
+  <circle cx="27" cy="49" r="2.5" fill="#06b6d4"/>
+  <circle cx="8"  cy="38" r="2.5" fill="#06b6d4"/>
+  <circle cx="8"  cy="16" r="2.5" fill="#7c3aed"/>
+
+  <!-- Linhas internas cruzadas -->
+  <line x1="46" y1="16" x2="8"  y2="38" stroke="#8b5cf620" stroke-width="1"/>
+  <line x1="8"  y1="16" x2="46" y2="38" stroke="#06b6d420" stroke-width="1"/>
+  <line x1="27" y1="5"  x2="27" y2="49" stroke="#7c3aed18" stroke-width="1"/>
+
+  <!-- S central -->
+  <text x="27" y="34" text-anchor="middle"
+    fill="url(#gVC)"
+    font-family="system-ui,-apple-system,sans-serif"
+    font-size="22" font-weight="700">S</text>
+
+  <!-- Wordmark: Syner + Educ sem espaço -->
+  <text x="58" y="32"
+    font-family="system-ui,-apple-system,sans-serif"
+    font-size="24" letter-spacing="-0.3">
+    <tspan fill="#f8fafc" font-weight="300">Syner</tspan><tspan fill="url(#gVC)" font-weight="700">Educ</tspan>
+  </text>
+
+  <!-- Subtítulo com textLength igual à largura do wordmark (~112px) -->
+  <text x="58" y="46"
+    fill="#475569"
+    font-family="system-ui,-apple-system,sans-serif"
+    font-size="7.5" font-weight="500"
+    textLength="112" lengthAdjust="spacing">GESTÃO ESCOLAR COM IA</text>
+</svg>

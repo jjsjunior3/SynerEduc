@@ -55,7 +55,7 @@ async function main() {
   const chunk2pags = await novoDoc.save()
 
   // 4. OCR com Anthropic Haiku
-  console.log('\n🔍 Testando OCR (2 primeiras páginas) com claude-3-5-haiku...')
+  console.log('\n🔍 Testando OCR (2 primeiras páginas) com claude-sonnet-4-6...')
   const base64 = Buffer.from(chunk2pags).toString('base64')
 
   const ocrResp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -66,7 +66,7 @@ async function main() {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       messages: [{
         role: 'user',

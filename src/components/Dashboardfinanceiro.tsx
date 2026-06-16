@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { PerfilUsuario } from './PerfilUsuario';
+import { ChatGabriela }  from './ai/ChatGabriela';
 import {
   LayoutDashboard, DollarSign, Settings,
   FileText, TrendingDown, TrendingUp,
@@ -596,6 +597,7 @@ export default function DashboardFinanceiro() {
       </div>
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
+      <ChatGabriela contexto="financeiro" />
     </div>
   );
 }

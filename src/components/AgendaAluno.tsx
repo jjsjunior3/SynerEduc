@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import {
   Loader2, AlertCircle, Calendar as CalendarIcon,
-  Clock, BookOpen, Home, Info, ListFilter,
+  Clock, BookOpen, Home, Info, ListFilter, MessageSquare,
 } from 'lucide-react';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -66,6 +66,7 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
   const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [mensagensPrivadas, setMensagensPrivadas] = useState<Record<string, string[]>>({});
 
   const hojeISO = new Date().toISOString().slice(0, 10);
   const [dataFiltro, setDataFiltro] = useState<string>(hojeISO);
@@ -122,7 +123,26 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
         .order("criado_em", { ascending: true });
 
       if (error) throw error;
-      setEventosAgenda((data || []) as EventoAgenda[]);
+      const eventos = (data || []) as EventoAgenda[];
+      setEventosAgenda(eventos);
+
+      // Carrega mensagens privadas para este aluno
+      if (eventos.length > 0 && usuario?.id) {
+        const agendaIds = eventos.map(e => e.id);
+        const { data: mps } = await supabase
+          .from('agenda_mensagens_privadas')
+          .select('agenda_id, mensagem')
+          .in('agenda_id', agendaIds)
+          .eq('aluno_id', usuario.id);
+        const mpMap: Record<string, string[]> = {};
+        (mps || []).forEach((mp: any) => {
+          if (!mpMap[mp.agenda_id]) mpMap[mp.agenda_id] = [];
+          mpMap[mp.agenda_id].push(mp.mensagem);
+        });
+        setMensagensPrivadas(mpMap);
+      } else {
+        setMensagensPrivadas({});
+      }
     } catch (e: any) {
       setErro(e.message || "Erro ao carregar eventos da agenda.");
       setEventosAgenda([]);
@@ -287,6 +307,17 @@ export function AgendaAluno({ serie, turma, disciplinasDoAluno }: AgendaAlunoPro
                             <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">{evento.observacao}</p>
                           </div>
                         )}
+
+                        {/* Mensagens privadas para este aluno */}
+                        {(mensagensPrivadas[evento.id] || []).map((msg, i) => (
+                          <div key={i} className="rounded-lg p-4 border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20">
+                            <div className="flex items-center gap-2 mb-2">
+                              <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                              <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Recado do professor para você</span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">{msg}</p>
+                          </div>
+                        ))}
                       </CardContent>
                     </Card>
                   );

@@ -108,7 +108,7 @@ function calcularPresencial(dados: DadosNota): ResultadoNota {
     };
   }
 
-  // REC substitui a média diretamente
+  // REC substitui a média do bimestre diretamente
   const mediaFinal = recuperacao!;
 
   return {

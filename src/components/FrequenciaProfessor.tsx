@@ -1,5 +1,6 @@
 // src/components/FrequenciaProfessor.tsx
 import { useState, useEffect, useCallback } from 'react';
+import { AssistenteVoz } from './ai/AssistenteVoz';
 import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -385,6 +386,24 @@ export function FrequenciaProfessor({ disciplina, serie }: FrequenciaProfessorPr
                         </CardTitle>
 
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* Assistente de voz — só aparece quando a aula está em edição */}
+                          {!modoExibir && (
+                            <AssistenteVoz
+                              contexto="frequencia"
+                              alunos={listaAlunos.map(a => ({ id: a.aluno_id, nome: a.nome }))}
+                              labelBotao="Marcar faltas por voz"
+                              onFrequencia={(ausentes, _numeroAula) => {
+                                // Aplica 'ausente' para os alunos identificados nesta aula
+                                ausentes.forEach(aluno => {
+                                  atualizarAula(aluno.id, num, 'status', 'ausente')
+                                })
+                                toast.success(
+                                  `${ausentes.length} falta(s) marcada(s) — revise e salve`
+                                )
+                              }}
+                            />
+                          )}
+
                           {/* Contadores */}
                           {[
                             { v: c.presentes, label: 'presente(s)',  cor: 'text-green-600 dark:text-green-400' },

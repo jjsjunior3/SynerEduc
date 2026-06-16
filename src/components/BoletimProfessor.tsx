@@ -242,8 +242,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
         av2:                   dadosAtuais.av2,
         av3:                   isPresencial ? dadosAtuais.av3 : null,
         recuperacao:           dadosAtuais.rec,
-        media:                 novaMediaFinal, // salva mediaFinal no banco
-        segmento,
+        media:                 novaMediaFinal,
         professor_responsavel: usuario.id,
         atualizado_em:         new Date().toISOString(),
       };

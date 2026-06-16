@@ -53,6 +53,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
+        // Perfil não encontrado ou erro de rede — faz logout para limpar estado inválido
+        console.warn('[Auth] Erro ao buscar perfil, forçando logout:', error.message);
+        await supabase.auth.signOut();
+        localStorage.removeItem('sb-' + import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token');
+        setUsuario(null);
+        setSession(null);
         setLoading(false);
         return;
       }
@@ -74,7 +80,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
     } catch {
-      // silencioso — setLoading(false) já é chamado no finally
+      // Erro inesperado (ex: offline) — limpa localStorage para evitar loop em próximo acesso
+      try {
+        await supabase.auth.signOut();
+      } catch { /* ignora */ }
+      setUsuario(null);
+      setSession(null);
     } finally {
       setLoading(false);
     }

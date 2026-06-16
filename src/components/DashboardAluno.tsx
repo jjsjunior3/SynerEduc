@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../supabase/supabaseClient";
 import { useAuth } from "../contexts/AuthContext";
+import { ChatFlutuante } from "./ai/ChatFlutuante";
 
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -27,7 +28,8 @@ import {
 } from "lucide-react";
 
 import { PerfilUsuario } from "./PerfilUsuario";
-import { Notificacoes } from "./Notificacoes";
+import { Notificacoes, useNotificacoesCount } from "./Notificacoes";
+import { NotificacaoBalloon } from "./NotificacaoBalloon";
 import { AgendaAluno } from "./AgendaAluno";
 import HorarioEscolar from "./HorarioEscolar";
 import Boletim from "./Boletim";
@@ -74,7 +76,9 @@ interface ComunicadoData {
 
 function formatarData(dataISO: string) {
   try {
-    return new Date(dataISO + 'T12:00:00').toLocaleDateString("pt-BR");
+    const d = new Date(dataISO.includes('T') ? dataISO : dataISO + 'T12:00:00');
+    if (isNaN(d.getTime())) return dataISO;
+    return d.toLocaleDateString("pt-BR");
   } catch {
     return dataISO;
   }
@@ -240,6 +244,7 @@ export default function DashboardAluno() {
   const [turma, setTurma] = useState<TurmaData | null>(null);
   const [comunicados, setComunicados] = useState<ComunicadoData[]>([]);
   const [mediaGeral, setMediaGeral] = useState<number | null>(null);
+  const [mediaTurma, setMediaTurma] = useState<number | null>(null);
   const [frequenciaPercent, setFrequenciaPercent] = useState<number | null>(null);
   const [faltas30Dias, setFaltas30Dias] = useState<number>(0);
 
@@ -250,7 +255,7 @@ export default function DashboardAluno() {
   const [erroComunicados, setErroComunicados] = useState<string | null>(null);
 
   const [disciplinaSelecionada, setDisciplinaSelecionada] = useState<DisciplinaData | null>(null);
-  const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
+  const { count: notificacoesNaoLidas } = useNotificacoesCount();
 
   const handleVoltar = useCallback(() => setViewAtual("dashboard"), []);
   const { segmento } = useSegmento();
@@ -387,6 +392,15 @@ export default function DashboardAluno() {
           setMediaGeral(Math.round((soma / medias.length) * 10) / 10);
         }
       }
+
+      // Média da turma via função SECURITY DEFINER
+      if (usuario?.serie && usuario?.segmento) {
+        const { data: mtData } = await supabase
+          .rpc('get_media_turma', { p_serie: usuario.serie, p_segmento: usuario.segmento });
+        if (mtData !== null && mtData !== undefined) {
+          setMediaTurma(Number(mtData));
+        }
+      }
     } catch {
       // Falha silenciosa
     }
@@ -422,7 +436,6 @@ export default function DashboardAluno() {
   useEffect(() => { if (usuario?.id) carregarTurma(); },           [usuario?.id, carregarTurma]);
   useEffect(() => { if (usuario) carregarComunicados(); },         [usuario, carregarComunicados]);
   useEffect(() => { if (usuario?.id) carregarIndicadoresAluno(); },[usuario?.id, carregarIndicadoresAluno]);
-  useEffect(() => { setNotificacoesNaoLidas(0); },                 []);
 
   // ---- Helpers ----
   const getCorDisciplina = (cor: string) => {
@@ -463,6 +476,7 @@ export default function DashboardAluno() {
           <Boletim turma={turma} usuario={usuario} />
         </main>
         {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -481,6 +495,7 @@ export default function DashboardAluno() {
           />
         </main>
         {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -495,6 +510,7 @@ export default function DashboardAluno() {
           <HorarioEscolar turmaSelecionada={turma?.serieNome || ""} />
         </main>
         {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -513,6 +529,7 @@ export default function DashboardAluno() {
           />
         </main>
         {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -527,6 +544,7 @@ export default function DashboardAluno() {
           <ComunicadosPage onVoltar={handleVoltar} />
         </main>
         {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
       </div>
     );
@@ -540,31 +558,22 @@ export default function DashboardAluno() {
       <HeaderPadrao {...headerProps} />
 
       {mostrarNotificacoes && <Notificacoes onClose={() => setMostrarNotificacoes(false)} />}
+        <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        {/* ── Banner ── */}
-        <section className="relative rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg p-8 md:p-10 overflow-hidden">
-          <div className="relative z-10">
-            <h1 className="text-3xl font-bold mb-2">
-              Olá, {usuario?.nome?.split(" ").filter(Boolean).slice(0, 2).join(" ")}! 👋
+        {/* ── Header contextual ── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-border">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-semibold text-foreground">
+              Olá, {usuario?.nome?.split(" ").filter(Boolean)[0]}
             </h1>
-            <p className="text-blue-100 text-lg max-w-xl">
-              Aqui você acompanha suas aulas, atividades e notas.
+            <p className="text-sm text-muted-foreground mt-0.5 capitalize">
+              {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {turma && <> · <span className="font-medium">{turma.serieNome} — Turma {turma.nome}</span></>}
             </p>
-            {turma && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Badge variant="secondary" className="bg-white/10 text-white border border-white/20">
-                  {turma.serieNome}
-                </Badge>
-                <Badge variant="secondary" className="bg-white/10 text-white border border-white/20">
-                  Turma {turma.nome}
-                </Badge>
-              </div>
-            )}
           </div>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
-        </section>
+        </div>
 
         {/* ── Cards de resumo ── */}
         {!loadingTurma && turma && (() => {
@@ -578,11 +587,16 @@ export default function DashboardAluno() {
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: mediaColors.iconBg }}>
                   <BarChart3 className={`w-5 h-5 ${mediaColors.text}`} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground hidden sm:block">Média Geral</p>
                   <p className={`text-2xl font-bold ${mediaColors.text}`}>
                     {mediaGeral !== null ? mediaGeral.toFixed(1) : '—'}
                   </p>
+                  {mediaTurma !== null && (
+                    <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
+                      Turma: <span className="font-semibold text-foreground">{mediaTurma.toFixed(1)}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -794,6 +808,12 @@ export default function DashboardAluno() {
       </main>
 
       <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
+
+      {/* ── Professora Sofia — Chat flutuante ── */}
+      <ChatFlutuante
+        serie={turma?.serie}
+        nomeAluno={usuario?.nome?.split(' ')[0]}
+      />
     </div>
   );
 }
