@@ -351,6 +351,55 @@ ADIADO
 
 ---
 
+## Auditoria de Segurança — 2026-06-17
+
+> Revisão completa realizada na sessão 2026-06-17. Vetores investigados e status de cada um.
+
+### Vulnerabilidades corrigidas nesta sessão
+
+| Vetor | Componente | Correção | Commit |
+|---|---|---|---|
+| Auth ausente | `agente-gabriela` | JWT obrigatório + contexto derivado do perfil real | `02fcba5a` |
+| API Injection | `agente-gabriela` | `sanitizeMes()` + `sanitizeStatus()` com allowlist | `42f7e592` |
+| Prompt Injection | `agente-gabriela`, `claude-proxy` | Bloco `<segurança>` no system prompt de todos os agentes | `42f7e592` |
+| Dependências críticas | `jspdf`, `vite`, `ws`, `lodash`... | `npm audit fix --force` → 0 vulnerabilidades | `433072ab` |
+| Sem limite de caracteres | Todos os `<Input>` e `<Textarea>` | Padrão global: 500 chars (input), 5000 (textarea) | `433072ab` |
+| Sem limite server-side | `claude-proxy`, `agente-gabriela` | Rejeita payload > 50k chars / prompt > 8k chars (HTTP 413) | `433072ab` |
+| Auth ausente | `extrair-ficha` | JWT obrigatório + allowlist de perfis (secretaria/gestor) | `(esta sessão)` |
+| MIME não validado server-side | `extrair-ficha` | Allowlist de tipos + limite 10MB no servidor | `(esta sessão)` |
+| MIME não validado client-side | `AtividadesAluno` | Validação de `file.type` + tamanho antes do upload | `(esta sessão)` |
+| Cabeçalhos HTTP ausentes | `vite.config.ts` | `X-Frame-Options`, `X-Content-Type-Options`, CSP, `Referrer-Policy` | `(esta sessão)` |
+
+### Vetores investigados — sem vulnerabilidade
+
+| Vetor | Resultado |
+|---|---|
+| SQL Injection | ✅ N/A — PostgREST trata params como valores, não SQL |
+| XSS | ✅ `dangerouslySetInnerHTML` apenas em chart.tsx com dados internos |
+| CSRF | ✅ N/A — autenticação por JWT no header, não por cookie |
+| BOLA / IDOR | ✅ RLS do Supabase valida `auth.uid()` no servidor |
+| Path Traversal | ✅ Sem acesso a filesystem; Storage usa URLs assinadas |
+| SSRF | ✅ URL do PDF vem do banco, não do usuário diretamente |
+| Desserialização insegura | ✅ Apenas `JSON.parse` de respostas de APIs confiáveis |
+| Mass Assignment | ✅ Campos sempre extraídos explicitamente, sem `...body` |
+| XXE | ✅ Sem parser XML em nenhum ponto do sistema |
+| BFLA | ✅ SPA com roteamento por estado React, não por URL |
+| Session Fixation | ✅ JWT renovado a cada login pelo Supabase Auth |
+| Criptografia fraca | ✅ Senhas gerenciadas pelo Supabase Auth (bcrypt) |
+| Enumeração de usuários | ✅ Mensagem genérica: "Usuário ou senha incorretos" |
+| CPF/RG em queries indevidas | ✅ Apenas `EmissaoContratos`, `EmissaoDocumentos`, `FormularioMatricula` (perfis autorizados) |
+| console.log com dados sensíveis | ✅ Nenhum log expõe senha, CPF, token ou RG |
+
+### Pendências — requerem ação na infraestrutura (Supabase Dashboard)
+
+| Status | Item | Detalhe |
+|:---:|---|---|
+| 🟡 | **Políticas dos buckets de Storage** | `entregas_atividades`, `atividades`, `comunicados`, `pdfs_conteudista` usam `getPublicUrl` — verificar se os buckets estão como "Private" no painel Supabase (requer autenticação para acesso) |
+| 🟡 | **Rate limiting no login** | Supabase Auth tem proteção básica; confirmar no painel: Auth → Rate Limits — recomendado máximo 5 tentativas/minuto |
+| 🟡 | **CSP em produção** | Os headers do `vite.config.ts` valem apenas para dev/preview. Em produção (hospedagem), configurar os mesmos headers no servidor/CDN (Vercel, Netlify, Nginx) |
+
+---
+
 ## Conformidade Legal — LGPD
 
 > Implementação técnica concluída em 2026-06-17. Itens abaixo são **obrigações jurídicas**, não melhorias opcionais.

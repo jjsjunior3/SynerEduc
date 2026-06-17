@@ -60,5 +60,29 @@ export default defineConfig({
     warmup: {
       clientFiles: ['./src/main.tsx', './src/App.tsx'],
     },
+    headers: {
+      'X-Frame-Options':           'DENY',
+      'X-Content-Type-Options':    'nosniff',
+      'Referrer-Policy':           'strict-origin-when-cross-origin',
+      'Permissions-Policy':        'camera=(), microphone=(), geolocation=()',
+      'Content-Security-Policy':   [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",   // unsafe-inline necessário para Vite HMR em dev
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https://*.supabase.co",
+        "connect-src 'self' https://*.supabase.co https://api.anthropic.com wss://*.supabase.co",
+        "font-src 'self'",
+        "frame-ancestors 'none'",
+      ].join('; '),
+    },
+  },
+  // Headers de segurança também aplicados no build (para preview/produção via Vite preview)
+  preview: {
+    headers: {
+      'X-Frame-Options':        'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy':        'strict-origin-when-cross-origin',
+      'Permissions-Policy':     'camera=(), microphone=(), geolocation=()',
+    },
   },
 });

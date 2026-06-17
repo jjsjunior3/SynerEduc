@@ -11,6 +11,11 @@ const CORS = {
 }
 
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')              ?? ''
+const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_KEY') ?? ''
+
+const TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+const MAX_BASE64_CHARS = 15_000_000 // ~11MB de arquivo original
 
 const PROMPT_FICHA = `Você é um assistente especializado em leitura de fichas de matrícula do Colégio Conexão Maranhense.
 Analise o documento fornecido e extraia os dados conforme a estrutura da ficha padrão da escola.
@@ -59,6 +64,34 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
+    // ── Validação de JWT ──────────────────────────────────────────────────────
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '').trim() ?? ''
+    if (!token) {
+      return new Response(
+        JSON.stringify({ erro: 'Não autorizado' }),
+        { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+    const userResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_KEY },
+    })
+    if (!userResp.ok) {
+      return new Response(
+        JSON.stringify({ erro: 'Não autorizado' }),
+        { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+    const userAuth = await userResp.json()
+    const tipo = userAuth.user_metadata?.tipo ?? ''
+    const perfisPermitidos = ['secretaria', 'gestor_geral', 'administrador', 'admin_presencial']
+    if (!perfisPermitidos.includes(tipo)) {
+      return new Response(
+        JSON.stringify({ erro: 'Perfil sem permissão para importar fichas' }),
+        { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const { imagem, tipo_mime } = await req.json()
     // imagem: string base64 do arquivo
     // tipo_mime: 'image/jpeg', 'image/png', 'application/pdf'
@@ -67,6 +100,22 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ erro: 'imagem base64 é obrigatória' }),
         { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Valida tipo MIME contra allowlist
+    if (!TIPOS_PERMITIDOS.includes(tipo_mime)) {
+      return new Response(
+        JSON.stringify({ erro: `Tipo de arquivo não permitido: ${tipo_mime}` }),
+        { status: 415, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Valida tamanho do base64 (~11MB de arquivo original)
+    if (typeof imagem === 'string' && imagem.length > MAX_BASE64_CHARS) {
+      return new Response(
+        JSON.stringify({ erro: 'Arquivo muito grande. Limite: 10MB.' }),
+        { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } }
       )
     }
 

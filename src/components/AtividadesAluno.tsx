@@ -692,9 +692,24 @@ export function AtividadesAluno({
                 id="arquivoResposta"
                 type="file"
                 accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.jpeg,.png"
-                onChange={(e) =>
-                  setArquivoResposta(e.target.files?.[0] || null)
-                }
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null
+                  if (!f) { setArquivoResposta(null); return }
+                  const TIPOS = ['application/pdf','application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'text/plain','application/zip','image/jpeg','image/png']
+                  if (!TIPOS.includes(f.type)) {
+                    toast.error('Tipo de arquivo não permitido.')
+                    e.target.value = ''
+                    return
+                  }
+                  if (f.size > 10 * 1024 * 1024) {
+                    toast.error('Arquivo muito grande. Máximo 10MB.')
+                    e.target.value = ''
+                    return
+                  }
+                  setArquivoResposta(f)
+                }}
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">
