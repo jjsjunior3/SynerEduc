@@ -184,19 +184,29 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       setDisciplinasPorSerie(discPorSerieFinal);
 
       const ids = alunosFiltrados.map((a: any) => a.id);
-      let queryNotas = supabase.from('notas').select(`
-        id, user_id, disciplina_id, bimestre, av1, av2, av3, recuperacao,
-        media, media_final, frequencia, faltas, status_final,
-        disciplinas:disciplinas!disciplina_id(id, nome)
-      `).in('user_id', ids);
+
+      // Busca notas sem join (igual ao BoletimProfessor) para evitar problemas de FK/RLS
+      let queryNotas = supabase.from('notas').select(
+        'id, user_id, disciplina_id, bimestre, av1, av2, av3, recuperacao, media, media_final, frequencia, faltas, status_final'
+      ).in('user_id', ids);
       if (filtroBimestre !== 'todos') queryNotas = queryNotas.eq('bimestre', parseInt(filtroBimestre));
       const { data: notasData, error: notasError } = await queryNotas;
       if (notasError) throw notasError;
 
+      // Busca nomes das disciplinas separadamente
+      const disciplinaIds = Array.from(new Set((notasData || []).map((n: any) => n.disciplina_id).filter(Boolean)));
+      const discNomeMap: Record<string, string> = {};
+      if (disciplinaIds.length > 0) {
+        const { data: discData } = await supabase.from('disciplinas').select('id, nome').in('id', disciplinaIds);
+        (discData || []).forEach((d: any) => { discNomeMap[d.id] = d.nome; });
+      }
+
       setNotas((notasData || []).map((n: any) => ({
         ...n,
         av3: n.av3 ?? null,
-        disciplina: n.disciplinas ? { id: n.disciplinas.id, nome: n.disciplinas.nome } : null,
+        disciplina: n.disciplina_id && discNomeMap[n.disciplina_id]
+          ? { id: n.disciplina_id, nome: discNomeMap[n.disciplina_id] }
+          : null,
       })));
     } catch (err: any) {
       setErro(err.message || 'Erro ao carregar boletins');
@@ -212,10 +222,26 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     for (const aluno of alunos) {
       if (filtroBimestre === 'todos') {
         const key = `${aluno.id}-0`;
-        if (!map.has(key)) map.set(key, {
-          id: key, alunoId: aluno.id, nomeAluno: aluno.nome, email: aluno.email,
-          serie: aluno.serie, bimestreNumero: 0, bimestreLabel: 'Todos os bimestres', notas: [],
-        });
+        if (!map.has(key)) {
+          // Agrega notas de todos os bimestres num único boletim
+          const notasAluno = notas.filter(n => n.user_id === aluno.id);
+          const discMap = new Map<string, NotaDisciplinaView>();
+          for (const n of notasAluno) {
+            if (!n.disciplina) continue;
+            const existing = discMap.get(n.disciplina_id);
+            if (!existing) {
+              discMap.set(n.disciplina_id, {
+                disciplinaId: n.disciplina.id, disciplinaNome: n.disciplina.nome,
+                av1: n.av1, av2: n.av2, av3: n.av3, rec: n.recuperacao,
+              });
+            }
+          }
+          map.set(key, {
+            id: key, alunoId: aluno.id, nomeAluno: aluno.nome, email: aluno.email,
+            serie: aluno.serie, bimestreNumero: 0, bimestreLabel: 'Todos os bimestres',
+            notas: Array.from(discMap.values()),
+          });
+        }
         continue;
       }
 
@@ -227,15 +253,20 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       };
       map.set(key, boletim);
 
-      const notasAlunoMap = new Map<string, Nota>();
-      notas
-        .filter(n => n.user_id === aluno.id && n.bimestre === bimestreNumero)
-        .forEach(n => { if (n.disciplina_id) notasAlunoMap.set(n.disciplina_id, n); });
+      const notasAluno = notas.filter(n => n.user_id === aluno.id && n.bimestre === bimestreNumero);
+      const notasPorId   = new Map<string, Nota>();
+      const notasPorNome = new Map<string, Nota>();
+      notasAluno.forEach(n => {
+        if (n.disciplina_id) notasPorId.set(n.disciplina_id, n);
+        if (n.disciplina?.nome) notasPorNome.set(n.disciplina.nome.toLowerCase().trim(), n);
+      });
 
       const disciplinasDaSerie = disciplinasPorSerie[aluno.serie] || [];
       if (disciplinasDaSerie.length > 0) {
         for (const disciplina of disciplinasDaSerie) {
-          const n = notasAlunoMap.get(disciplina.id);
+          // tenta por ID primeiro, cai no nome como fallback
+          const n = notasPorId.get(disciplina.id)
+                 ?? notasPorNome.get(disciplina.nome.toLowerCase().trim());
           boletim.notas.push({
             disciplinaId: disciplina.id, disciplinaNome: disciplina.nome,
             av1: n?.av1 ?? null, av2: n?.av2 ?? null,
@@ -243,7 +274,7 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
           });
         }
       } else {
-        for (const n of notasAlunoMap.values()) {
+        for (const n of notasAluno) {
           if (n.disciplina) boletim.notas.push({
             disciplinaId: n.disciplina.id, disciplinaNome: n.disciplina.nome,
             av1: n.av1, av2: n.av2, av3: n.av3, rec: n.recuperacao,
@@ -554,7 +585,7 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
                                       <td className="py-3 px-4 text-right">
                                         <Button size="sm" variant="ghost"
                                           onClick={e => { e.stopPropagation(); abrirEdicaoNota(boletim, nota); }}
-                                          className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 opacity-0 group-hover:opacity-100 transition-opacity gap-1"
+                                          className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 gap-1"
                                         >
                                           <Edit className="w-3.5 h-3.5" /> Editar
                                         </Button>
