@@ -833,6 +833,7 @@ function HistoricoPreview({
             value={dados.observacao}
             onChange={e => updStr('observacao', e.target.value)}
             rows={2}
+            maxLength={1000}
             placeholder="Observações da escola anterior (opcional)..."
             className="w-full px-3 py-2 rounded border border-border text-sm bg-background resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
           />

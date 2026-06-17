@@ -180,6 +180,7 @@ export function ComentariosPedagogicos({
           <textarea
             value={novoComentario}
             onChange={(e) => setNovoComentario(e.target.value)}
+            maxLength={2000}
             placeholder="Digite sua dúvida sobre o conteúdo do material..."
             className={`w-full h-24 p-3 rounded-lg border resize-none ${
               darkMode 

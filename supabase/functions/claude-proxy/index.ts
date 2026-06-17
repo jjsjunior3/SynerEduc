@@ -149,6 +149,20 @@ serve(async (req: Request) => {
   const modelo     = payload.modelo     ?? 'claude-sonnet-4-6'
   const max_tokens = payload.max_tokens ?? 4000
 
+  // ── Limite de tamanho do payload de texto ──────────────────────────────────
+  // Impede que um usuário envie textos gigantescos para consumir tokens ou lotar o banco
+  const MAX_PROMPT_CHARS  = 8_000   // ~2000 tokens — suficiente para qualquer conversa
+  const MAX_PAYLOAD_CHARS = 50_000  // limite absoluto do body JSON (base64 de PDF excluído)
+  const bodyStr = JSON.stringify(payload)
+  const temBase64 = bodyStr.includes('"conteudo_base64"')
+  if (!temBase64 && bodyStr.length > MAX_PAYLOAD_CHARS) {
+    return json({ erro: 'Payload excede o tamanho máximo permitido.' }, 413)
+  }
+  const promptTexto = (payload as any).prompt ?? ''
+  if (typeof promptTexto === 'string' && promptTexto.length > MAX_PROMPT_CHARS) {
+    return json({ erro: 'Mensagem muito longa. Limite: 8.000 caracteres.' }, 413)
+  }
+
   // ── 3. Modo Histórico (compatibilidade com Módulo 1) ────────────────────────
   if (payload.modo === 'historico' || !('modo' in payload)) {
     // Retrocompatibilidade: Módulo 1 não envia `modo`

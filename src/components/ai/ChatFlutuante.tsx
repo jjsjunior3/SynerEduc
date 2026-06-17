@@ -329,6 +329,7 @@ export function ChatFlutuante({ disciplina }: Props) {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                maxLength={2000}
                 placeholder={placeholderPorTipo(tipo)}
                 className="flex-1 min-h-[42px] max-h-[120px] resize-none text-sm rounded-xl border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-500 px-3 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 overflow-y-auto"
                 rows={1}

@@ -530,6 +530,18 @@ serve(async (req) => {
       )
     }
 
+    // Limite de tamanho — impede payload gigante consumindo tokens ou lotando banco
+    const ultimaMsg = mensagens[mensagens.length - 1]
+    const textoUltima = typeof ultimaMsg?.content === 'string'
+      ? ultimaMsg.content
+      : JSON.stringify(ultimaMsg?.content ?? '')
+    if (textoUltima.length > 4000) {
+      return new Response(
+        JSON.stringify({ erro: 'Mensagem muito longa. Limite: 4.000 caracteres.' }),
+        { status: 413, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const tools    = getTools(contexto)
     const sistema  = buildSistema(contexto)
     const t0       = Date.now()

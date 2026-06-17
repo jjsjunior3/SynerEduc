@@ -702,6 +702,7 @@ export function AtividadesRecebidas({ onVoltar }: AtividadesRecebidasProps) {
                 <textarea
                   id="feedback-input"
                   rows={5}
+                  maxLength={3000}
                   placeholder="Escreva aqui seu comentário sobre a atividade — pontos positivos, o que pode melhorar, orientações..."
                   value={modalCorrecao.feedback}
                   onChange={(e) => setModalCorrecao((p) => ({ ...p, feedback: e.target.value }))}

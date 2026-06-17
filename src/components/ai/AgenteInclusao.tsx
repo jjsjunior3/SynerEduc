@@ -920,6 +920,7 @@ export function AgenteInclusao({ usuario }: Props) {
                   value={form.observacoes}
                   onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
                   placeholder="Ex: Lucas gosta muito de dinossauros e tem dificuldade em ficar parado por mais de 10 minutos..."
+                  maxLength={1000}
                   rows={4}
                   className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
                 />
