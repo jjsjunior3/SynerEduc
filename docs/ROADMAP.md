@@ -1,5 +1,5 @@
 # ROADMAP — Portal Conexão AVA · SynerEduc
-> Backlog priorizado por dependência estrutural · Atualizado em: 2026-06-13  
+> Backlog priorizado por dependência estrutural · Atualizado em: 2026-06-17  
 > Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · 🔄 Em andamento · ⏸ Adiado · 🚫 Descartado
 
 ---
@@ -43,6 +43,21 @@ DEPENDÊNCIA ESTRUTURAL PARA IA
               │   │  ✅ F8.3 FrequenciaRealtime — Realtime Supabase         │
               │   │  ✅ F8.4 WhatsApp MVP (wa.me) — notif. responsável      │
               │   │  ✅ agente_ia_log — observabilidade todos os agentes    │
+              │   │                                                         │
+              │   │  ENTREGUES NA SESSÃO 2026-06-17                        │
+              │   │  ✅ Sofia: saudação corrigida por tipo (ref por ID)     │
+              │   │  ✅ Sofia: histórico por sessão (sessionStorage/logout) │
+              │   │  ✅ Sofia v9: agenda no system prompt, sem repetição    │
+              │   │  ✅ claude-proxy v7: JWT via /auth/v1/user (fix 401)    │
+              │   │  ✅ Gabriela: movida para canto inferior esquerdo       │
+              │   │  ✅ Arquivo Morto: extração ficha+boletim com IA        │
+              │   │       extrair-ficha Edge Function, soft-delete, RG      │
+              │   │       botões upload violeta, painel boletins salvos     │
+              │   │  ✅ Importar Fichas IA: fix busca (.tipo) + rg_resp     │
+              │   │       coluna rg_responsavel + UNIQUE aluno_id no banco  │
+              │   │  ✅ BoletinsGerais: notas presencial visíveis (RLS +    │
+              │   │       query sem join, fallback por nome de disciplina)  │
+              │   │  ✅ Botão Editar nota sempre visível (fix opacity-0)    │
               │   └─────────────────────────────────────────────────────────┘
               │
  #3  F3   → Portal do Responsável  ← novo perfil, RLS isolado
@@ -143,7 +158,7 @@ ADIADO
 **Template base:** Colégio Ariane (modelo recebido em 2026-06-12) — adotado como padrão universal do sistema. Logo do cabeçalho troca dinamicamente pelo `escola_id`.
 
 **Dependências:** F5.1 (Pinecone indexado), F1.1 (multi-tenant para `escola_id` — pode ser antecipado com `segmento` como chave provisória)
-**Status:** 🔄 **Implementando agora** — esqueleto para demo Colégio Ariane em 2026-06-17
+**Status:** ⏳ **Aguardando** — demo Colégio Ariane realizada em 2026-06-17. Implementação após F1.1 multi-tenant (usa `escola_id` para logo dinâmico)
 
 ---
 
@@ -405,6 +420,15 @@ ADIADO
 | BUG-009 | Coluna `metodo_pagamento` em `financeiro_mensalidades` | #9 | `01a5fbb3` |
 | BUG-012 | `FloatingHelpButton` — componente abandonado deletado | — | `45f2fcad` |
 | — | `AdminUsuariosSimple` — componente abandonado deletado | — | `e6a71161` |
+| — | Sofia: saudação errada para professor/aluno (race condition auth) | — | `44786c86` |
+| — | Sofia: repetia agenda em cada resposta (agenda movida pro system prompt) | — | `44786c86` |
+| — | Sofia: histórico apagado ao navegar (persistência sessionStorage) | — | `44786c86` |
+| — | claude-proxy: 401 em boletim (JWT JWKS→/auth/v1/user) | — | `44786c86` |
+| — | Arquivo Morto: 504 timeout em ficha (sem header PDF beta) | — | `44786c86` |
+| — | Arquivo Morto: deletados apareciam na busca (filtro soft-delete) | — | `44786c86` |
+| — | Importar Fichas IA: busca 400 (.role→.tipo), rg_responsavel ausente | — | `c1d2c930` |
+| — | BoletinsGerais: coordenador presencial via RLS + fix query join | — | `c1d2c930` |
+| — | Botão Editar nota invisível (opacity-0 group-hover removido) | — | `c1d2c930` |
 
 ---
 
