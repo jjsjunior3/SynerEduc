@@ -351,6 +351,25 @@ ADIADO
 
 ---
 
+## Conformidade Legal — LGPD
+
+> Implementação técnica concluída em 2026-06-17. Itens abaixo são **obrigações jurídicas**, não melhorias opcionais.
+
+| Status | Item | Detalhe | Prazo sugerido |
+|:---:|---|---|---|
+| ✅ | Consentimento registrado na matrícula | `consentimento_lgpd` + `consentimento_em` no banco | Jun/2026 |
+| ✅ | Política de Privacidade pública | Página acessível no login — 8 seções (Art. 9) | Jun/2026 |
+| ✅ | Controle de acesso por perfil | CPF/RG visível só para secretaria e gestão | Jun/2026 |
+| ✅ | Soft-delete (não apaga dados permanentemente) | `deletado_em` — guarda histórico conforme Art. 16 | Jun/2026 |
+| 🟡 | **Contrato DPA Controlador × Operador** | **Instrumento formal entre Colégio Conexão (Controlador) e SynerEduc (Operador) — Art. 39. Sem esse contrato a escola não pode provar que delegou o tratamento com segurança.** | **Ago/2026** |
+| 🟡 | E-mail DPO ativo | `privacidade@colegioconexao.com.br` citado na política precisa existir e ter responsável | Ago/2026 |
+| 🟢 | Procedimento de resposta a incidentes | Roteiro interno: o que fazer se houver vazamento (notificar ANPD em 72h — Art. 48) | Set/2026 |
+| 🟢 | ROPA — Registro de Atividades de Tratamento | Documento interno listando cada fluxo de dado: quem coleta, finalidade, retenção | Set/2026 |
+
+> **Próximo passo jurídico:** redigir o contrato DPA entre escola e SynerEduc. Quando solicitado, o Claude pode gerar um modelo base.
+
+---
+
 ## Bugs backend — descobertos via análise do Supabase (2026-05-30)
 
 | ID | Componente | Descrição | Issue | Risco |
