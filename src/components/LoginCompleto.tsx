@@ -16,11 +16,12 @@ import { supabase } from "../supabase/supabaseClient";
 interface LoginCompletoProps {
   onLogin: (user: Usuario, senhaProvisoria?: boolean) => void;
   onBackToSite: () => void;
+  onPoliticaPrivacidade?: () => void;
 }
 
 type Tela = "login" | "recuperar" | "recuperar_enviado";
 
-export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoProps) {
+export default function LoginCompleto({ onLogin, onBackToSite, onPoliticaPrivacidade }: LoginCompletoProps) {
   const { theme, toggleTheme } = useTheme();
 
   const [tela, setTela] = useState<Tela>("login");
@@ -349,6 +350,16 @@ export default function LoginCompleto({ onLogin, onBackToSite }: LoginCompletoPr
             </Button>
           </div>
         </CardContent>
+
+        {onPoliticaPrivacidade && (
+          <div className="px-6 pb-4 text-center">
+            <button
+              onClick={onPoliticaPrivacidade}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors">
+              Política de Privacidade e Proteção de Dados (LGPD)
+            </button>
+          </div>
+        )}
       </Card>
     </div>
   );

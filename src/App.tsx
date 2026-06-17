@@ -21,6 +21,7 @@ import DashboardFinanceiro from "./components/Dashboardfinanceiro";
 import SiteInstitucional from "./components/SiteInstitucional";
 import LoginCompleto from "./components/LoginCompleto";
 import TrocarSenha from "./components/TrocarSenha";
+import PoliticaPrivacidade from "./components/PoliticaPrivacidade";
 
 // Hook global de Presence
 import { usePresence } from "./hooks/usePresence";
@@ -62,7 +63,7 @@ function AVAComPresence({
 }
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<"website" | "login" | "ava">("website");
+  const [currentView, setCurrentView] = useState<"website" | "login" | "ava" | "politica">("website");
 
   const [user, setUser] = useState<Usuario | null>(() => {
     try {
@@ -166,7 +167,12 @@ export default function App() {
           <LoginCompleto
             onLogin={handleLogin}
             onBackToSite={handleBackToSite}
+            onPoliticaPrivacidade={() => setCurrentView("politica")}
           />
+        )}
+
+        {currentView === "politica" && (
+          <PoliticaPrivacidade onVoltar={() => setCurrentView("login")} />
         )}
 
         {currentView === "ava" && user && (

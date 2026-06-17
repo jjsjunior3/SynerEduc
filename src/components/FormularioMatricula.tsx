@@ -119,6 +119,7 @@ export function FormularioMatricula({
   const [form, setForm]             = useState<FormData>(FORM_INICIAL);
   const [salvando, setSalvando]     = useState(false);
   const [salvo, setSalvo]           = useState(false);
+  const [consentimentoLGPD, setConsentimentoLGPD] = useState(false);
   const [fichaId, setFichaId]       = useState<string | null>(null);
   const [modoEdicao, setModoEdicao] = useState<string | null>(null);
 
@@ -240,6 +241,7 @@ export function FormularioMatricula({
     if (!form.nome_responsavel.trim()) { toast.error('Nome do responsável é obrigatório'); return; }
     if (!form.serie)                   { toast.error('Selecione a série'); return; }
     if (!form.turno)                   { toast.error('Selecione o turno'); return; }
+    if (!consentimentoLGPD)            { toast.error('Confirme que o responsável foi informado sobre o uso dos dados (LGPD)'); return; }
 
     setSalvando(true);
     try {
@@ -256,9 +258,11 @@ export function FormularioMatricula({
         serie:             form.serie,
         turma:             form.turma             || null,
         turno:             form.turno,
-        segmento:          segmentoFixo,
-        ano_letivo:        parseInt(form.ano_letivo),
-        status_matricula:  form.status_matricula,
+        segmento:           segmentoFixo,
+        ano_letivo:         parseInt(form.ano_letivo),
+        status_matricula:   form.status_matricula,
+        consentimento_lgpd: true,
+        consentimento_em:   new Date().toISOString(),
       };
 
       if (modoEdicao) {
@@ -917,6 +921,43 @@ export function FormularioMatricula({
                   </Select>
                 </div>
               </div>
+
+              {/* ── Consentimento LGPD ── */}
+              {!modoEdicao && (
+                <div className={`rounded-lg border-2 p-4 transition-colors ${
+                  consentimentoLGPD
+                    ? 'border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
+                    : 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20'
+                }`}>
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={consentimentoLGPD}
+                      onChange={e => setConsentimentoLGPD(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-green-600 flex-shrink-0"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                        Consentimento LGPD — obrigatório
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                        Confirmo que o responsável foi <strong>informado verbalmente ou por escrito</strong> que os dados
+                        pessoais do aluno e do responsável serão armazenados no sistema do{' '}
+                        <strong>Colégio Conexão Maranhense</strong>, utilizados exclusivamente para fins escolares
+                        (matrículas, emissão de documentos, histórico escolar e comunicação com a família),
+                        e que o acesso é restrito à secretaria e gestão da escola, conforme a{' '}
+                        <strong>Lei 13.709/2018 (LGPD)</strong>.
+                      </p>
+                      {consentimentoLGPD && (
+                        <p className="text-xs text-green-700 dark:text-green-400 mt-1.5 font-medium">
+                          ✓ Registrado em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
+                    </div>
+                  </label>
+                </div>
+              )}
 
               <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
                 <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
