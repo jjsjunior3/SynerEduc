@@ -449,15 +449,53 @@ async function rodarComTools(
 
 // ─── Handler principal ────────────────────────────────────────────────────────
 
+// Mapeia tipo do usuário para contexto da Gabriela
+function tipoParaContexto(tipo: string): string | null {
+  if (tipo === 'gestor_geral' || tipo === 'administrador') return 'gestor'
+  if (tipo === 'secretaria')                                return 'secretaria'
+  if (tipo === 'financeiro')                                return 'financeiro'
+  return null
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { mensagens, contexto } = await req.json()
-
-    if (!mensagens?.length || !contexto) {
+    // ── Validação de JWT ──────────────────────────────────────────────────────
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '').trim() ?? ''
+    if (!token) {
       return new Response(
-        JSON.stringify({ erro: 'mensagens e contexto são obrigatórios' }),
+        JSON.stringify({ erro: 'Não autorizado' }),
+        { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const userResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: SERVICE_KEY },
+    })
+    if (!userResp.ok) {
+      return new Response(
+        JSON.stringify({ erro: 'Não autorizado' }),
+        { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+    const userAuth = await userResp.json()
+    const tipoUsuario = userAuth.user_metadata?.tipo ?? ''
+    const contexto = tipoParaContexto(tipoUsuario)
+
+    if (!contexto) {
+      return new Response(
+        JSON.stringify({ erro: 'Perfil sem acesso à Gabriela' }),
+        { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      )
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const { mensagens } = await req.json()
+
+    if (!mensagens?.length) {
+      return new Response(
+        JSON.stringify({ erro: 'mensagens são obrigatórias' }),
         { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
       )
     }
