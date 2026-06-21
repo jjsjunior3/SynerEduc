@@ -285,7 +285,7 @@ export function DashboardProfessor() {
   const pos = getDropdownPos();
 
   const Header = () => (
-    <header className="bg-card border-b border-border py-4 sticky top-0 z-50">
+    <header className="bg-card border-b border-border py-4 fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <SchoolHeader subtitle="Painel do Professor" />
@@ -411,7 +411,7 @@ export function DashboardProfessor() {
 
   if (viewAtual === "disciplina" && disciplinaSelecionada) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo={disciplinaSelecionada.nome} subtitulo={disciplinaSelecionada.serie?.nome} onVoltar={handleVoltarParaDashboard} />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -429,7 +429,7 @@ export function DashboardProfessor() {
 
   if (viewAtual === "atividades") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo="Atividades Recebidas" onVoltar={handleVoltarParaDashboard} />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -442,7 +442,7 @@ export function DashboardProfessor() {
 
   if (viewAtual === "boletim") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo="Lançar Notas" onVoltar={() => { setViewAtual("dashboard"); setTurmaSelecionada(null); setDisciplinaSelecionada(null); }} />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -470,7 +470,7 @@ export function DashboardProfessor() {
 
   if (viewAtual === "agenda") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo="Agenda Diária" onVoltar={() => { setViewAtual("dashboard"); setTurmaSelecionada(null); setDisciplinaSelecionada(null); }} />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -500,7 +500,7 @@ export function DashboardProfessor() {
 
   if (viewAtual === "horarios") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo="Grade Horária" onVoltar={() => setViewAtual("dashboard")} />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -542,7 +542,7 @@ export function DashboardProfessor() {
 
   if (viewAtual === "plano-aula") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo="Plano de Aula com IA" onVoltar={() => setViewAtual("dashboard")} />
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -559,7 +559,7 @@ export function DashboardProfessor() {
 
   if (viewAtual === "aulas-vivo") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo="Aulas ao Vivo" onVoltar={() => { setViewAtual("dashboard"); setTurmaSelecionada(null); }} />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -583,7 +583,7 @@ export function DashboardProfessor() {
 
   if (viewAtual === "comunicados") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo="Comunicados" subtitulo="Avisos da escola" onVoltar={handleVoltarParaDashboard} />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -596,7 +596,7 @@ export function DashboardProfessor() {
 
   // ── DASHBOARD PRINCIPAL ──
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground pt-16">
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

@@ -231,7 +231,7 @@ export function DashboardAdministrador({
     <div className="min-h-screen bg-background flex flex-col">
 
       {/* Header */}
-      <header className="bg-card border-b border-border py-3 sticky top-0 z-50 shadow-sm">
+      <header className="bg-card border-b border-border py-3 fixed top-0 left-0 right-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logoEscola} alt="Logo" className="w-10 h-10 object-contain" />
@@ -280,7 +280,7 @@ export function DashboardAdministrador({
       )}
 
       {/* Conteúdo */}
-      <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+      <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20 w-full">
 
         {viewAtual !== "dashboard" ? (
           <>

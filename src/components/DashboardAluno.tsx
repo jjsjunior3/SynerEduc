@@ -115,7 +115,7 @@ function HeaderPadrao({
   const pos = getDropdownPos();
 
   return (
-    <header className="bg-card border-b border-border sticky top-0 z-30">
+    <header className="bg-card border-b border-border fixed top-0 left-0 right-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <SchoolHeader subtitle="Painel do Aluno" />
 
@@ -493,7 +493,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo="Boletim Escolar" subtitulo={turma?.serieNome} onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
           <Boletim turma={turma} usuario={usuario} />
         </main>
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
@@ -506,7 +506,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo="Agenda Diária" subtitulo={turma.serieNome} onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
           <AgendaAluno
             serie={{ id: turma.serieId, nome: turma.serieNome }}
             turma={{ id: turma.id, nome: turma.nome }}
@@ -523,7 +523,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo="Grade Horária" subtitulo={turma?.serieNome} onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
           <HorarioEscolar turmaSelecionada={turma?.serieNome || ""} />
         </main>
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
@@ -536,7 +536,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo={disciplinaSelecionada.nome} subtitulo={turma.serieNome} onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
           <DisciplinaPage
             disciplina={disciplinaSelecionada}
             turma={turma}
@@ -553,7 +553,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo="Comunicados" subtitulo="Avisos da escola" onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
           <ComunicadosPage onVoltar={handleVoltar} />
         </main>
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
@@ -570,7 +570,7 @@ export default function DashboardAluno() {
 
       <NotificacaoBalloon onAbrirNotificacoes={() => setMostrarNotificacoes(true)} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 space-y-8">
 
         {/* ── Header contextual ── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-border">

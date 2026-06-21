@@ -113,7 +113,7 @@ export function NotificacaoBalloon({ onAbrirNotificacoes }: Props) {
       className={`fixed top-16 right-4 z-[9999] transition-all duration-300 ${
         fechando ? 'opacity-0 -translate-y-2' : 'opacity-100 translate-y-0'
       }`}
-      style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }}
+      style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}
     >
       {/* Balão */}
       <div className="relative bg-white dark:bg-gray-900 rounded-2xl border-2 border-blue-200 dark:border-blue-700 w-[340px] max-w-[90vw] overflow-hidden">

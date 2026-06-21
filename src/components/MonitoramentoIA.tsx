@@ -133,6 +133,7 @@ export function MonitoramentoIA({ onVoltar }: MonitoramentoIAProps) {
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<Date | null>(null);
   const [filtroAgente, setFiltroAgente] = useState<string>("todos");
   const [paginaLog, setPaginaLog]     = useState(0);
+  const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
   const LOG_POR_PAGINA = 15;
 
   const periodoHoras: Record<Periodo, number> = { "24h": 24, "7d": 168, "30d": 720 };
@@ -455,40 +456,61 @@ export function MonitoramentoIA({ onVoltar }: MonitoramentoIAProps) {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {logsPagina.map(entry => (
-                      <tr key={entry.id} className={`hover:bg-muted/30 transition-colors ${entry.erro ? "bg-red-50/30 dark:bg-red-900/10" : ""}`}>
-                        <td className="py-2.5 text-muted-foreground whitespace-nowrap">
-                          {formatarDataHora(entry.criado_em)}
-                        </td>
-                        <td className="py-2.5">
-                          <BadgeAgente agente={entry.agente} />
-                        </td>
-                        <td className="py-2.5 text-muted-foreground hidden md:table-cell">
-                          {entry.contexto || "—"}
-                        </td>
-                        <td className="py-2.5 text-foreground hidden lg:table-cell max-w-[200px]">
-                          <span className="truncate block" title={entry.pergunta ?? ""}>
-                            {entry.pergunta ? entry.pergunta.slice(0, 60) + (entry.pergunta.length > 60 ? "…" : "") : "—"}
-                          </span>
-                        </td>
-                        <td className="py-2.5 text-right text-muted-foreground whitespace-nowrap">
-                          {formatarDuracao(entry.latencia_ms)}
-                        </td>
-                        <td className="py-2.5 text-right text-muted-foreground hidden sm:table-cell">
-                          {((entry.input_tokens + entry.output_tokens) / 1000).toFixed(1)}k
-                        </td>
-                        <td className="py-2.5 text-right text-muted-foreground hidden sm:table-cell">
-                          {entry.turns}x
-                        </td>
-                        <td className="py-2.5 text-center">
-                          {entry.erro ? (
-                            <span title={entry.erro_msg ?? "Erro"}>
-                              <XCircle className="w-4 h-4 text-red-500 inline" />
+                      <>
+                        <tr
+                          key={entry.id}
+                          onClick={() => entry.erro && setLinhaExpandida(linhaExpandida === entry.id ? null : entry.id)}
+                          className={`transition-colors ${entry.erro ? "bg-red-50/30 dark:bg-red-900/10 cursor-pointer hover:bg-red-100/40 dark:hover:bg-red-900/20" : "hover:bg-muted/30"}`}
+                        >
+                          <td className="py-2.5 text-muted-foreground whitespace-nowrap">
+                            {formatarDataHora(entry.criado_em)}
+                          </td>
+                          <td className="py-2.5">
+                            <BadgeAgente agente={entry.agente} />
+                          </td>
+                          <td className="py-2.5 text-muted-foreground hidden md:table-cell">
+                            {entry.contexto || "—"}
+                          </td>
+                          <td className="py-2.5 text-foreground hidden lg:table-cell max-w-[200px]">
+                            <span className="truncate block" title={entry.pergunta ?? ""}>
+                              {entry.pergunta ? entry.pergunta.slice(0, 60) + (entry.pergunta.length > 60 ? "…" : "") : "—"}
                             </span>
-                          ) : (
-                            <CheckCircle2 className="w-4 h-4 text-green-500 inline" />
-                          )}
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="py-2.5 text-right text-muted-foreground whitespace-nowrap">
+                            {formatarDuracao(entry.latencia_ms)}
+                          </td>
+                          <td className="py-2.5 text-right text-muted-foreground hidden sm:table-cell">
+                            {((entry.input_tokens + entry.output_tokens) / 1000).toFixed(1)}k
+                          </td>
+                          <td className="py-2.5 text-right text-muted-foreground hidden sm:table-cell">
+                            {entry.turns}x
+                          </td>
+                          <td className="py-2.5 text-center">
+                            {entry.erro ? (
+                              <span title="Clique para ver detalhes do erro">
+                                <XCircle className="w-4 h-4 text-red-500 inline" />
+                              </span>
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4 text-green-500 inline" />
+                            )}
+                          </td>
+                        </tr>
+                        {entry.erro && linhaExpandida === entry.id && (
+                          <tr key={`${entry.id}-detail`} className="bg-red-50/50 dark:bg-red-900/15">
+                            <td colSpan={8} className="px-3 py-2.5">
+                              <div className="flex items-start gap-2">
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="text-xs font-medium text-red-700 dark:text-red-400">Mensagem de erro:</span>
+                                  <pre className="text-xs text-red-600 dark:text-red-300 mt-0.5 whitespace-pre-wrap break-all font-mono">
+                                    {entry.erro_msg ?? "Sem detalhes disponíveis"}
+                                  </pre>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     ))}
                   </tbody>
                 </table>

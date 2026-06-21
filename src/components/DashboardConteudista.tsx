@@ -151,7 +151,7 @@ export default function DashboardConteudista({
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-indigo-50 to-blue-50">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b sticky top-0 z-40">
+      <header className="bg-white/80 border-b fixed top-0 left-0 right-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
             {onBackToSite && (
@@ -200,7 +200,7 @@ export default function DashboardConteudista({
       </header>
 
       {/* Conteúdo principal */}
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-6 py-10 pt-20">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
           Olá, {usuario?.nome?.split(" ")[0] || "Professor"} 👋
         </h2>

@@ -337,7 +337,6 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
     try {
       const { alunoId, disciplinaId, bimestre, av1, av2, av3, rec, notaRegistroId } = notaEmEdicao;
 
-      // ✅ Usa a função local que aplica a regra correta por segmento
       const mediaCalculada = calcularMedia({ av1, av2, av3, rec });
 
       const payload: any = {
@@ -346,34 +345,49 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
         bimestre,
         av1,
         av2,
-        // AV3 só salva para presencial
         av3:           isPresencial ? (av3 ?? null) : null,
         recuperacao:   rec,
         media:         mediaCalculada,
         media_final:   mediaCalculada,
-        segmento,
       };
 
       const resp = notaRegistroId
         ? await supabase.from('notas').update(payload).eq('id', notaRegistroId).select()
         : await supabase.from('notas').insert(payload).select();
+
       if (resp.error) throw resp.error;
 
       const nova = resp.data?.[0] as any;
+
+      // Se RLS bloqueou o retorno da linha, atualiza o estado com os dados locais
       setNotas(prev => [
         ...prev.filter(n => !(n.user_id === alunoId && n.disciplina_id === disciplinaId && n.bimestre === bimestre)),
         {
-          id: nova.id, user_id: nova.user_id, disciplina_id: nova.disciplina_id,
-          bimestre: nova.bimestre, av1: nova.av1, av2: nova.av2, av3: nova.av3,
-          recuperacao: nova.recuperacao, media: nova.media, media_final: nova.media_final,
-          frequencia: nova.frequencia, faltas: nova.faltas, status_final: nova.status_final,
-          disciplina: null,
+          id:           nova?.id           ?? notaRegistroId ?? crypto.randomUUID(),
+          user_id:      nova?.user_id      ?? alunoId,
+          disciplina_id: nova?.disciplina_id ?? disciplinaId,
+          bimestre:     nova?.bimestre     ?? bimestre,
+          av1:          nova?.av1          ?? av1,
+          av2:          nova?.av2          ?? av2,
+          av3:          nova?.av3          ?? (isPresencial ? av3 : null),
+          recuperacao:  nova?.recuperacao  ?? rec,
+          media:        nova?.media        ?? mediaCalculada,
+          media_final:  nova?.media_final  ?? mediaCalculada,
+          frequencia:   nova?.frequencia   ?? null,
+          faltas:       nova?.faltas       ?? null,
+          status_final: nova?.status_final ?? null,
+          disciplina:   null,
         },
       ]);
+
       toast.success('Nota salva com sucesso!');
       setNotaEmEdicao(null);
-    } catch { toast.error('Erro ao salvar nota'); }
-    finally { setSalvandoNota(false); }
+    } catch (err: any) {
+      console.error('[BoletinsGerais] Erro ao salvar nota:', err);
+      toast.error('Erro ao salvar nota: ' + (err?.message || 'verifique o console'));
+    } finally {
+      setSalvandoNota(false);
+    }
   }
 
   const notaEmEdicaoPreview = notaEmEdicao

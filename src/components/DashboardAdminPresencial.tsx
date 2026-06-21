@@ -188,7 +188,7 @@ export function DashboardAdminPresencial({ usuario, logout }: DashboardAdminPres
   const pos = getDropdownPos();
 
   const Header = () => (
-    <header className="bg-card border-b border-border py-3 sm:py-4 sticky top-0 z-50">
+    <header className="bg-card border-b border-border py-3 sm:py-4 fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between">
         <SchoolHeader subtitle="Painel Administrativo — Presencial" />
         <div className="flex items-center px-2 gap-2 sm:gap-3">
@@ -241,7 +241,7 @@ export function DashboardAdminPresencial({ usuario, logout }: DashboardAdminPres
 
   if (viewAtual !== 'dashboard') {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraTitulo titulo={tituloPorView[viewAtual]||''} />
         <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -255,7 +255,7 @@ export function DashboardAdminPresencial({ usuario, logout }: DashboardAdminPres
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-16">
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
 

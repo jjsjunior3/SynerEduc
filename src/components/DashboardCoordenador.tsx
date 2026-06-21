@@ -1,5 +1,31 @@
 // src/components/DashboardCoordenador.tsx
-import { lazy, Suspense, useState, useRef, useEffect } from 'react';
+import { lazy, Suspense, useState, useRef, useEffect, Component, ReactNode } from 'react';
+
+// ErrorBoundary local — captura erros de render em módulos lazy e evita tela branca
+class ModuloBoundary extends Component<
+  { children: ReactNode; onReset: () => void },
+  { erro: string | null }
+> {
+  state = { erro: null };
+  static getDerivedStateFromError(e: any) { return { erro: e?.message || 'Erro desconhecido' }; }
+  componentDidCatch(e: any) { console.error('[DashboardCoordenador] Erro no módulo:', e); }
+  render() {
+    if (this.state.erro) return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <AlertCircle className="w-10 h-10 text-red-500" />
+        <p className="text-foreground font-medium">Erro ao carregar módulo</p>
+        <p className="text-sm text-muted-foreground max-w-md text-center">{this.state.erro}</p>
+        <button
+          onClick={() => { this.setState({ erro: null }); this.props.onReset(); }}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+        >
+          Voltar ao painel
+        </button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
 import { createPortal } from 'react-dom';
 import {
   Clock, Loader2, Bell, Calendar, FileText, BarChart3,
@@ -362,7 +388,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
 
   // ── Header ────────────────────────────────────────────────────────────────────
   const Header = () => (
-    <header className="bg-card border-b border-border py-3 sm:py-4 sticky top-0 z-50">
+    <header className="bg-card border-b border-border py-3 sm:py-4 fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between">
         <SchoolHeader subtitle="Painel do Coordenador" />
         <div className="flex items-center gap-3">
@@ -429,18 +455,20 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
   // ── Sub-painéis ───────────────────────────────────────────────────────────────
   if (viewAtual !== 'dashboard') {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-16">
         <Header />
         <BarraAzul titulo={tituloPorView[viewAtual] || ''} />
         <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
-          <Suspense fallback={
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="w-6 h-6 animate-spin mr-2 text-blue-600" />
-              <span className="text-muted-foreground">Carregando módulo...</span>
-            </div>
-          }>
-            {renderConteudo()}
-          </Suspense>
+          <ModuloBoundary onReset={() => setViewAtual('dashboard')}>
+            <Suspense fallback={
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin mr-2 text-blue-600" />
+                <span className="text-muted-foreground">Carregando módulo...</span>
+              </div>
+            }>
+              {renderConteudo()}
+            </Suspense>
+          </ModuloBoundary>
         </main>
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} usuario={usuario} logout={logout} />
       </div>
@@ -449,7 +477,7 @@ export default function DashboardCoordenador({ onBackToSite, usuario, logout }: 
 
   // ── Dashboard principal ───────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-16">
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
