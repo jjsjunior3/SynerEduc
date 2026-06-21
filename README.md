@@ -1,10 +1,12 @@
-# SynerEduc — Repositório Privado
+# SynerEduc
 
-Plataforma de gestão escolar em produção no **Colégio Conexão Maranhense**, São Luís/MA.  
-Stack: **React 18 + TypeScript + Vite + Supabase + Tailwind CSS v4**
+Plataforma SaaS de gestão escolar com IA integrada para escolas privadas do Brasil.  
+Em produção no **Colégio Conexão Maranhense** (São Luís/MA) e **Colégio Ariane** (229 alunos).
+
+Stack: **React 18 + TypeScript + Vite + Supabase (PostgreSQL) + Tailwind CSS + Anthropic Claude**
 
 > ⚠️ Este repositório contém código em produção com dados reais de alunos.  
-> Toda alteração deve ser feita em branch separada — **nunca commitar direto na `main`**.
+> Toda alteração deve ser feita em branch separada — **nunca commitar direto na `master`**.
 
 ---
 
@@ -21,8 +23,8 @@ Stack: **React 18 + TypeScript + Vite + Supabase + Tailwind CSS v4**
 ### 1. Clonar o repositório
 
 ```bash
-git clone https://github.com/jjsjunior3/Ava_ConexaoEAD.git
-cd Ava_ConexaoEAD
+git clone https://github.com/jjsjunior3/SynerEduc.git
+cd SynerEduc
 ```
 
 ### 2. Instalar dependências
@@ -56,19 +58,36 @@ Acesse: `http://localhost:5173`
 ## Estrutura do projeto
 
 ```
-Ava_ConexaoEAD/
+SynerEduc/
 ├── public/
-│   └── logo-colegio-conexao.png   # Logo da escola — usada nos PDFs
+│   └── logo-colegio-conexao.png     # Logo da escola — usada nos PDFs
 ├── src/
-│   ├── components/                # Todos os componentes React
-│   ├── contexts/                  # AuthContext, ThemeContext
-│   ├── hooks/                     # useSegmento, usePresence, etc.
+│   ├── components/                  # ~55 componentes React
+│   │   ├── ai/                      # Recursos de IA: ChatFlutuante, ChatGabriela,
+│   │   │                            #   AgenteInclusao, AssistenteVoz, avatares
+│   │   └── ui/                      # shadcn/ui: Button, Input, Dialog, etc.
+│   ├── contexts/                    # AuthContext, ThemeContext
+│   ├── hooks/                       # useSegmento, usePresence, useChatIA
 │   ├── supabase/
-│   │   └── supabaseClient.ts      # Cliente único do Supabase
-│   ├── types/                     # Tipos TypeScript globais
-│   ├── utils/                     # Funções utilitárias (cálculo de notas, datas)
-│   └── App.tsx                    # Navegação principal via useState
-├── .env                           # Variáveis de ambiente (não commitar)
+│   │   └── supabaseClient.ts        # Cliente único do Supabase (nunca duplicar)
+│   ├── types/auth.ts                # TipoUsuario, Usuario e interfaces globais
+│   ├── utils/                       # calculoNotas, authUtils, serieUtils, dateUtils
+│   └── App.tsx                      # Roteamento: website / login / ava / politica
+├── supabase/
+│   └── functions/                   # 8 Edge Functions (Deno/TypeScript)
+│       ├── agente-gabriela/         # Agente com Tool Use (secretaria/financeiro/gestor)
+│       ├── chat-sofia/              # RAG chatbot pedagógico (Pinecone)
+│       ├── claude-proxy/            # Proxy seguro para Anthropic API
+│       ├── extrair-ficha/           # OCR de fichas de matrícula
+│       ├── gerar-plano-aula/        # Geração de plano de aula com RAG
+│       ├── dona-maria/              # Geração de atividades inclusivas
+│       ├── indexar-documento/       # Indexação de PDFs no Pinecone
+│       └── interpretar-voz/         # Speech-to-text + interpretação
+├── docs/                            # Documentação técnica (ver tabela abaixo)
+├── scripts/
+│   └── indexar-imagens-locais.ts    # Pipeline RAG local (Ollama + Pinecone)
+├── CLAUDE.md                        # Contexto técnico completo do projeto
+├── .env                             # Variáveis de ambiente (não commitar)
 ├── vite.config.ts
 └── package.json
 ```
@@ -252,18 +271,36 @@ style: ajuste visual sem mudança de lógica
 |-----------|-----------|
 | [`docs/PRD.md`](docs/PRD.md) | Requisitos de produto — o "porquê" da plataforma |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Backlog priorizado — bugs e próximas features |
-| [`docs/ANALISE_COMPLETA.md`](docs/ANALISE_COMPLETA.md) | Mapa técnico de todos os 57 componentes + 15 bugs |
+| [`CLAUDE.md`](CLAUDE.md) | **Leia primeiro** — contexto técnico completo: stack, banco, segurança, o que falta para SaaS |
+| [`docs/ANALISE_COMPLETA.md`](docs/ANALISE_COMPLETA.md) | Inventário técnico v0.2.0: 90+ arquivos, todos os componentes, Edge Functions, testes |
+| [`docs/AGENTES_IA_DECISOES.md`](docs/AGENTES_IA_DECISOES.md) | Decisões técnicas dos recursos de IA com raciocínio detalhado |
 | [`docs/SKILLS_SUPABASE.md`](docs/SKILLS_SUPABASE.md) | Padrões de uso do Supabase neste projeto |
 | [`docs/SKILLS_REACT.md`](docs/SKILLS_REACT.md) | Convenções de React/TypeScript |
 | [`docs/SKILLS_PATTERNS.md`](docs/SKILLS_PATTERNS.md) | Padrões gerais (dark mode, PDF, toast, segmento) |
 
 ---
 
-## Contato
+## Perfis de acesso e testes
 
-**José João Santos Júnior** — responsável pelo projeto  
-Dúvidas sobre regras de negócio ou acesso ao Supabase: falar diretamente com o responsável.
+| Perfil | Acesso |
+|--------|--------|
+| `administrador` | Visão global + monitoramento de IA |
+| `gestor_geral` | KPIs + agente Gabriela |
+| `coordenador` | Boletins, agenda, frequência, planos de aula |
+| `professor` | Notas, atividades, frequência, plano de aula IA |
+| `secretaria` | Matrículas, documentos, importação por IA |
+| `financeiro` | Mensalidades, despesas, agente Gabriela |
+| `aluno` | Material, atividades, boletim, chat Sofia |
+| `admin_presencial` | Dashboard do segmento presencial |
+
+Cada perfil deve ser testado nos dois segmentos (EAD e Presencial) onde aplicável.
 
 ---
 
-*SynerEduc — Sistema de Gestão Escolar © 2026*
+## Contato
+
+Dúvidas sobre regras de negócio ou acesso ao Supabase: falar diretamente com o responsável do projeto.
+
+---
+
+*SynerEduc — Plataforma SaaS de Gestão Escolar com IA © 2026*
