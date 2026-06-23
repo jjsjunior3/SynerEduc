@@ -343,6 +343,7 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
         user_id:       alunoId,
         disciplina_id: disciplinaId,
         bimestre,
+        segmento,
         av1,
         av2,
         av3:           isPresencial ? (av3 ?? null) : null,
