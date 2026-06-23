@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../supabase/supabaseClient'
+import { useSegmento } from '../hooks/useSegmento'
 import { toast } from 'sonner'
 import {
   Upload, FileText, User,
@@ -125,6 +126,7 @@ interface Props {
 }
 
 export function ImportacaoFichas({ onVoltar }: Props) {
+  const { segmento } = useSegmento()
   const [aba,        setAba]        = useState<Aba>('ficha')
   const [fase,       setFase]       = useState<Fase>('upload')
   const [arrastando, setArrastando] = useState(false)
@@ -286,6 +288,7 @@ export function ImportacaoFichas({ onVoltar }: Props) {
       // 1. Salvar/atualizar ficha de matrícula
       const payload = {
         aluno_id:         alunoVinculado.id,
+        segmento,
         nome_aluno:       ficha.aluno.nome_completo,
         data_nascimento:  ficha.aluno.data_nascimento || null,
         serie:            ficha.aluno.serie || null,
