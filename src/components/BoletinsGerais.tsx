@@ -360,25 +360,30 @@ export default function BoletinsGerais({ onVoltar }: BoletinsGeraisProps) {
       const nova = resp.data?.[0] as any;
 
       // Se RLS bloqueou o retorno da linha, atualiza o estado com os dados locais
-      setNotas(prev => [
-        ...prev.filter(n => !(n.user_id === alunoId && n.disciplina_id === disciplinaId && n.bimestre === bimestre)),
-        {
-          id:           nova?.id           ?? notaRegistroId ?? crypto.randomUUID(),
-          user_id:      nova?.user_id      ?? alunoId,
-          disciplina_id: nova?.disciplina_id ?? disciplinaId,
-          bimestre:     nova?.bimestre     ?? bimestre,
-          av1:          nova?.av1          ?? av1,
-          av2:          nova?.av2          ?? av2,
-          av3:          nova?.av3          ?? (isPresencial ? av3 : null),
-          recuperacao:  nova?.recuperacao  ?? rec,
-          media:        nova?.media        ?? mediaCalculada,
-          media_final:  nova?.media_final  ?? mediaCalculada,
-          frequencia:   nova?.frequencia   ?? null,
-          faltas:       nova?.faltas       ?? null,
-          status_final: nova?.status_final ?? null,
-          disciplina:   null,
-        },
-      ]);
+      setNotas(prev => {
+        const anterior = prev.find(n =>
+          n.user_id === alunoId && n.disciplina_id === disciplinaId && n.bimestre === bimestre
+        );
+        return [
+          ...prev.filter(n => !(n.user_id === alunoId && n.disciplina_id === disciplinaId && n.bimestre === bimestre)),
+          {
+            id:            nova?.id            ?? notaRegistroId ?? crypto.randomUUID(),
+            user_id:       nova?.user_id       ?? alunoId,
+            disciplina_id: nova?.disciplina_id ?? disciplinaId,
+            bimestre:      nova?.bimestre      ?? bimestre,
+            av1:           nova?.av1           ?? av1,
+            av2:           nova?.av2           ?? av2,
+            av3:           nova?.av3           ?? (isPresencial ? av3 : null),
+            recuperacao:   nova?.recuperacao   ?? rec,
+            media:         nova?.media         ?? mediaCalculada,
+            media_final:   nova?.media_final   ?? mediaCalculada,
+            frequencia:    nova?.frequencia    ?? null,
+            faltas:        nova?.faltas        ?? null,
+            status_final:  nova?.status_final  ?? null,
+            disciplina:    anterior?.disciplina ?? null,
+          },
+        ];
+      });
 
       toast.success('Nota salva com sucesso!');
       setNotaEmEdicao(null);
