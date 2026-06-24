@@ -28,6 +28,26 @@ describe('perfilLabel', () => {
   it('retorna "Financeiro" para financeiro', () => {
     expect(perfilLabel('financeiro')).toBe('Financeiro');
   });
+
+  it('retorna "Gestor Geral" para gestor_geral', () => {
+    expect(perfilLabel('gestor_geral')).toBe('Gestor Geral');
+  });
+
+  it('retorna "Admin Presencial" para admin_presencial', () => {
+    expect(perfilLabel('admin_presencial')).toBe('Admin Presencial');
+  });
+
+  it('retorna "Secretaria" para secretaria', () => {
+    expect(perfilLabel('secretaria')).toBe('Secretaria');
+  });
+
+  it('retorna "Prof. Conteudista" para professor_conteudista', () => {
+    expect(perfilLabel('professor_conteudista')).toBe('Prof. Conteudista');
+  });
+
+  it('retorna "Responsável" para responsavel', () => {
+    expect(perfilLabel('responsavel')).toBe('Responsável');
+  });
 });
 
 describe('isAdmin', () => {
@@ -39,12 +59,21 @@ describe('isAdmin', () => {
     expect(isAdmin('gestor_geral')).toBe(true);
   });
 
-  it('retorna false para professor', () => {
-    expect(isAdmin('professor')).toBe(false);
+  it('retorna false para admin_presencial', () => {
+    // admin_presencial tem escopo limitado ao segmento presencial — não é super-admin
+    expect(isAdmin('admin_presencial')).toBe(false);
   });
 
   it('retorna false para coordenador', () => {
     expect(isAdmin('coordenador')).toBe(false);
+  });
+
+  it('retorna false para professor', () => {
+    expect(isAdmin('professor')).toBe(false);
+  });
+
+  it('retorna false para aluno', () => {
+    expect(isAdmin('aluno')).toBe(false);
   });
 });
 
@@ -57,12 +86,16 @@ describe('isProfessor', () => {
     expect(isProfessor('professor_conteudista')).toBe(true);
   });
 
+  it('retorna false para coordenador', () => {
+    expect(isProfessor('coordenador')).toBe(false);
+  });
+
   it('retorna false para aluno', () => {
     expect(isProfessor('aluno')).toBe(false);
   });
 
-  it('retorna false para coordenador', () => {
-    expect(isProfessor('coordenador')).toBe(false);
+  it('retorna false para administrador', () => {
+    expect(isProfessor('administrador')).toBe(false);
   });
 });
 
@@ -75,12 +108,24 @@ describe('isGestorOuAdmin', () => {
     expect(isGestorOuAdmin('administrador')).toBe(true);
   });
 
-  it('retorna false para aluno', () => {
-    expect(isGestorOuAdmin('aluno')).toBe(false);
+  it('retorna true para gestor_geral', () => {
+    expect(isGestorOuAdmin('gestor_geral')).toBe(true);
+  });
+
+  it('retorna true para admin_presencial', () => {
+    expect(isGestorOuAdmin('admin_presencial')).toBe(true);
   });
 
   it('retorna false para professor', () => {
     expect(isGestorOuAdmin('professor')).toBe(false);
+  });
+
+  it('retorna false para aluno', () => {
+    expect(isGestorOuAdmin('aluno')).toBe(false);
+  });
+
+  it('retorna false para secretaria', () => {
+    expect(isGestorOuAdmin('secretaria')).toBe(false);
   });
 });
 
@@ -93,8 +138,20 @@ describe('canAccessFinanceiro', () => {
     expect(canAccessFinanceiro('administrador')).toBe(true);
   });
 
+  it('retorna true para gestor_geral', () => {
+    expect(canAccessFinanceiro('gestor_geral')).toBe(true);
+  });
+
+  it('retorna true para secretaria', () => {
+    expect(canAccessFinanceiro('secretaria')).toBe(true);
+  });
+
   it('retorna false para professor', () => {
     expect(canAccessFinanceiro('professor')).toBe(false);
+  });
+
+  it('retorna false para coordenador', () => {
+    expect(canAccessFinanceiro('coordenador')).toBe(false);
   });
 
   it('retorna false para aluno', () => {
@@ -111,11 +168,27 @@ describe('canAccessAlunos', () => {
     expect(canAccessAlunos('secretaria')).toBe(true);
   });
 
-  it('retorna false para estoque', () => {
-    expect(canAccessAlunos('estoque')).toBe(false);
+  it('retorna true para administrador', () => {
+    expect(canAccessAlunos('administrador')).toBe(true);
+  });
+
+  it('retorna true para gestor_geral', () => {
+    expect(canAccessAlunos('gestor_geral')).toBe(true);
+  });
+
+  it('retorna true para admin_presencial', () => {
+    expect(canAccessAlunos('admin_presencial')).toBe(true);
   });
 
   it('retorna false para professor', () => {
     expect(canAccessAlunos('professor')).toBe(false);
+  });
+
+  it('retorna false para aluno', () => {
+    expect(canAccessAlunos('aluno')).toBe(false);
+  });
+
+  it('retorna false para financeiro', () => {
+    expect(canAccessAlunos('financeiro')).toBe(false);
   });
 });
