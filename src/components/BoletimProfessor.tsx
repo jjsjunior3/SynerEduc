@@ -239,6 +239,7 @@ export function BoletimProfessor({ disciplina, serie }: BoletimProfessorProps) {
         user_id:               alunoId,
         disciplina_id:         disciplina.id,
         bimestre:              bimestreNumero,
+        segmento,
         av1:                   dadosAtuais.av1,
         av2:                   dadosAtuais.av2,
         av3:                   isPresencial ? dadosAtuais.av3 : null,
