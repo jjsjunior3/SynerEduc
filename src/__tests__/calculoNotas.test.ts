@@ -25,10 +25,10 @@ describe('calcularNota — EAD', () => {
     expect(r.situacao).toBe('aprovado');
   });
 
-  it('reprova aluno com média < 5', () => {
+  it('recuperação mesmo com média < 5 — reprovado só existe no boletim final anual', () => {
     const r = calcularNota({ av1: 3, av2: 4 }, 'ead');
     expect(r.media).toBe(3.5);
-    expect(r.situacao).toBe('reprovado');
+    expect(r.situacao).toBe('recuperacao');
   });
 
   it('coloca em recuperação quando 5 ≤ média < 7', () => {
@@ -61,20 +61,20 @@ describe('calcularNota — EAD', () => {
     expect(r.situacao).toBe('recuperacao');
   });
 
-  it('média 4.9 → reprovado (abaixo do limite de recuperação)', () => {
-    // (4 + 5.8) / 2 = 4.9
+  it('média 4.9 → recuperação (reprovado não existe no bimestre)', () => {
+    // (4 + 5.8) / 2 = 4.9 → recuperação, mesmo abaixo de 5
     const r = calcularNota({ av1: 4, av2: 5.8 }, 'ead');
     expect(r.media).toBeCloseTo(4.9, 1);
-    expect(r.situacao).toBe('reprovado');
+    expect(r.situacao).toBe('recuperacao');
   });
 
   // ── Nota zero — zero é nota válida, diferente de null ───────────────────────
 
-  it('AV1 = 0 é nota válida e calcula normalmente', () => {
+  it('AV1 = 0 é nota válida — zero ≠ null, resulta em recuperação', () => {
     // zero ≠ null — aluno recebeu nota zero
     const r = calcularNota({ av1: 0, av2: 0 }, 'ead');
     expect(r.media).toBe(0);
-    expect(r.situacao).toBe('reprovado');
+    expect(r.situacao).toBe('recuperacao');
   });
 
   it('AV1 = 0, AV2 = 10 → média 5.0 → recuperação', () => {
@@ -95,18 +95,17 @@ describe('calcularNota — EAD', () => {
   });
 
   it('REC abaixo da menor nota não altera o resultado', () => {
-    // AV1=3, AV2=6, REC=2 — REC(2) < AV1(3), não substitui
+    // AV1=3, AV2=6, REC=2 — REC(2) < AV1(3), não substitui → mediaFinal = 4.5
     const r = calcularNota({ av1: 3, av2: 6, recuperacao: 2 }, 'ead');
     expect(r.mediaFinal).toBe(4.5);
-    expect(r.situacao).toBe('reprovado');
+    expect(r.situacao).toBe('recuperacao');
   });
 
-  it('REC exatamente igual à menor nota não substitui — fase de recuperação encerrada → reprovado', () => {
-    // AV1=5, AV2=8, REC=5 → REC não é maior que AV1 → media permanece 6.5
-    // Como o professor já lançou o REC, a recuperação está encerrada → reprovado
+  it('REC exatamente igual à menor nota não substitui — situação permanece recuperação', () => {
+    // AV1=5, AV2=8, REC=5 → REC não é maior que AV1 → media permanece 6.5 → recuperação
     const r = calcularNota({ av1: 5, av2: 8, recuperacao: 5 }, 'ead');
     expect(r.mediaFinal).toBe(6.5);
-    expect(r.situacao).toBe('reprovado');
+    expect(r.situacao).toBe('recuperacao');
   });
 
   it('REC = 0 não substitui nada (equivale a não ter feito recuperação)', () => {
@@ -147,10 +146,10 @@ describe('calcularNota — Presencial', () => {
     expect(r.situacao).toBe('aprovado');
   });
 
-  it('reprova com média < 5', () => {
+  it('recuperação com média < 5 — reprovado não existe no bimestre', () => {
     const r = calcularNota({ av1: 2, av2: 3, av3: 4 }, 'presencial');
     expect(r.media).toBe(3);
-    expect(r.situacao).toBe('reprovado');
+    expect(r.situacao).toBe('recuperacao');
   });
 
   it('coloca em recuperação quando 5 ≤ média < 7', () => {
@@ -176,10 +175,10 @@ describe('calcularNota — Presencial', () => {
 
   // ── Nota zero — zero é nota válida ───────────────────────────────────────────
 
-  it('AV1 = AV2 = AV3 = 0 é válido → média 0 → reprovado', () => {
+  it('AV1 = AV2 = AV3 = 0 é válido → média 0 → recuperação', () => {
     const r = calcularNota({ av1: 0, av2: 0, av3: 0 }, 'presencial');
     expect(r.media).toBe(0);
-    expect(r.situacao).toBe('reprovado');
+    expect(r.situacao).toBe('recuperacao');
   });
 
   it('AV1 = 0, AV2 = 10, AV3 = 5 → média 5.0 → recuperação', () => {
@@ -198,11 +197,11 @@ describe('calcularNota — Presencial', () => {
     expect(r.situacao).toBe('aprovado');
   });
 
-  it('REC abaixo de 7 → reprovado mesmo com recuperação feita', () => {
-    // (4 + 4 + 4) / 3 = 4.0 → recuperação; REC=6 → mediaFinal=6 → reprovado
+  it('REC abaixo de 7 → recuperação (reprovado não existe no bimestre)', () => {
+    // (4 + 4 + 4) / 3 = 4.0; REC=6 → mediaFinal=6 → ainda recuperação
     const r = calcularNota({ av1: 4, av2: 4, av3: 4, recuperacao: 6 }, 'presencial');
     expect(r.mediaFinal).toBe(6);
-    expect(r.situacao).toBe('reprovado');
+    expect(r.situacao).toBe('recuperacao');
   });
 
   it('REC = 0 não substitui — mantém a média original', () => {

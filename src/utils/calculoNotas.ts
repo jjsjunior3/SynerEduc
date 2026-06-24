@@ -12,30 +12,25 @@ export interface DadosNota {
 export interface ResultadoNota {
   media: number | null;       // média SEM recuperação (exibição intermediária)
   mediaFinal: number | null;  // média COM recuperação aplicada (situação real)
-  situacao: 'aprovado' | 'recuperacao' | 'reprovado' | null;
+  // 'reprovado' não existe no nível de bimestre — apenas no boletim anual final
+  situacao: 'aprovado' | 'recuperacao' | null;
 }
 
-// ── Situação SEM recuperação ──────────────────────────────────────────────────
-// média ≥ 7 → aprovado | entre 5 e 6.9 → recuperação | < 5 → reprovado
-function getSituacaoSemRec(media: number): 'aprovado' | 'recuperacao' | 'reprovado' {
-  if (media >= 7.0) return 'aprovado';
-  if (media >= 5.0) return 'recuperacao';
-  return 'reprovado';
-}
-
-// ── Situação COM recuperação já aplicada ──────────────────────────────────────
-// Após REC só existe aprovado ou reprovado — não há nova recuperação
-function getSituacaoComRec(mediaFinal: number): 'aprovado' | 'reprovado' {
-  return mediaFinal >= 7.0 ? 'aprovado' : 'reprovado';
+// ── Situação por bimestre ─────────────────────────────────────────────────────
+// média ≥ 7 → aprovado | < 7 → recuperação
+// 'reprovado' NÃO existe no nível de bimestre — só no boletim anual final
+// (quando o aluno faz a recuperação final e não atinge 7)
+function getSituacaoBimestre(media: number): 'aprovado' | 'recuperacao' {
+  return media >= 7.0 ? 'aprovado' : 'recuperacao';
 }
 
 // ── EAD: (AV1 + AV2) / 2 ─────────────────────────────────────────────────────
 // Regras:
 //   1. Média = (AV1 + AV2) / 2
-//   2. Se média < 7 → aluno vai para recuperação
+//   2. Se média < 7 → recuperação (inclui notas abaixo de 5)
 //   3. REC substitui a MENOR entre AV1 e AV2 (somente se REC > menor nota)
 //   4. Média final = (nova_AV1 + nova_AV2) / 2
-//   5. Situação pós-REC: ≥ 7 aprovado, < 7 reprovado (sem nova recuperação)
+//   5. Situação pós-REC: ≥ 7 aprovado, < 7 recuperação
 function calcularEAD(dados: DadosNota): ResultadoNota {
   const { av1, av2, recuperacao } = dados;
 
@@ -55,7 +50,7 @@ function calcularEAD(dados: DadosNota): ResultadoNota {
     return {
       media:      +media.toFixed(2),
       mediaFinal: +media.toFixed(2),
-      situacao:   getSituacaoSemRec(media),
+      situacao:   getSituacaoBimestre(media),
     };
   }
 
@@ -81,7 +76,7 @@ function calcularEAD(dados: DadosNota): ResultadoNota {
   return {
     media:      +media.toFixed(2),     // média original para exibição
     mediaFinal: +mediaFinal.toFixed(2), // média com REC aplicada
-    situacao:   getSituacaoComRec(mediaFinal),
+    situacao:   getSituacaoBimestre(mediaFinal),
   };
 }
 
@@ -89,7 +84,7 @@ function calcularEAD(dados: DadosNota): ResultadoNota {
 // Regras:
 //   1. Média = (AV1 + AV2 + AV3) / 3
 //   2. REC substitui a média diretamente (media_final = REC)
-//   3. Situação pós-REC: ≥ 7 aprovado, < 7 reprovado
+//   3. Situação pós-REC: ≥ 7 aprovado, < 7 recuperação
 function calcularPresencial(dados: DadosNota): ResultadoNota {
   const { av1, av2, av3, recuperacao } = dados;
 
@@ -104,7 +99,7 @@ function calcularPresencial(dados: DadosNota): ResultadoNota {
     return {
       media:      +media.toFixed(2),
       mediaFinal: +media.toFixed(2),
-      situacao:   getSituacaoSemRec(media),
+      situacao:   getSituacaoBimestre(media),
     };
   }
 
@@ -114,7 +109,7 @@ function calcularPresencial(dados: DadosNota): ResultadoNota {
   return {
     media:      +media.toFixed(2),
     mediaFinal: +mediaFinal.toFixed(2),
-    situacao:   getSituacaoComRec(mediaFinal),
+    situacao:   getSituacaoBimestre(mediaFinal),
   };
 }
 
