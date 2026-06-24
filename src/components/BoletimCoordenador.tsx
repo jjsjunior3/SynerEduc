@@ -654,8 +654,8 @@ export default function BoletimCoordenador({ onVoltar }: BoletimCoordenadorProps
                       ))}
                     </tr>
                     <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor:'var(--muted)' }}>
-                      {[0,1,2,3].flatMap(() => colunasBim.map((col, i) => (
-                        <th key={`${col}-${i}`} style={{
+                      {[0,1,2,3].flatMap((bim) => colunasBim.map((col, i) => (
+                        <th key={`${bim}-${col}-${i}`} style={{
                           padding:'5px 6px', textAlign:'center', fontWeight:500,
                           color:'var(--muted-foreground)', fontSize:10,
                           borderLeft:'1px solid var(--border)',
