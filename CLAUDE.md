@@ -62,6 +62,22 @@ RLS ativo em todas as tabelas. As políticas seguem o padrão:
 
 Implicação importante: se o RLS bloqueia um DELETE, o Supabase retorna `error: null` e `count: 0` sem lançar exceção. Por isso todo DELETE verifica `count === 0` explicitamente.
 
+### Tabela `escola_config` (multi-escola fase 1)
+
+Criada em 2026-06-23. Armazena identidade visual e configuração por escola.
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `dominio` | text UNIQUE | ex: `colegioconexaomaranhense.com.br` |
+| `nome` | text | Nome completo da escola |
+| `nome_curto` | text | Nome curto para exibição |
+| `cor_primaria` | text | Hex da cor principal |
+| `cor_secundaria` | text | Hex da cor secundária |
+| `logo_url` | text | URL da logo |
+| `segmento_padrao` | text | `'ead'` ou `'presencial'` |
+
+O hook `src/hooks/useEscolaConfig.ts` detecta a escola pelo `window.location.hostname`, busca a config no banco e aplica título da aba, favicon e variáveis CSS `--cor-escola` e `--cor-escola-secundaria`. Em desenvolvimento (`localhost`) usa o Conexão como fallback.
+
 ### Principais tabelas
 
 | Tabela | Descrição |
@@ -115,6 +131,9 @@ const { data, error } = await supabase
 - **Datas** — strings ISO `YYYY-MM-DD` interpretadas como UTC midnight causam bug de -1 dia no Brasil (UTC-3). Correção: `new Date(iso + 'T12:00:00')` — encapsulado em `src/utils/dateUtils.ts`
 - **Upsert com chave composta** — `grade_horaria` usa `onConflict: 'serie_id,dia_semana,ordem'`
 - **Cálculo de notas** — feito no frontend (`src/utils/calculoNotas.ts`), não por função SQL, para evitar bugs de fórmula no banco (funções SQL anteriores tinham fórmulas erradas)
+- **`notas.segmento`** — obrigatório em todo INSERT/UPDATE de notas. Default histórico era `'ead'`, o que bloqueava coordenadores e professores presenciais via RLS. Todos os payloads de `BoletimProfessor`, `BoletinsGerais` e `ImportacaoFichas` incluem `segmento` explicitamente
+- **`notas` — constraint UNIQUE** — `(user_id, disciplina_id, bimestre)` adicionada em 2026-06-23. Impede duplicatas que causavam exibição de notas zeradas no boletim
+- **RLS UPDATE de professor em `notas`** — permite UPDATE quando `professor_responsavel = auth.uid()` OU quando `professor_responsavel IS NULL` e o professor está vinculado à disciplina via `professores_disciplinas_series`
 
 ---
 
@@ -175,6 +194,15 @@ Recuperação de contexto + geração. Não toma ações, não chama ferramentas
 Pergunta → embedding (Pinecone Inference API) → busca vetorial →
 5 chunks mais relevantes → Haiku 4.5 com contexto → resposta
 ```
+
+### Regra de situação por bimestre em `calculoNotas.ts`
+
+`'reprovado'` **não existe no nível de bimestre**. A função `calcularNota` retorna apenas:
+- `'aprovado'` — média ≥ 7.0
+- `'recuperacao'` — média < 7.0 (inclui notas abaixo de 5)
+- `null` — notas não lançadas
+
+`'reprovado'` é exclusivo do boletim anual final (após recuperação final).
 
 ### Geração com IA (prompt → documento estruturado)
 - **Tia Maria José:** formulário guiado (4 etapas) → Sonnet 4.6 → documento pedagógico completo para impressão

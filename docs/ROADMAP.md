@@ -1,5 +1,5 @@
 # ROADMAP — Portal Conexão AVA · SynerEduc
-> Backlog priorizado por dependência estrutural · Atualizado em: 2026-06-17  
+> Backlog priorizado por dependência estrutural · Atualizado em: 2026-06-23  
 > Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · 🔄 Em andamento · ⏸ Adiado · 🚫 Descartado
 
 ---
@@ -497,6 +497,14 @@ ADIADO
 | — | Importar Fichas IA: busca 400 (.role→.tipo), rg_responsavel ausente | — | `c1d2c930` |
 | — | BoletinsGerais: coordenador presencial via RLS + fix query join | — | `c1d2c930` |
 | — | Botão Editar nota invisível (opacity-0 group-hover removido) | — | `c1d2c930` |
+| — | `BoletinsGerais`: segmento ausente no payload → RLS bloqueava UPDATE coordenador presencial | — | `c29056fa` |
+| — | `ImportacaoFichas`: segmento ausente no payload → ficha salva mas não aparecia em Gerenciar Alunos | — | `9b933b3e` |
+| — | `BoletimProfessor`: segmento ausente → notas professor presencial gravadas como EAD e invisíveis ao coordenador | — | `0023e99f` |
+| — | RLS `notas_update_professor`: bloqueava UPDATE quando `professor_responsavel` era null (notas sem dono) | — | SQL direto |
+| — | Notas duplicadas no banco (mesmo aluno/disciplina/bimestre): removidas, constraint UNIQUE adicionada | — | SQL direto |
+| — | `calculoNotas`: `reprovado` removido do nível de bimestre — só existe no boletim anual final | — | `c67fb5e4` |
+| — | `BoletimCoordenador`: React key duplicada `REC-3`/`MÉD-4` nos cabeçalhos da tabela | — | `04fbc59d` |
+| — | Cache de localStorage stale em secretaria (instrução: limpar via DevTools Application) | — | sem código |
 
 ---
 
@@ -512,7 +520,8 @@ ADIADO
 - [x] ~~`vitest.config.ts` separado do `vite.config.ts`~~
 - [x] ~~`dateUtils.ts`, `authUtils.ts`, `serieUtils.ts` — utils puras testáveis~~
 - [x] ~~4 suítes de teste — `calculoNotas`, `dateUtils`, `authUtils`, `serieUtils`~~
-- **65/65 testes passando · `npm run test:run`**
+- **101/101 testes passando · `npm run test:run`**
+- Sessão 2026-06-23: +36 novos casos (calculoNotas: limites exatos, zero≠null, REC=0; authUtils: todos os 10 perfis cobertos)
 
 ---
 
@@ -615,6 +624,27 @@ ADIADO
 ### 🚫 F3 · Portal do Responsável — DESCARTADO
 
 > **Decisão 2026-06-13:** Ambas as escolas (Conexão Maranhense e Colégio Ariane) têm parceria com **Isaac**, que já oferece portal financeiro e contratos para os responsáveis. Criar um portal próprio duplicaria funcionalidade já disponível sem agregar valor. O painel do aluno já expõe notas, frequência e comunicados — suficiente.
+
+---
+
+### 🔄 Colégio Ariane — Onboarding (Ago/2026)
+
+> Segunda escola contratada. 229 alunos, segmento Presencial, do Maternal ao 9º ano.
+> Contrato: R$1.490/mês. Onboarding previsto para Agosto/2026.
+
+**Preparação técnica iniciada em 2026-06-23:**
+- [x] Tabela `escola_config` criada no Supabase (nome, logo, cores, domínio)
+- [x] Colégio Conexão e Colégio Ariane cadastrados na `escola_config`
+- [x] Hook `useEscolaConfig.ts` criado — detecta escola pelo domínio, aplica logo/cores/título
+- [ ] Comprar domínio do Colégio Ariane no Hostgator
+- [ ] Criar addon domain no cPanel + subir build na pasta do Ariane
+- [ ] Upload da logo do Ariane no Storage
+- [ ] Plugar `useEscolaConfig` no `SchoolHeader`, login e PDFs
+- [ ] Cadastrar séries, turmas e disciplinas do Ariane no banco
+- [ ] Criar usuários da escola (secretaria, coordenador, professores, alunos)
+- [ ] Lançar notas do 1º semestre já existentes
+
+**Nota técnica:** deploy manual por escola (mesmo build, pastas separadas no Hostgator). A partir da 3ª-4ª escola, migrar para F1.1 multi-tenant se torna necessário.
 
 ---
 
