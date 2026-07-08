@@ -139,37 +139,6 @@ export default function DashboardConteudista({
     }
   }, [usuario?.id, view]);
 
-  if (view === "uploadPDF") {
-    return (
-      <div className="min-h-screen bg-background p-6">
-        <Button
-          variant="ghost"
-          onClick={() => setView("dashboard")}
-          className="mb-4"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
-        </Button>
-        {/* Passando o usuário explicitamente para evitar erro de autenticação */}
-        <GestaoConteudoPDF usuario={usuario} />
-      </div>
-    );
-  }
-
-  if (view === "gestaoRAG") {
-    return (
-      <div className="min-h-screen bg-background p-6">
-        <Button
-          variant="ghost"
-          onClick={() => setView("dashboard")}
-          className="mb-4"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
-        </Button>
-        <GestaoRAG />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -216,6 +185,35 @@ export default function DashboardConteudista({
 
       {/* Conteúdo principal */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20 w-full">
+        {view === "uploadPDF" && (
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setView("dashboard")}
+              className="mb-4"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
+            </Button>
+            {/* Passando o usuário explicitamente para evitar erro de autenticação */}
+            <GestaoConteudoPDF usuario={usuario} />
+          </>
+        )}
+
+        {view === "gestaoRAG" && (
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setView("dashboard")}
+              className="mb-4"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
+            </Button>
+            <GestaoRAG />
+          </>
+        )}
+
+        {view === "dashboard" && (
+        <>
         <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-foreground">
@@ -351,6 +349,8 @@ export default function DashboardConteudista({
             )}
           </CardContent>
         </Card>
+        </>
+        )}
       </main>
     </div>
   );
