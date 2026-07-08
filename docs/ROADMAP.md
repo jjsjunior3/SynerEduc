@@ -29,11 +29,17 @@ DEPENDÊNCIA ESTRUTURAL PARA IA
  ✅  F2.3 → Arquivo Morto         ← histórico retroativo unificado + pré-visualização
               │
               ▼
- #1  F5   → Agentes de IA — 6/7 perfis  ← reutiliza F2.1 imediatamente
+ ✅  F5   → Agentes de IA — 6/7 perfis  ← reutiliza F2.1 imediatamente · fechado em 2026-07-08
               │   (secretaria, gestor, coord, prof, financeiro, aluno)
               │   ┌─────────────────────────────────────────────────────────┐
+              │   │  ENTREGUES NA SESSÃO 2026-07-08                        │
+              │   │  ✅ Sofia: contexto extra p/ coordenador (freq+ativid.) │
+              │   │  ✅ Agente NEXUS (Admin Geral) — Tool Use, 3 ferramentas│
+              │   │  ✅ GestaoRAG.tsx — status Pinecone + exclusão por      │
+              │   │       série/disciplina (painel Conteudista)             │
+              │   │                                                         │
               │   │  ENTREGUES NA SESSÃO 2026-06-06                        │
-              │   │  ✅ F5.1 Pinecone pipeline — 🔄 indexando (~60/465 imgs) │
+              │   │  ✅ F5.1 Pinecone pipeline — 313/465 imgs indexadas     │
               │   │  ✅ F5.2 ChatFlutuante — Professora Sofia (RAG chat)    │
               │   │  ✅ F5.3/5.5/5.8 Agente Secretaria/Gestor/Financeiro   │
               │   │       → Gabriela v7 (Tool Use) — em produção           │
@@ -102,7 +108,7 @@ ADIADO
 | Prioridade | Fase | Por que esta posição | Esforço est. | Janela |
 |:---:|---|---|:---:|---|
 | ~~**#1**~~ | ~~F2.1/2.2/2.3 IA Histórico~~ | ~~Edge Function proxy + arquivo histórico + arquivo morto~~ | ~~2 sem~~ | ✅ Jun/2026 |
-| **#1** | F5 Agentes (6/7) | Objetivo principal — reutiliza F2.1 direto | 3-4 sem | Jun-Jul |
+| ~~**#1**~~ | ~~F5 Agentes (6/7)~~ | ~~Objetivo principal — reutiliza F2.1 direto~~ | ~~3-4 sem~~ | ✅ Jul/2026 |
 | **#2** | F1.1 Multi-tenant | Férias escolares — sistema pode sair do ar · Colégio Ariane entra pós-migração | 3-4 sem | **Jul** |
 | **#3** | F10 Plano de Aula IA | Esqueleto na demo Ariane (jun/17) · completo após indexação | 1-2 sem | Jun-Jul |
 | **#2.5** | F12 Painel Super-Admin | synereduc.com — controle central, onboarding automático de escolas | 1-2 sem | Ago |
@@ -617,11 +623,11 @@ ADIADO
 - [x] ~~**Agente Pedagógico · Professor/Aluno** — Sofia v6 (RAG + agenda de hoje)~~
 - [x] ~~**Agente Coordenador** — Sofia v8 recebe contexto extra (frequência dos últimos 7 dias + atividades aguardando correção) via `<contexto_coordenador>` no system prompt, filtrado por segmento~~
 - [x] ~~**Agente Admin Geral "NEXUS"** (#28) — Edge Function `agente-nexus` (Tool Use, mesmo padrão de agente-gabriela) com 3 ferramentas: `status_sistema`, `consumo_ia`, `logs_seguranca` (tentativas de prompt injection via `agente_log.tentativa_violacao` + erros de execução via `agente_ia_log`). `ChatNexus.tsx` plugado no `DashboardAdministrador.tsx`, restrito a `tipo === 'administrador'`~~
-- [ ] **F5.10** (#29) — Interface de gestão do RAG integrada ao painel do Professor Conteudista (mesma pessoa que alimenta o sistema) — **não iniciado**
+- [x] ~~**F5.10** (#29) — `GestaoRAG.tsx` no painel do Professor Conteudista: mostra total de vetores indexados no Pinecone (`rag-status` Edge Function, `describe_index_stats`) e permite remover vetores de uma série/disciplina antes de reindexar localmente. Restrito a `professor_conteudista`/`administrador`~~
 
-> Checagem de código em 2026-07-08 confirmou o status acima (`chat-sofia/index.ts`, `DashboardAdministrador.tsx`, `DashboardConteudista.tsx`). Contexto do coordenador (chat-sofia v10) e NEXUS (agente-nexus v1) implementados e deployados na mesma sessão. Queries validadas via SQL direto contra o schema real — sem erros de coluna/join.
+> Checagem de código em 2026-07-08 confirmou o status acima (`chat-sofia/index.ts`, `DashboardAdministrador.tsx`, `DashboardConteudista.tsx`). Contexto do coordenador (chat-sofia v10), NEXUS (agente-nexus v1) e gestão do RAG (rag-status v1) implementados e deployados na mesma sessão. Queries validadas via SQL direto contra o schema real — sem erros de coluna/join.
 
-**Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4.
+**Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4. **F5 fechado em 2026-07-08.**
 
 ---
 

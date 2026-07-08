@@ -21,7 +21,8 @@ import {
 import { PerfilUsuario } from "./PerfilUsuario";
 import { Notificacoes } from "./Notificacoes";
 // Importante: Usando o componente corrigido
-import { GestaoConteudoPDF } from "./GestaoConteudoPDF"; 
+import { GestaoConteudoPDF } from "./GestaoConteudoPDF";
+import { GestaoRAG } from "./GestaoRAG";
 import { Usuario } from "../types/auth";
 import { supabase } from "../supabase/supabaseClient";
 
@@ -286,6 +287,10 @@ export default function DashboardConteudista({
             )}
           </CardContent>
         </Card>
+
+        <div className="mt-8">
+          <GestaoRAG />
+        </div>
       </main>
     </div>
   );
