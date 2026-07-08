@@ -616,10 +616,10 @@ ADIADO
 **Tarefas restantes F5 (agentes pedagógicos):**
 - [x] ~~**Agente Pedagógico · Professor/Aluno** — Sofia v6 (RAG + agenda de hoje)~~
 - [x] ~~**Agente Coordenador** — Sofia v8 recebe contexto extra (frequência dos últimos 7 dias + atividades aguardando correção) via `<contexto_coordenador>` no system prompt, filtrado por segmento~~
-- [ ] **Agente Admin Geral "NEXUS"** (#28) — status do sistema, consumo IA, logs de segurança · plugado no DashboardAdministrador — **não iniciado**, `DashboardAdministrador.tsx` hoje não usa nenhum agente de IA
+- [x] ~~**Agente Admin Geral "NEXUS"** (#28) — Edge Function `agente-nexus` (Tool Use, mesmo padrão de agente-gabriela) com 3 ferramentas: `status_sistema`, `consumo_ia`, `logs_seguranca` (tentativas de prompt injection via `agente_log.tentativa_violacao` + erros de execução via `agente_ia_log`). `ChatNexus.tsx` plugado no `DashboardAdministrador.tsx`, restrito a `tipo === 'administrador'`~~
 - [ ] **F5.10** (#29) — Interface de gestão do RAG integrada ao painel do Professor Conteudista (mesma pessoa que alimenta o sistema) — **não iniciado**
 
-> Checagem de código em 2026-07-08 confirmou o status acima (`chat-sofia/index.ts`, `DashboardAdministrador.tsx`, `DashboardConteudista.tsx`). Contexto do coordenador implementado e deployado (v10) na mesma sessão.
+> Checagem de código em 2026-07-08 confirmou o status acima (`chat-sofia/index.ts`, `DashboardAdministrador.tsx`, `DashboardConteudista.tsx`). Contexto do coordenador (chat-sofia v10) e NEXUS (agente-nexus v1) implementados e deployados na mesma sessão. Queries validadas via SQL direto contra o schema real — sem erros de coluna/join.
 
 **Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4.
 

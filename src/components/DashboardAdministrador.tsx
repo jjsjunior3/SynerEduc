@@ -22,8 +22,9 @@ import FrequenciaProfessores from "./FrequenciaProfessores";
 import ComunicadosPage from "./ComunicadosPage";
 import { GestaoVinculos } from "./GestaoVinculos";
 import { MonitoramentoIA } from "./MonitoramentoIA";
+import { ChatNexus } from "./ai/ChatNexus";
 import { supabase } from "../supabase/supabaseClient";
-// Agentes de IA: Administrador não utiliza Sofia nem Tia Maria José
+// Agentes de IA: Administrador não utiliza Sofia nem Tia Maria José — usa NEXUS (agente-nexus)
 import { useTheme } from "../contexts/ThemeContext";
 // ✅ Importa as funções do novo hook baseado em sessoes_ativas
 import { contarOnline, listarOnline } from "../hooks/usePresence";
@@ -503,6 +504,7 @@ export function DashboardAdministrador({
           </div>
         )}
       </div>
+      <ChatNexus />
     </div>
   );
 }
