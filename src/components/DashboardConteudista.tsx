@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   TrendingUp,
   ChevronRight,
+  Database,
 } from "lucide-react";
 import { PerfilUsuario } from "./PerfilUsuario";
 import { Notificacoes, useNotificacoesCount } from "./Notificacoes";
@@ -54,7 +55,7 @@ export default function DashboardConteudista({
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
   const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
   const { count: notifCount } = useNotificacoesCount();
-  const [view, setView] = useState<"dashboard" | "uploadPDF">("dashboard");
+  const [view, setView] = useState<"dashboard" | "uploadPDF" | "gestaoRAG">("dashboard");
   const [loadingStats, setLoadingStats] = useState(true);
 
   // Estatísticas dinâmicas
@@ -154,6 +155,21 @@ export default function DashboardConteudista({
     );
   }
 
+  if (view === "gestaoRAG") {
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <Button
+          variant="ghost"
+          onClick={() => setView("dashboard")}
+          className="mb-4"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
+        </Button>
+        <GestaoRAG />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -209,13 +225,23 @@ export default function DashboardConteudista({
               Gerencie e publique o conteúdo das disciplinas
             </p>
           </div>
-          <Button
-            className="gap-2 text-xs shrink-0"
-            onClick={() => setView("uploadPDF")}
-          >
-            <Upload className="w-4 h-4" />
-            Gerenciar Conteúdos
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              className="gap-2 text-xs"
+              onClick={() => setView("gestaoRAG")}
+            >
+              <Database className="w-4 h-4" />
+              Gestão do RAG
+            </Button>
+            <Button
+              className="gap-2 text-xs"
+              onClick={() => setView("uploadPDF")}
+            >
+              <Upload className="w-4 h-4" />
+              Gerenciar Conteúdos
+            </Button>
+          </div>
         </div>
 
         {/* Estatísticas */}
@@ -325,10 +351,6 @@ export default function DashboardConteudista({
             )}
           </CardContent>
         </Card>
-
-        <div className="mt-6">
-          <GestaoRAG />
-        </div>
       </main>
     </div>
   );

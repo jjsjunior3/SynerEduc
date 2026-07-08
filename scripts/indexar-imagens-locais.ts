@@ -17,6 +17,7 @@
 import * as fs     from 'fs'
 import * as path   from 'path'
 import * as dotenv from 'dotenv'
+import { createClient } from '@supabase/supabase-js'
 
 dotenv.config({ path: '.env.local' })
 
@@ -25,6 +26,10 @@ dotenv.config({ path: '.env.local' })
 const PINECONE_KEY  = process.env.PINECONE_API_KEY ?? ''
 const PINECONE_HOST = process.env.PINECONE_HOST    ?? ''
 const OLLAMA_URL    = process.env.OLLAMA_URL ?? 'http://localhost:11434'
+
+const SUPABASE_URL  = process.env.VITE_SUPABASE_URL   ?? ''
+const SERVICE_KEY   = process.env.SUPABASE_SERVICE_KEY ?? ''
+const supabase       = SUPABASE_URL && SERVICE_KEY ? createClient(SUPABASE_URL, SERVICE_KEY) : null
 
 const VISION_MODEL       = 'gemma3:4b'              // OCR local (mantido)
 const PINECONE_EMBED_URL = 'https://api.pinecone.io/embed'
@@ -449,6 +454,55 @@ async function upsertPinecone(vetores: object[]) {
   if (!resp.ok) throw new Error(`Pinecone upsert ${resp.status}: ${await resp.text()}`)
 }
 
+// ─── Catálogo do RAG (Supabase) ────────────────────────────────────────────────
+// Espelha o que está no Pinecone para a UI de gestão poder navegar/excluir
+// sem depender de "listar valores distintos de metadata" (que o Pinecone não tem).
+
+// Roda uma vez no início: garante que TODO livro descoberto localmente tenha uma
+// linha no catálogo (mesmo os já indexados em runs anteriores a este recurso),
+// sem sobrescrever total_vetores/indexado de linhas que já existem.
+async function sincronizarCatalogoInicial(livros: Livro[], checkpoint: Set<string>) {
+  if (!supabase) return
+  const linhas = livros.map(l => ({
+    livro_id:   l.id,
+    serie:      l.serie,
+    disciplina: l.disciplina,
+    area:       l.area || null,
+    bimestre:   l.bimestre,
+    volume:     l.volume ?? null,
+    tipo:       l.tipo,
+    indexado:   checkpoint.has(l.id),
+  }))
+  for (let i = 0; i < linhas.length; i += 200) {
+    const lote = linhas.slice(i, i + 200)
+    const { error } = await supabase
+      .from('rag_material_indexado')
+      .upsert(lote, { onConflict: 'livro_id', ignoreDuplicates: true })
+    if (error) console.error('⚠️  Falha ao sincronizar catálogo (seed):', error.message)
+  }
+}
+
+// Chamado após indexação (ou remoção) bem-sucedida de um livro específico.
+async function atualizarCatalogo(livro: Livro, totalVetores: number) {
+  if (!supabase) return
+  const { error } = await supabase
+    .from('rag_material_indexado')
+    .upsert({
+      livro_id:      livro.id,
+      serie:         livro.serie,
+      disciplina:    livro.disciplina,
+      area:          livro.area || null,
+      bimestre:      livro.bimestre,
+      volume:        livro.volume ?? null,
+      tipo:          livro.tipo,
+      total_vetores: totalVetores,
+      indexado:      true,
+      indexado_em:   new Date().toISOString(),
+      atualizado_em: new Date().toISOString(),
+    }, { onConflict: 'livro_id' })
+  if (error) console.error('⚠️  Falha ao atualizar catálogo:', error.message)
+}
+
 // ─── Pipeline de um livro ─────────────────────────────────────────────────────
 
 async function indexarLivro(livro: Livro, idx: number, total: number): Promise<boolean> {
@@ -505,6 +559,7 @@ async function indexarLivro(livro: Livro, idx: number, total: number): Promise<b
     }
 
     process.stdout.write(`\n   ✅ ${totalVetores} vetores no Pinecone\n`)
+    await atualizarCatalogo(livro, totalVetores)
     return true
 
   } catch (err: any) {
@@ -559,6 +614,11 @@ async function main() {
   // Checkpoint — pula os já processados
   const checkpoint = carregarCheckpoint()
   const pendentes  = livros.filter(l => !checkpoint.has(l.id))
+
+  // Sincroniza o catálogo (Supabase) com tudo que foi descoberto localmente —
+  // roda sempre, mesmo se não houver nada pendente, para popular metadados
+  // (série/disciplina/bimestre) de livros indexados antes deste recurso existir.
+  await sincronizarCatalogoInicial(livros, checkpoint)
 
   if (pendentes.length === 0) {
     console.log('\n✅ Todos os livros já foram indexados. Use --reset para reindexar.\n')

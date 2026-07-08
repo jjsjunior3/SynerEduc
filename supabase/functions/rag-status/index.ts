@@ -1,9 +1,12 @@
 // supabase/functions/rag-status/index.ts
 // F5.10 — Gestão do RAG (Pinecone) para o Professor Conteudista
 // Ações:
-//   status   → total de vetores indexados no Pinecone (describe_index_stats)
-//   excluir  → remove vetores de uma série/disciplina específica (filtro de metadata)
-//              usado antes de reindexar localmente um livro atualizado
+//   status    → total geral de vetores indexados no Pinecone (describe_index_stats)
+//   catalogo  → lista o catálogo (série/disciplina/bimestre) espelhado no Supabase,
+//               que é a única forma de "navegar" o que existe — o Pinecone não
+//               suporta listar valores distintos de metadata
+//   excluir   → remove vetores de um ou mais livros (por livro_id exato) do
+//               Pinecone e do catálogo, usado antes de reindexar localmente
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
@@ -20,13 +23,27 @@ const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get(
 
 const PERFIS_PERMITIDOS = ['professor_conteudista', 'administrador']
 
-// Aceita apenas letras (com acento), números, espaço, hífen — evita quebrar o filtro JSON do Pinecone
-const TEXTO_SEGURO_RE = /^[\p{L}0-9 ºª\-]{1,60}$/u
+// IDs são gerados por nós mesmos (toAsciiId no script local) — só ASCII, _ e -
+const LIVRO_ID_RE = /^[a-zA-Z0-9_-]{1,120}$/
 
-function sanitizeTexto(val: unknown): string | null {
-  if (typeof val !== 'string') return null
-  const limpo = val.trim()
-  return TEXTO_SEGURO_RE.test(limpo) ? limpo : null
+function sanitizeLivroIds(val: unknown): string[] | null {
+  if (!Array.isArray(val) || val.length === 0 || val.length > 200) return null
+  const limpos = val.filter((v): v is string => typeof v === 'string' && LIVRO_ID_RE.test(v))
+  return limpos.length === val.length ? limpos : null
+}
+
+async function supabaseRest(path: string, init?: RequestInit) {
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      'apikey':        SERVICE_KEY,
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'Content-Type':  'application/json',
+      ...(init?.headers ?? {}),
+    },
+  })
+  if (!resp.ok) throw new Error(`Supabase ${path}: ${resp.status} ${await resp.text()}`)
+  return resp.status === 204 ? null : resp.json()
 }
 
 serve(async (req) => {
@@ -53,7 +70,7 @@ serve(async (req) => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    const { acao, serie, disciplina } = await req.json()
+    const { acao, livro_ids } = await req.json()
 
     if (acao === 'status') {
       const resp = await fetch(`${PINECONE_HOST}/describe_index_stats`, {
@@ -72,13 +89,18 @@ serve(async (req) => {
       )
     }
 
-    if (acao === 'excluir') {
-      const serieLimpa      = sanitizeTexto(serie)
-      const disciplinaLimpa = sanitizeTexto(disciplina)
+    if (acao === 'catalogo') {
+      const linhas = await supabaseRest(
+        'rag_material_indexado?select=livro_id,serie,disciplina,area,bimestre,volume,tipo,total_vetores,indexado_em&indexado=eq.true&order=serie.asc,disciplina.asc,volume.asc.nullslast,bimestre.asc'
+      )
+      return new Response(JSON.stringify({ itens: linhas }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
+    }
 
-      if (!serieLimpa || !disciplinaLimpa) {
+    if (acao === 'excluir') {
+      const ids = sanitizeLivroIds(livro_ids)
+      if (!ids) {
         return new Response(
-          JSON.stringify({ erro: 'Informe série e disciplina válidas' }),
+          JSON.stringify({ erro: 'Informe ao menos um livro_id válido' }),
           { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
         )
       }
@@ -87,16 +109,17 @@ serve(async (req) => {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Api-Key': PINECONE_KEY },
         body: JSON.stringify({
-          filter: {
-            serie:      { '$eq': serieLimpa },
-            disciplina: { '$eq': disciplinaLimpa },
-          },
+          filter: { livro_id: { '$in': ids } },
         }),
       })
       if (!resp.ok) throw new Error(`Pinecone vectors/delete: ${resp.status} ${await resp.text()}`)
 
+      // Remove do catálogo (best-effort — a exclusão no Pinecone já aconteceu)
+      const filtroIds = ids.map(id => `"${id}"`).join(',')
+      await supabaseRest(`rag_material_indexado?livro_id=in.(${filtroIds})`, { method: 'DELETE' })
+
       return new Response(
-        JSON.stringify({ ok: true, mensagem: `Vetores de ${disciplinaLimpa} / ${serieLimpa} removidos. Rode a reindexação local para essa série/disciplina quando o material for atualizado.` }),
+        JSON.stringify({ ok: true, removidos: ids.length, mensagem: `${ids.length} item(ns) removido(s) do índice. Rode a reindexação local quando o material for atualizado.` }),
         { headers: { ...CORS, 'Content-Type': 'application/json' } }
       )
     }
@@ -106,7 +129,7 @@ serve(async (req) => {
   } catch (err: any) {
     console.error('rag-status error:', err)
     return new Response(
-      JSON.stringify({ erro: err.message ?? 'Erro ao consultar o Pinecone' }),
+      JSON.stringify({ erro: err.message ?? 'Erro ao consultar o RAG' }),
       { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } }
     )
   }
