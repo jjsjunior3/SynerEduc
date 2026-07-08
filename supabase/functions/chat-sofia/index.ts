@@ -99,9 +99,58 @@ async function buscarPerfil(authHeader: string): Promise<Perfil> {
   return { userId, nome, tipo, serie, segmento, disciplinas, series }
 }
 
+// ─── Contexto extra do coordenador ───────────────────────────────────────────
+
+interface ContextoCoordenador {
+  frequenciaSemanalPct:      string
+  atividadesPendentesCorrecao: number
+}
+
+async function buscarContextoCoordenador(segmento: string | null): Promise<ContextoCoordenador | null> {
+  if (!segmento) return null
+
+  const seteDiasAtras = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().split('T')[0]
+
+  const [freqResp, ativResp] = await Promise.all([
+    fetch(
+      `${SUPABASE_URL}/rest/v1/frequencia_diaria`
+        + `?select=presente,turmas!inner(segmento)`
+        + `&turmas.segmento=eq.${encodeURIComponent(segmento)}`
+        + `&data_aula=gte.${seteDiasAtras}`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+    ),
+    fetch(
+      `${SUPABASE_URL}/rest/v1/atividades_alunos`
+        + `?select=status,users!inner(segmento)`
+        + `&users.segmento=eq.${encodeURIComponent(segmento)}`
+        + `&status=eq.enviado`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+    ),
+  ])
+
+  if (!freqResp.ok || !ativResp.ok) return null
+
+  const freqRows: { presente: boolean }[] = await freqResp.json()
+  const ativRows: unknown[] = await ativResp.json()
+
+  const total     = freqRows.length
+  const presentes = freqRows.filter(r => r.presente).length
+  const pct       = total > 0 ? ((presentes / total) * 100).toFixed(1) : 'sem registros'
+
+  return {
+    frequenciaSemanalPct:        total > 0 ? `${pct}%` : 'sem registros nos últimos 7 dias',
+    atividadesPendentesCorrecao: ativRows.length,
+  }
+}
+
 // ─── System prompt por tipo de usuário ───────────────────────────────────────
 
-function systemPrompt(perfil: Perfil, agenda: AgendaAula[], disciplinaAtual?: string): string {
+function systemPrompt(
+  perfil: Perfil,
+  agenda: AgendaAula[],
+  disciplinaAtual?: string,
+  contextoCoordenador?: ContextoCoordenador | null,
+): string {
   const { nome, tipo, serie, disciplinas, series } = perfil
 
   // Bloco de agenda formatado para o system prompt
@@ -159,15 +208,20 @@ ${disciplinaAtual ? `O contexto atual é a disciplina de ${disciplinaAtual}.` : 
   }
 
   // coordenador (e outros papéis privilegiados)
+  const coordBlock = contextoCoordenador
+    ? `\n\n<contexto_coordenador>\nFrequência dos últimos 7 dias: ${contextoCoordenador.frequenciaSemanalPct}\nAtividades aguardando correção pelos professores: ${contextoCoordenador.atividadesPendentesCorrecao}\n</contexto_coordenador>`
+    : ''
+
   return `Você é a Professora Sofia, assistente pedagógica do Colégio Conexão Maranhense.
 Você apoia a coordenação com visão ampla do conteúdo escolar, planejamento e acompanhamento curricular.
 Tom profissional, objetivo e completo.
 
-Você está conversando com ${nome ?? 'a coordenação'}, coordenador(a) pedagógico(a).${agendaBlock}
+Você está conversando com ${nome ?? 'a coordenação'}, coordenador(a) pedagógico(a).${agendaBlock}${coordBlock}
 
 <regras>
 - Você tem acesso ao material didático de TODAS as séries e disciplinas
 - Use <agenda_de_hoje> para contextualizar discussões curriculares quando perguntado — não repita em toda resposta
+- Use <contexto_coordenador> para responder sobre frequência da semana ou atividades pendentes de correção quando perguntado — não repita proativamente em toda resposta
 - Use <material_didatico> para embasar análises e recomendações
 - Pode responder sobre qualquer série, disciplina ou aspecto pedagógico
 - Mantenha foco em conteúdo curricular e gestão pedagógica
@@ -303,6 +357,7 @@ async function chamarClaude(
   historico:  { role: string; content: string }[],
   perfil:     Perfil,
   disciplina?: string,
+  contextoCoordenador?: ContextoCoordenador | null,
 ): Promise<RespostaClaude> {
   // Bloco do material didático (vai na mensagem do usuário, por ser dinâmico por pergunta)
   const materialBlock = chunks.length > 0
@@ -331,7 +386,7 @@ async function chamarClaude(
     body: JSON.stringify({
       model:      CHAT_MODEL,
       max_tokens: 1024,
-      system:     systemPrompt(perfil, agenda, disciplina),
+      system:     systemPrompt(perfil, agenda, disciplina, contextoCoordenador),
       messages:   mensagens,
     }),
   })
@@ -373,10 +428,11 @@ serve(async (req) => {
       )
     }
 
-    // Busca agenda e embedding em paralelo
-    const [vetor, agenda] = await Promise.all([
+    // Busca agenda, embedding e (se coordenador) contexto extra em paralelo
+    const [vetor, agenda, contextoCoordenador] = await Promise.all([
       gerarEmbedding(pergunta),
       buscarAgendaHoje(perfil, disciplina),
+      perfil.tipo === 'coordenador' ? buscarContextoCoordenador(perfil.segmento) : Promise.resolve(null),
     ])
 
     // Busca chunks no Pinecone (filtro por tipo)
@@ -384,7 +440,7 @@ serve(async (req) => {
 
     // Resposta do Claude
     const t0 = Date.now()
-    const resultado = await chamarClaude(pergunta, chunks, agenda, historico, perfil, disciplina)
+    const resultado = await chamarClaude(pergunta, chunks, agenda, historico, perfil, disciplina, contextoCoordenador)
     const latencia  = Date.now() - t0
 
     await logIA({

@@ -615,11 +615,11 @@ ADIADO
 
 **Tarefas restantes F5 (agentes pedagógicos):**
 - [x] ~~**Agente Pedagógico · Professor/Aluno** — Sofia v6 (RAG + agenda de hoje)~~
-- [ ] **Agente Coordenador** — Sofia já detecta `tipo === 'coordenador'` (system prompt próprio, acesso a todo o material) mas ainda **não** recebe o contexto extra planejado (frequência semanal, atividades a corrigir) — só a agenda de hoje, igual aos outros perfis
+- [x] ~~**Agente Coordenador** — Sofia v8 recebe contexto extra (frequência dos últimos 7 dias + atividades aguardando correção) via `<contexto_coordenador>` no system prompt, filtrado por segmento~~
 - [ ] **Agente Admin Geral "NEXUS"** (#28) — status do sistema, consumo IA, logs de segurança · plugado no DashboardAdministrador — **não iniciado**, `DashboardAdministrador.tsx` hoje não usa nenhum agente de IA
 - [ ] **F5.10** (#29) — Interface de gestão do RAG integrada ao painel do Professor Conteudista (mesma pessoa que alimenta o sistema) — **não iniciado**
 
-> Checagem de código em 2026-07-08 confirmou o status acima (`chat-sofia/index.ts` v7, `DashboardAdministrador.tsx`, `DashboardConteudista.tsx`).
+> Checagem de código em 2026-07-08 confirmou o status acima (`chat-sofia/index.ts`, `DashboardAdministrador.tsx`, `DashboardConteudista.tsx`). Contexto do coordenador implementado e deployado (v10) na mesma sessão.
 
 **Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4.
 
