@@ -1,5 +1,5 @@
 # ROADMAP — Portal Conexão AVA · SynerEduc
-> Backlog priorizado por dependência estrutural · Atualizado em: 2026-06-23  
+> Backlog priorizado por dependência estrutural · Atualizado em: 2026-07-08  
 > Status: 🔴 Crítico · 🟡 Importante · 🟢 Melhoria · ✅ Concluído · 🔄 Em andamento · ⏸ Adiado · 🚫 Descartado
 
 ---
@@ -105,8 +105,10 @@ ADIADO
 | **#1** | F5 Agentes (6/7) | Objetivo principal — reutiliza F2.1 direto | 3-4 sem | Jun-Jul |
 | **#2** | F1.1 Multi-tenant | Férias escolares — sistema pode sair do ar · Colégio Ariane entra pós-migração | 3-4 sem | **Jul** |
 | **#3** | F10 Plano de Aula IA | Esqueleto na demo Ariane (jun/17) · completo após indexação | 1-2 sem | Jun-Jul |
+| **#2.5** | F12 Painel Super-Admin | synereduc.com — controle central, onboarding automático de escolas | 1-2 sem | Ago |
 | **#6** | F1.3 Virada de ano | Deadline dez/2026 — testar com 2 meses de antecedência | 1-2 sem | Set-Out |
-| **#7** | F4 Financeiro+Asaas | Após F3 (portal) + F1.1 (multi-tenant) = zero retrabalho | 2-3 sem | Out-Nov |
+| **#6.5** | F11 Modularização | Camada comercial (3 planos) — depende de F1.1 para `escola_id` | 1-2 sem | Ago-Set |
+| **#7** | F4 Financeiro+Asaas | Após F1.1 (multi-tenant) = zero retrabalho | 2-3 sem | Out-Nov |
 | **#8** | F6 PWA | Produto estável — após tudo acima consolidado | 1-2 sem | Nov-Dez |
 | **#9** | F7 Agente de Inclusão | Produto independente — acervo especialista pronto | 4-6 sem | 2027 |
 | **⏸** | F1.2 Liberar acesso | Todos os alunos já cadastrados — retomar nas matrículas | — | Dez/2026 |
@@ -592,12 +594,12 @@ ADIADO
 > ⚠️ parcial = funciona com dados ao vivo; apenas a consulta ao regimento fica pendente até o documento chegar.
 
 **Tarefas F5.0 (infra):**
-- [ ] SQL: tabelas `agente_log`, `agente_uso_diario`, `agente_limites`
+- [x] ~~SQL: tabelas `agente_log`, `agente_uso_diario`, `agente_limites`~~ — confirmado em produção (Supabase)
 
 **Tarefas F5.1 (Pinecone):**
 - [x] ~~Script de indexação PNG via Ollama gemma3:4b (OCR) + multilingual-e5-large → Pinecone~~
 - [x] ~~1ª série / Biologia / 1º bimestre — primeiros vetores indexados e funcionando~~
-- [ ] 🔄 **Completar indexação demais séries e disciplinas** — rodando em background (~60/465 imagens)
+- [ ] 🔄 **Completar indexação demais séries e disciplinas** — 313 imagens indexadas no checkpoint local (`scripts/indexar-imagens-checkpoint.json`), rodando em background na máquina do operador. Confirmar total restante antes de fechar o item.
 - [ ] Utilitário de deleção + re-upsert para atualização futura
 
 **Tarefas F5.2 (componente base):**
@@ -613,9 +615,11 @@ ADIADO
 
 **Tarefas restantes F5 (agentes pedagógicos):**
 - [x] ~~**Agente Pedagógico · Professor/Aluno** — Sofia v6 (RAG + agenda de hoje)~~
-- [ ] **Agente Coordenador** — sem novo balão flutuante; Sofia detecta role=coordenador e recebe contexto adicional (agenda pendente, frequência semanal, atividades a corrigir) automaticamente
-- [ ] **Agente Admin Geral "NEXUS"** (#28) — status do sistema, consumo IA, logs de segurança · plugado no DashboardAdministrador
-- [ ] **F5.10** (#29) — Interface de gestão do RAG integrada ao painel do Professor Conteudista (mesma pessoa que alimenta o sistema)
+- [ ] **Agente Coordenador** — Sofia já detecta `tipo === 'coordenador'` (system prompt próprio, acesso a todo o material) mas ainda **não** recebe o contexto extra planejado (frequência semanal, atividades a corrigir) — só a agenda de hoje, igual aos outros perfis
+- [ ] **Agente Admin Geral "NEXUS"** (#28) — status do sistema, consumo IA, logs de segurança · plugado no DashboardAdministrador — **não iniciado**, `DashboardAdministrador.tsx` hoje não usa nenhum agente de IA
+- [ ] **F5.10** (#29) — Interface de gestão do RAG integrada ao painel do Professor Conteudista (mesma pessoa que alimenta o sistema) — **não iniciado**
+
+> Checagem de código em 2026-07-08 confirmou o status acima (`chat-sofia/index.ts` v7, `DashboardAdministrador.tsx`, `DashboardConteudista.tsx`).
 
 **Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4.
 
@@ -679,6 +683,66 @@ ADIADO
 - [ ] Tela de confirmação com lista de alunos afetados antes de executar
 
 **Deadline:** testar em outubro, executar em dezembro/2026.
+
+---
+
+### 🔴 #2.5 — F12 · Painel Super-Admin (synereduc.com) · Ago/2026 · ~1-2 semanas
+
+> **Por que aqui?** Depende de F1.1 (multi-tenant + `escola_id`) para ter dados de todas as escolas isolados corretamente. É a peça de controle central do SaaS — sem ela, cada escola nova exige operação manual.
+
+**Contexto:** Painel exclusivo em `synereduc.com` para o operador da plataforma (Junior). Login com perfil `super_admin`, branding SynerEduc, acesso cross-escola sem entrar em cada domínio individualmente.
+
+**Tarefas:**
+
+- [ ] Perfil `super_admin` no Supabase Auth (`user_metadata.tipo = 'super_admin'`, `escola_id: null`)
+- [ ] RLS: policy `BYPASS RLS` ou `USING(true)` para `super_admin` em todas as tabelas
+- [ ] `useEscolaConfig`: quando domínio = `synereduc.com` → retorna modo super-admin
+- [ ] Tela de login exclusiva com logo/cores do SynerEduc (detectado pelo domínio)
+- [ ] `DashboardSuperAdmin.tsx` com:
+  - KPIs globais: escolas ativas, usuários totais, MRR, uso de IA no mês
+  - Lista de escolas com status (ativa/suspensa), plano contratado, nº de usuários
+  - Seletor de escola ativa — todas as telas abaixo operam no contexto da escola selecionada
+- [ ] `CadastroEscola.tsx` — formulário completo:
+  - Nome, CNPJ, domínio, segmento padrão, plano (módulos), logo, cores
+  - Ao salvar: INSERT em `escola_config` + cria usuário admin no Supabase Auth + envia e-mail de boas-vindas com credenciais
+- [ ] Edge Function `criar-escola` — automação do onboarding (substitui operação manual)
+- [ ] **Gestão completa por escola (suporte remoto)** — reutiliza componentes existentes com `escola_id` injetado pelo seletor:
+  - Usuários: cadastrar alunos, professores, coordenadores, secretaria — mesmo `GestaoUsuarios` já existente
+  - Vínculos: professor ↔ disciplina ↔ série — mesmo `VinculosProfessores` já existente
+  - Disciplinas e séries: criar, editar, remover — mesmo `GestaoDisciplinas` / `GestaoSeries` já existentes
+  - Turmas: criar e associar alunos — mesmo `GestaoTurmas` já existente
+  - Notas e boletins: consultar e corrigir em nome da escola se necessário
+  - Tudo isso sem precisar de login separado na escola, sem sair do `synereduc.com`
+- [ ] Registro do SynerEduc em `escola_config` (domínio `synereduc.com`, cores `#6366F1`/`#8B5CF6`)
+- [ ] Adicionar `synereduc.com` como domínio customizado no Vercel
+
+**Dependência:** F1.1 (multi-tenant)
+**Destrava:** onboarding de novas escolas sem operação manual — de horas para minutos
+
+---
+
+### 🟡 #6.5 — F11 · Modularização do Produto (Planos Pedagógico / Secretaria+Financeiro / IA) · Ago-Set/2026 · ~1-2 semanas
+
+> **Por que aqui?** Depende de F1.1 (multi-tenant) porque o campo `modulos` fica em `escola_config`, que precisa de `escola_id`. Não bloqueia nenhuma feature existente — é uma camada sobre o que já existe.
+
+**Contexto:** Divisão do produto em 3 módulos comercialmente independentes para ampliar o alcance e permitir precificação por camada:
+
+| Módulo | Perfis incluídos | Funcionalidades |
+|---|---|---|
+| **Pedagógico** (base) | Aluno, Professor, Coordenador, Admin básico | Notas, boletim, frequência, agenda, comunicados, fórum, atividades |
+| **Secretaria + Financeiro** | Secretaria, Financeiro, Gestor Geral | Matrículas, fichas, contratos, mensalidades, despesas |
+| **IA** (add-on) | Todos os perfis habilitados | Sofia, Gabriela, Plano de Aula, Tia Maria José, Assistente de Voz |
+
+**Tarefas:**
+- [ ] Campo `modulos text[]` em `escola_config` (default: `'{pedagogico}'`)
+- [ ] Hook `useModulos()` — expõe `temFinanceiro`, `temIA`, `temSecretaria`
+- [ ] Esconder rotas/menus dos módulos não contratados (menu lateral, Dashboard routing)
+- [ ] Edge Functions de IA: verificar `modulos` inclui `'ia'` antes de processar (HTTP 403 se não tiver)
+- [ ] Impedir criação de usuários com perfis de módulos não contratados (`secretaria`, `financeiro`, `gestor_geral` bloqueados sem módulo financeiro)
+- [ ] Dashboard super-admin: exibir qual plano cada escola tem contratado
+
+**Dependência:** F1.1 (multi-tenant — `escola_id` + `escola_config` com isolamento real)
+**Não bloqueia:** nenhuma feature existente — é controle de acesso sobre o que já existe
 
 ---
 
