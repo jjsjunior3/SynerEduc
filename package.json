@@ -78,6 +78,7 @@
     "indexar:tudo": "npm run build:worker && tsx scripts/indexar-todos-pdfs.ts --tudo",
     "indexar:imagens": "tsx scripts/indexar-imagens-locais.ts",
     "indexar:imagens:dry": "tsx scripts/indexar-imagens-locais.ts --dry-run",
-    "indexar:imagens:reset": "tsx scripts/indexar-imagens-locais.ts --reset"
+    "indexar:imagens:reset": "tsx scripts/indexar-imagens-locais.ts --reset",
+    "sync:calculonotas": "node -e \"require('fs').copyFileSync('src/utils/calculoNotas.ts','supabase/functions/chat-sofia/calculoNotas.ts')\""
   }
 }
