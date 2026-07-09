@@ -33,6 +33,8 @@ export interface Usuario {
   email: string;
   tipo: TipoUsuario;
   avatar?: string;
+  // Escola (multi-tenant)
+  escolaId?: string;
   // Segmento
   segmento?: Segmento;
   turno?: Turno;

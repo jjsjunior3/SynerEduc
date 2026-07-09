@@ -80,7 +80,9 @@ DEPENDÊNCIA ESTRUTURAL PARA IA
               └──► #7  F4  → Financeiro Avançado + Asaas
 
 REFACTOR ESTRUTURAL (antes da 2ª escola + antes de F4 para evitar retrabalho)
- #5  F1.1 → Multi-tenant  ← escola_id em todas as tabelas + RLS
+ 🔄  #5  F1.1 → Multi-tenant  ← escola_id em todas as tabelas + RLS
+              │   Fase 1 (schema + RLS core) ✅ concluída 2026-07-08
+              │   Fase 1b (RLS 2ª leva) + Fase 2 (frontend explícito) — pendentes
               │
               └──► deadline natural: Colégio Ariane Maria (~nov/2026)
 
@@ -116,7 +118,7 @@ ADIADO
 |:---:|---|---|:---:|---|
 | ~~**#1**~~ | ~~F2.1/2.2/2.3 IA Histórico~~ | ~~Edge Function proxy + arquivo histórico + arquivo morto~~ | ~~2 sem~~ | ✅ Jun/2026 |
 | ~~**#1**~~ | ~~F5 Agentes (6/7)~~ | ~~Objetivo principal — reutiliza F2.1 direto~~ | ~~3-4 sem~~ | ✅ Jul/2026 |
-| **#2** | F1.1 Multi-tenant | Férias escolares — sistema pode sair do ar · Colégio Ariane entra pós-migração | 3-4 sem | **Jul** |
+| **#2** | F1.1 Multi-tenant | 🔄 Fase 1 (schema+RLS core) ✅ · Fase 1b (RLS 2ª leva) e Fase 2 (frontend) pendentes | 3-4 sem | **Jul** |
 | **#3** | F10 Plano de Aula IA | Esqueleto na demo Ariane (jun/17) · completo após indexação | 1-2 sem | Jun-Jul |
 | **#2.5** | F12 Painel Super-Admin | synereduc.com — controle central, onboarding automático de escolas | 1-2 sem | Ago |
 | **#6** | F1.3 Virada de ano | Deadline dez/2026 — testar com 2 meses de antecedência | 1-2 sem | Set-Out |
@@ -668,18 +670,28 @@ ADIADO
 
 ---
 
-### 🔴 #2 — F1.1 · Multi-tenant · **Jul/2026** · ~3-4 semanas
+### 🔄 #2 — F1.1 · Multi-tenant · **Jul/2026** · ~3-4 semanas
 
 > **Janela:** Julho/2026 — férias escolares. Sistema pode ficar fora do ar para atualização sem impacto nos usuários. Colégio Ariane previsto para entrar no sistema após esta migração.
 
-**Tarefas:**
-- [ ] Tabela `escolas` (`id`, `nome`, `cnpj`, `segmentos_ativos`, `dominio`)
-- [ ] Campo `escola_id` em todas as tabelas de dados (users, notas, frequência, agenda, financeiro…)
-- [ ] RLS policies baseadas em `escola_id` do JWT — isolamento total entre escolas
-- [ ] Hook `useEscola()` — detecta escola pelo domínio ou `escola_id` no perfil
-- [ ] Migration dos dados existentes para o registro da escola atual
-- [ ] `school.ts` dinâmico (busca configurações do banco por `escola_id`)
+**Descoberta na Fase 1 (2026-07-08):** a tabela `escola_config` (criada em 23/06 para branding dinâmico) **já cumpre o papel da tabela `escolas`** — já tem `id`, `dominio`, `nome`, `segmento_padrao`, e já tem as 2 escolas cadastradas (Conexão `e6ddd149-9858-418f-94be-3b0e4c554cd7` e Ariane `1c7a0c64-d5e7-4025-befa-69cad4e23304`). Reusamos `escola_config.id` como `escola_id` em vez de criar tabela nova.
+
+**Fase 1 — schema + RLS multi-tenant-ready (✅ concluída 2026-07-08):**
+- [x] ~~Campo `escola_id uuid references escola_config(id)` em todas as ~47 tabelas de dados, com default = Conexão (única escola com dados reais). Aplicado em 7 etapas por domínio (base → acadêmico → matrícula → financeiro → comunicação → histórico/conteúdo → calendário/vínculos/IA), cada uma verificada por SQL (0 linhas com `escola_id` nulo)~~
+- [x] ~~Função `get_escola_usuario()` — mesmo padrão de fallback em 4 camadas de `get_segmento_usuario()` (user_metadata JWT → app_metadata JWT → auth.users raw_user_meta_data → raw_app_meta_data)~~
+- [x] ~~Trigger `sync_user_metadata()` estendido para propagar `escola_id` de `users` para o JWT, junto com `tipo`/`segmento` que já propagava. Backfill imediato do JWT de todos os usuários já existentes (sem esperar próximo login)~~
+- [x] ~~RLS: `AND escola_id = get_escola_usuario()` nas políticas de `users`, `notas`, `frequencia_diaria`, `agenda_professor`, `grade_horaria` (as 5 tabelas mais sensíveis/mais usadas) — validado com sessão simulada: aluno real vê 17 notas/209 registros de frequência com `escola_id` correto, **0** com `escola_id` errado~~
+- [x] ~~Hook `useEscola()` (espelha `useSegmento()`) + `escolaId` em `Usuario`/`UsuarioPerfil`/`AuthContext`~~
+- [x] ~~`npm run test:run` — 101/101 testes passando após a migração (zero regressão)~~
+
+**Fase 1b — RLS na 2ª leva de tabelas (pendente):**
+- [ ] Mesmo padrão `AND escola_id = get_escola_usuario()` em: `fichas_matricula`, `documentos_matricula`, `contratos`, `financeiro_mensalidades`, `financeiro_despesas`, `atividades`, `atividades_alunos`, `comunicados`, `disciplinas`, `series`, `turmas`, `sessoes_ativas` e demais tabelas com RLS customizada ainda não cobertas — textos exatos das políticas já levantados via `pg_policies`, é trabalho mecânico repetindo o padrão da Fase 1
+
+**Fase 2 — frontend explícito (adiada, junto do onboarding do Ariane em ago/2026):**
+- [ ] Reescrever os ~300 call sites de `.eq('segmento', ...)` (~47-50 arquivos mapeados) para também filtrar por `escolaId` explicitamente — hoje a RLS já garante isolamento real; isso é higiene/performance, não segurança
+- [ ] `school.ts` dinâmico por `escola_id` (hoje `useEscolaConfig()` já cobre branding por domínio)
 - [ ] Atualizar queries dos agentes de IA (F5) para filtrar por `escola_id`
+- [ ] Fluxo de login/seleção de escola quando o Ariane tiver usuários reais
 
 **Dependência reversa:** F4 e F6 devem ser feitos APÓS F1.1 para evitar retrabalho.
 

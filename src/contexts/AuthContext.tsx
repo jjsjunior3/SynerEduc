@@ -20,6 +20,7 @@ interface UsuarioPerfil {
     | "financeiro"
     | "estoque";
   avatar?: string;
+  escolaId?: string;
   serie?: string;
   segmento?: "ead" | "presencial";
   turno?: "matutino" | "vespertino" | "noturno";
@@ -81,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           nome: data.nome || "",
           tipo: data.tipo || "aluno",
           avatar: data.avatar || undefined,
+          escolaId: data.escola_id || undefined,
           serie: data.serie || undefined,
           segmento: data.segmento || "ead",
           turno: data.turno || undefined,
