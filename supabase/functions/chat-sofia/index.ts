@@ -246,8 +246,11 @@ async function executarFerramentaAluno(nome: string, input: any, perfil: Perfil,
       const dias  = sanitizeDias(input.dias, 30, 90)
       const desde = new Date(Date.now() - dias * 24 * 3600 * 1000).toISOString().split('T')[0]
 
+      // frequencia_diaria tem 2 FKs duplicadas para disciplinas (fk_frequencia_disciplina
+      // e frequencia_diaria_disciplina_id_fkey) — precisa nomear a FK para o PostgREST
+      // não retornar 300 (embedding ambíguo)
       const rows = await supabaseAsUser(
-        `frequencia_diaria?select=data_aula,presente,disciplinas(nome)`
+        `frequencia_diaria?select=data_aula,presente,disciplinas!frequencia_diaria_disciplina_id_fkey(nome)`
         + `&aluno_id=eq.${perfil.userId}&data_aula=gte.${desde}&order=data_aula.desc&limit=200`,
         userToken,
       )
