@@ -218,7 +218,7 @@ function BarraAzul({
   onVoltar: () => void;
 }) {
   return (
-    <div className="bg-blue-600 text-white">
+    <div className="bg-blue-600 text-white fixed top-16 left-0 right-0 z-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-4">
         <Button
           variant="ghost"
@@ -493,7 +493,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo="Boletim Escolar" subtitulo={turma?.serieNome} onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
           <Boletim turma={turma} usuario={usuario} />
         </main>
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
@@ -506,7 +506,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo="Agenda Diária" subtitulo={turma.serieNome} onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
           <AgendaAluno
             serie={{ id: turma.serieId, nome: turma.serieNome }}
             turma={{ id: turma.id, nome: turma.nome }}
@@ -523,7 +523,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo="Grade Horária" subtitulo={turma?.serieNome} onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
           <HorarioEscolar turmaSelecionada={turma?.serieNome || ""} />
         </main>
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
@@ -536,7 +536,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo={disciplinaSelecionada.nome} subtitulo={turma.serieNome} onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
           <DisciplinaPage
             disciplina={disciplinaSelecionada}
             turma={turma}
@@ -553,7 +553,7 @@ export default function DashboardAluno() {
       <div className="min-h-screen bg-background">
         <HeaderPadrao {...headerProps} />
         <BarraAzul titulo="Comunicados" subtitulo="Avisos da escola" onVoltar={handleVoltar} />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
           <ComunicadosPage onVoltar={handleVoltar} />
         </main>
         <PerfilUsuario open={mostrarPerfil} onOpenChange={setMostrarPerfil} />
