@@ -35,8 +35,15 @@ DEPENDÊNCIA ESTRUTURAL PARA IA
               │   │  ENTREGUES NA SESSÃO 2026-07-08                        │
               │   │  ✅ Sofia: contexto extra p/ coordenador (freq+ativid.) │
               │   │  ✅ Agente NEXUS (Admin Geral) — Tool Use, 3 ferramentas│
-              │   │  ✅ GestaoRAG.tsx — status Pinecone + exclusão por      │
-              │   │       série/disciplina (painel Conteudista)             │
+              │   │  ✅ Gestão do RAG — aba dedicada no painel Conteudista, │
+              │   │       navegador série→disciplina→volume/bimestre,      │
+              │   │       catálogo rag_material_indexado (Supabase espelha │
+              │   │       o Pinecone), exclusão individual/lote c/ barreiras│
+              │   │  ✅ Sofia: Tool Use estruturado p/ aluno — notas        │
+              │   │       (calcularNota real), frequência, grade horária e │
+              │   │       agenda recente. Queries com JWT do próprio aluno │
+              │   │       (RLS real, não service key). Testado ao vivo:    │
+              │   │       recusa corretamente pedido de nota de colega     │
               │   │                                                         │
               │   │  ENTREGUES NA SESSÃO 2026-06-06                        │
               │   │  ✅ F5.1 Pinecone pipeline — 313/465 imgs indexadas     │
@@ -593,9 +600,11 @@ ADIADO
 | F5.6 · Agente Professor (Pedagógico) | #25 | F5.1 + F5.2 | ❌ |
 | F5.7 · Agente Aluno (Pedagógico) | #26 | F5.1 + F5.2 | ❌ |
 | F5.8 · Agente Financeiro | #27 | F5.2 | ❌ |
-| F5.9 · Agente Admin Geral | #28 | F5.2 | ❌ |
-| F5.10 · DashboardConteudista → interface de gestão do RAG | #29 | F5.1 | ❌ |
-| F5.11 · Painel de Monitoramento de IA (Admin SynerEduc) | #30 | F5.0 | ❌ |
+| F5.9 · Agente Admin Geral | #28 | F5.2 | ✅ |
+| F5.10 · DashboardConteudista → interface de gestão do RAG | #29 | F5.1 | ✅ |
+| F5.11 · Painel de Monitoramento de IA (Admin SynerEduc) | #30 | F5.0 | ✅ |
+
+> Tabela de sub-etapas mantida como histórico do planejamento original — o F5 como um todo está ✅ fechado (ver diagrama acima). Alguns status "❌ bloqueado por regimento" acima ficaram desatualizados; confiar no resumo consolidado, não linha a linha.
 
 > ⚠️ parcial = funciona com dados ao vivo; apenas a consulta ao regimento fica pendente até o documento chegar.
 
@@ -623,9 +632,10 @@ ADIADO
 - [x] ~~**Agente Pedagógico · Professor/Aluno** — Sofia v6 (RAG + agenda de hoje)~~
 - [x] ~~**Agente Coordenador** — Sofia v8 recebe contexto extra (frequência dos últimos 7 dias + atividades aguardando correção) via `<contexto_coordenador>` no system prompt, filtrado por segmento~~
 - [x] ~~**Agente Admin Geral "NEXUS"** (#28) — Edge Function `agente-nexus` (Tool Use, mesmo padrão de agente-gabriela) com 3 ferramentas: `status_sistema`, `consumo_ia`, `logs_seguranca` (tentativas de prompt injection via `agente_log.tentativa_violacao` + erros de execução via `agente_ia_log`). `ChatNexus.tsx` plugado no `DashboardAdministrador.tsx`, restrito a `tipo === 'administrador'`~~
-- [x] ~~**F5.10** (#29) — `GestaoRAG.tsx` no painel do Professor Conteudista: mostra total de vetores indexados no Pinecone (`rag-status` Edge Function, `describe_index_stats`) e permite remover vetores de uma série/disciplina antes de reindexar localmente. Restrito a `professor_conteudista`/`administrador`~~
+- [x] ~~**F5.10** (#29) — aba dedicada "Gestão do RAG" no painel do Professor Conteudista: navegador hierárquico série → disciplina → volume/bimestre, alimentado pela tabela `rag_material_indexado` (espelha o Pinecone no Supabase, já que o Pinecone não lista valores distintos de metadata — sincronizada pelo próprio `indexar-imagens-locais.ts`). Exclusão individual (confirmação simples) e em lote (exige digitar o nome da disciplina) via `rag-status`, restrito a `professor_conteudista`/`administrador`~~
+- [x] ~~**Sofia — Tool Use estruturado para o aluno**: 4 tools novas (`obter_notas_aluno` com `calcularNota` real, `obter_frequencia_aluno`, `obter_grade_horaria_aluno`, `obter_agenda_recente_aluno`). Consultas com o JWT do próprio aluno (RLS real como 2ª camada de defesa, não a service key). Decisões registradas em `docs/AGENTES_IA_DECISOES.md` (D1.6)~~
 
-> Checagem de código em 2026-07-08 confirmou o status acima (`chat-sofia/index.ts`, `DashboardAdministrador.tsx`, `DashboardConteudista.tsx`). Contexto do coordenador (chat-sofia v10), NEXUS (agente-nexus v1) e gestão do RAG (rag-status v1) implementados e deployados na mesma sessão. Queries validadas via SQL direto contra o schema real — sem erros de coluna/join.
+> Checagem de código em 2026-07-08 confirmou o status acima. Contexto do coordenador, NEXUS, gestão do RAG (aba dedicada + catálogo Supabase) e Tool Use estruturado da Sofia — tudo implementado, deployado e testado ao vivo (isolamento entre alunos confirmado com aluna real) na mesma sessão. Um bug real foi encontrado e corrigido em produção: `frequencia_diaria` tinha 2 FKs duplicadas para `disciplinas`, causando erro 300 (embedding ambíguo) no PostgREST — corrigido nomeando a FK explicitamente (`chat-sofia` v12).
 
 **Entrega:** 6 perfis com IA contextual no ar. O 7º (responsável) entra no #4. **F5 fechado em 2026-07-08.**
 
