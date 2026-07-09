@@ -1,6 +1,6 @@
 # Registro de Decisões e Arquitetura — Módulos de IA do SynerEduc
 **Para revisão técnica · Destinatário: Lucas**  
-**Última atualização: 2026-06-19**
+**Última atualização: 2026-07-08**
 
 > Este documento registra cada módulo de IA implementado, sua arquitetura, e as decisões técnicas
 > tomadas durante o desenvolvimento — com o raciocínio por trás de cada escolha.
@@ -21,7 +21,7 @@ Infraestrutura de IA: Anthropic Claude + Pinecone + Ollama local.
 | # | Módulo | Agente | Componente | Edge Function | Status |
 |---|---|---|---|---|---|
 | 1 | Geração de Histórico Escolar por IA | — | `ArquivoHistorico.tsx`, `ArquivoMorto.tsx` | `claude-proxy` | ✅ Produção |
-| 2 | Agente Pedagógico do Aluno | Professora Sofia | `ChatFlutuante.tsx`, `AvatarSofia.tsx` | `chat-sofia` | ✅ Produção (RAG Pinecone) |
+| 2 | Agente Pedagógico do Aluno | Professora Sofia | `ChatFlutuante.tsx`, `AvatarSofia.tsx` | `chat-sofia` | ✅ Produção (RAG Pinecone + Tool Use: notas/frequência/grade/agenda) |
 | 3 | Pipeline RAG — Material Didático | — | `scripts/indexar-imagens-locais.ts` | — | 🔄 Indexando (1ª série concluída) |
 | 4 | Agente Administrativo | Gabriela | `ChatGabriela.tsx` | `agente-gabriela` | ✅ Produção |
 | 5 | Agente Psicopedagógico de Inclusão | Tia Maria José | `AgenteInclusao.tsx`, `AvatarDonaMaria.tsx` | `dona-maria` | ✅ Produção (sem acervo clínico) |
@@ -122,8 +122,40 @@ Resposta ao usuário
 #### D1.5 — Markdown no chat: parser mínimo próprio, sem biblioteca
 **Motivo:** Claude retorna negrito e parágrafos. Importar `react-markdown` seria ~50KB para renderizar dois padrões. Função `MarkdownSimples` tem 15 linhas e cobre 100% do que o Claude gera nesse contexto.
 
+#### D1.6 — Evolução: Tool Use estruturado (notas, frequência, grade, agenda recente) — 2026-07-08
+**Contexto:** Até aqui a Sofia só respondia com base no RAG (material didático) e na agenda de hoje, sempre injetados no prompt. Ela não conseguia responder "qual minha nota de matemática" ou "quantas faltas eu tenho" — dados estruturados do sistema.
+
+**Decisão de arquitetura (avaliada após estudo dos protocolos MCP e A2A):**
+- **Tool Use dentro da própria Sofia, não agentes separados (A2A).** Agenda, frequência e notas são consultas de leitura pontuais, determinísticas e sem estado — não justificam virar agentes independentes conversando entre si. O padrão correto é Tool Use no mesmo agente, no espírito do MCP: cada tool é uma ação/leitura específica, nunca lógica de negócio embutida.
+- **Distinção Tool vs. Resource (vocabulário do MCP):** as 4 novas capacidades são todas **Resources** (leitura pura) — nenhuma delas muda estado. Isso reforça que Tool Use local (não um MCP Server dedicado) é suficiente por ora — ver [Questão em aberto: MCP](#questão-em-aberto-mcp-model-context-protocol) mais abaixo.
+- **Sem Sofia por série.** A precisão de contexto por série/disciplina já é resolvida pelo filtro de metadados no Pinecone (RAG). Multiplicar instâncias de agente não aumenta precisão, só manutenção.
+- **Sem memória de longo prazo.** Mantido apenas o histórico da sessão atual (já existente). Motivo: risco de minimização de dados sob LGPD — a base de usuários é majoritariamente menor de idade. Se revisitado no futuro, a abordagem correta é resumo/retrieval vetorial, nunca acumular o transcript bruto.
+
+**Arquitetura implementada:**
+```
+Pergunta do aluno
+      ↓
+chat-sofia (loop de Tool Use, mesmo padrão MAX_TURNS=5 da agente-gabriela)
+      ↓
+Claude decide se precisa de uma tool → obter_notas_aluno | obter_frequencia_aluno |
+                                        obter_grade_horaria_aluno | obter_agenda_recente_aluno
+      ↓
+Tool consulta o Postgres com o JWT do PRÓPRIO ALUNO (não a service key)
+      ↓
+RLS de notas/frequencia_diaria (user_id/aluno_id = auth.uid()) é uma segunda
+camada de defesa real — além do filtro explícito por perfil.userId na Edge Function
+      ↓
+Resultado volta para o Claude → resposta final ao aluno
+```
+
+**Decisões de segurança específicas:**
+- Nenhuma tool recebe identificador de aluno como parâmetro de input — o id vem exclusivamente de `perfil.userId`, derivado do JWT validado no início da requisição. É estruturalmente impossível o modelo "pedir" dados de outro aluno através das tools.
+- **Divergência deliberada do padrão da Gabriela:** a Gabriela consulta sempre com a `SERVICE_ROLE_KEY` (bypassa RLS). Para essas 4 tools da Sofia optamos por consultar com o JWT do próprio aluno (`supabaseAsUser()`), para que a RLS de `notas`/`frequencia_diaria` seja uma segunda camada de defesa de verdade, não apenas política inerte. Validado diretamente no Postgres simulando a sessão de um aluno real: 17 notas e 209 registros de frequência próprios visíveis, **0** de outros alunos visíveis em ambos os casos.
+- Reuso de `calcularNota` (`src/utils/calculoNotas.ts`) sem duplicar a lógica de negócio: o arquivo é copiado programaticamente (`npm run sync:calculonotas`) para `supabase/functions/chat-sofia/calculoNotas.ts` e importado — nunca reescrito à mão. Fonte única de verdade preservada mesmo com o deploy da Edge Function sendo um pacote de arquivos separado do bundle do frontend.
+
 ### Status atual
 - ✅ Material 1ª série Biologia indexado (35 vetores, Sofia respondendo corretamente)
+- ✅ Tool Use estruturado: notas, frequência, grade horária e agenda recente (aluno) — `chat-sofia` v11
 - 🔄 Demais séries em indexação
 
 ---
@@ -349,6 +381,9 @@ O que já construímos **é** MCP conceitualmente — só com implementação cu
 | PDF output | HTML + CSS + window.print() | jsPDF, pdfmake | Qualidade gráfica superior, suporte PT-BR nativo |
 | Segmento do usuário | JWT server-side | Payload do cliente | Inforjável criptograficamente |
 | Limites de tokens | Por perfil/dia | Por escola global | Isola impacto de uso intenso individual |
+| Dados estruturados na Sofia (notas/frequência/agenda) | Tool Use no próprio agente | Agentes separados (A2A) por domínio | Leituras pontuais e sem estado — não justificam agentes independentes |
+| Autenticação nas queries das tools da Sofia | JWT do próprio aluno (RLS real) | Service role key (padrão da Gabriela) | RLS vira segunda camada de defesa de verdade, não só filtro na Edge Function |
+| Memória de longo prazo da Sofia | Não implementada | Resumo/retrieval vetorial | Risco de minimização de dados sob LGPD (maioria dos usuários são menores) |
 
 ---
 
