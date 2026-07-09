@@ -81,8 +81,8 @@ DEPENDÊNCIA ESTRUTURAL PARA IA
 
 REFACTOR ESTRUTURAL (antes da 2ª escola + antes de F4 para evitar retrabalho)
  🔄  #5  F1.1 → Multi-tenant  ← escola_id em todas as tabelas + RLS
-              │   Fase 1 (schema + RLS core) ✅ concluída 2026-07-08
-              │   Fase 1b (RLS 2ª leva) + Fase 2 (frontend explícito) — pendentes
+              │   Fase 1 (schema + RLS core) ✅ 2026-07-08 · Fase 1b (RLS 2ª leva) ✅ 2026-07-09
+              │   Fase 2 (frontend explícito) — pendente, junto do onboarding do Ariane
               │
               └──► deadline natural: Colégio Ariane Maria (~nov/2026)
 
@@ -118,7 +118,7 @@ ADIADO
 |:---:|---|---|:---:|---|
 | ~~**#1**~~ | ~~F2.1/2.2/2.3 IA Histórico~~ | ~~Edge Function proxy + arquivo histórico + arquivo morto~~ | ~~2 sem~~ | ✅ Jun/2026 |
 | ~~**#1**~~ | ~~F5 Agentes (6/7)~~ | ~~Objetivo principal — reutiliza F2.1 direto~~ | ~~3-4 sem~~ | ✅ Jul/2026 |
-| **#2** | F1.1 Multi-tenant | 🔄 Fase 1 (schema+RLS core) ✅ · Fase 1b (RLS 2ª leva) e Fase 2 (frontend) pendentes | 3-4 sem | **Jul** |
+| **#2** | F1.1 Multi-tenant | 🔄 Fase 1 ✅ + Fase 1b ✅ (schema + RLS completo) · Fase 2 (frontend) pendente | 3-4 sem | **Jul** |
 | **#3** | F10 Plano de Aula IA | Esqueleto na demo Ariane (jun/17) · completo após indexação | 1-2 sem | Jun-Jul |
 | **#2.5** | F12 Painel Super-Admin | synereduc.com — controle central, onboarding automático de escolas | 1-2 sem | Ago |
 | **#6** | F1.3 Virada de ano | Deadline dez/2026 — testar com 2 meses de antecedência | 1-2 sem | Set-Out |
@@ -684,8 +684,11 @@ ADIADO
 - [x] ~~Hook `useEscola()` (espelha `useSegmento()`) + `escolaId` em `Usuario`/`UsuarioPerfil`/`AuthContext`~~
 - [x] ~~`npm run test:run` — 101/101 testes passando após a migração (zero regressão)~~
 
-**Fase 1b — RLS na 2ª leva de tabelas (pendente):**
-- [ ] Mesmo padrão `AND escola_id = get_escola_usuario()` em: `fichas_matricula`, `documentos_matricula`, `contratos`, `financeiro_mensalidades`, `financeiro_despesas`, `atividades`, `atividades_alunos`, `comunicados`, `disciplinas`, `series`, `turmas`, `sessoes_ativas` e demais tabelas com RLS customizada ainda não cobertas — textos exatos das políticas já levantados via `pg_policies`, é trabalho mecânico repetindo o padrão da Fase 1
+**Fase 1b — RLS na 2ª leva de tabelas (✅ concluída 2026-07-09):**
+- [x] ~~Mesmo padrão `AND escola_id = get_escola_usuario()` em: `fichas_matricula`, `documentos_matricula`, `contratos`, `financeiro_mensalidades`, `financeiro_despesas`, `atividades`, `atividades_alunos`, `comunicados`, `disciplinas`, `series`, `turmas`, `sessoes_ativas` (~60 políticas, aplicadas em 5 etapas por domínio, cada uma verificada por contagem de linhas antes da próxima)~~
+- [x] ~~Achado extra corrigido: a policy `leitura_autenticado` de `sessoes_ativas` tinha `qual = true` — qualquer usuário autenticado via qualquer escola lia sessões ativas de todas as escolas. Fechado (`escola_id = get_escola_usuario()`) — vazamento cross-tenant real que só não importava até agora por existir uma única escola~~
+- [x] ~~Validado com sessão simulada: aluno real vê 11 registros em `atividades_alunos` com `escola_id` correto, **0** com `escola_id` da outra escola~~
+- [x] ~~`npm run test:run` — 101/101 passando~~
 
 **Fase 2 — frontend explícito (adiada, junto do onboarding do Ariane em ago/2026):**
 - [ ] Reescrever os ~300 call sites de `.eq('segmento', ...)` (~47-50 arquivos mapeados) para também filtrar por `escolaId` explicitamente — hoje a RLS já garante isolamento real; isso é higiene/performance, não segurança
