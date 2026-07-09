@@ -411,9 +411,31 @@ ADIADO
 
 | Status | Item | Detalhe |
 |:---:|---|---|
-| 🟡 | **Políticas dos buckets de Storage** | `entregas_atividades`, `atividades`, `comunicados`, `pdfs_conteudista` usam `getPublicUrl` — verificar se os buckets estão como "Private" no painel Supabase (requer autenticação para acesso) |
+| ✅ | ~~**Políticas dos buckets de Storage**~~ | Corrigido em 2026-07-09 — ver auditoria abaixo (removida a listagem pública, buckets seguem `public:true` intencionalmente para `getPublicUrl`) |
 | 🟡 | **Rate limiting no login** | Supabase Auth tem proteção básica; confirmar no painel: Auth → Rate Limits — recomendado máximo 5 tentativas/minuto |
 | 🟡 | **CSP em produção** | Os headers do `vite.config.ts` valem apenas para dev/preview. Em produção (hospedagem), configurar os mesmos headers no servidor/CDN (Vercel, Netlify, Nginx) |
+| 🟡 | **Leaked Password Protection desativada** | Authentication → Providers → Email no painel Supabase — não configurável via SQL/API, requer toggle manual |
+| 🟡 | **Postgres com patch de segurança pendente** | Settings → Infrastructure → Upgrade — envolve janela de manutenção/restart, não fazer sem planejar horário de baixo uso |
+
+---
+
+## Auditoria de Segurança — 2026-07-09
+
+> Revisão dos advisors de segurança do Supabase (nunca tratados desde que foram detectados). Migration: `supabase/migrations/20260709_security_fixes.sql`.
+
+| Vetor | Detalhe | Correção |
+|---|---|---|
+| **`get_all_users_with_auth_data()` vazando dados** | Função SECURITY DEFINER retornava nome+email+tipo+status de **todos os usuários**, sem nenhuma checagem de quem chama — executável até por `anon` (sem login) via `/rest/v1/rpc/get_all_users_with_auth_data`. Confirmado não usada em nenhum lugar do código (frontend nem edge functions) | `REVOKE EXECUTE ... FROM PUBLIC` |
+| **`get_users_with_email()` sem controle de acesso** | Mesmo problema, mas função usada legitimamente por `GerenciadorUsuariosFixed.tsx` (só renderizado pra administrador/admin_presencial) — o problema é que a proteção era só na UI, o RPC em si aceitava qualquer `authenticated`. Um aluno podia chamar o RPC direto e pegar o e-mail de todo mundo | Adicionada guarda interna (`WHERE tem_tipo(ARRAY['administrador','admin_presencial','gestor_geral'])`) + `REVOKE FROM PUBLIC` + `GRANT` só para `authenticated`. Validado: admin vê 288 usuários, aluno vê 0 |
+| **`atualizar_status_mensalidades()` e `incrementar_uso_ia()` sem controle** | Funções de escrita (SECURITY DEFINER) expostas via RPC sem checagem — a segunda aceitava `usuario_id` arbitrário, permitindo adulterar o contador de uso de IA de outra pessoa. Confirmado: nenhuma usada via RPC do frontend (`incrementar_uso_ia` só é chamada pela Edge Function `dona-maria` com service role key) | `REVOKE EXECUTE ... FROM PUBLIC` |
+| **21 funções com `search_path` mutável** | Sem `search_path` fixo, uma função `SECURITY DEFINER` pode ser enganada por um `search_path` malicioso do caller | `ALTER FUNCTION ... SET search_path = 'public', 'pg_temp'` em todas |
+| **4 buckets públicos permitindo listagem** | `atividades`, `avatars`, `comunicados`, `pdfs-conteudista` tinham policy de `SELECT` ampla em `storage.objects`, permitindo listar TODOS os arquivos via API/SDK (não só buscar por URL conhecida) — ex: enumerar todos os avatares/fotos de atividades de todos os alunos | Removidas as 4 policies. Buckets continuam `public:true` de propósito (URLs públicas não passam por RLS) — confirmado com `curl`: URL pública de avatar real continuou retornando 200 depois da remoção |
+
+**Nota técnica:** `REVOKE EXECUTE ... FROM anon, authenticated` sozinho não bastava — as funções também tinham `EXECUTE` concedido implicitamente a `PUBLIC` (padrão do Postgres ao criar função), que `anon` herda independentemente de revokes nominais. Precisou `REVOKE ... FROM PUBLIC` explicitamente.
+
+**O que foi deixado de propósito:** `eh_admin()`, `tem_tipo()`, `get_tipo_usuario()`, `get_segmento_usuario()`, `get_escola_usuario()`, `get_media_turma()`, `total_alunos_ativos()`, `sync_user_metadata()` continuam executáveis por `anon`/`authenticated` — são chamadas de dentro das próprias políticas de RLS durante a avaliação de queries normais; revogar de `PUBLIC` sem regrant quebraria toda política que as usa. São só introspecção da sessão do próprio caller (inofensivas mesmo pra `anon`, que não tem `auth.uid()`).
+
+`npm run test:run`: 101/101 passando após todas as correções.
 
 ---
 
