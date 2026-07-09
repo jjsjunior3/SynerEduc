@@ -680,10 +680,10 @@ ADIADO
 - [x] Tabela `escola_config` criada no Supabase (nome, logo, cores, domínio)
 - [x] Colégio Conexão e Colégio Ariane cadastrados na `escola_config`
 - [x] Hook `useEscolaConfig.ts` criado — detecta escola pelo domínio, aplica logo/cores/título
-- [ ] Comprar domínio do Colégio Ariane no Hostgator
+- [x] ~~Comprar domínio do Colégio Ariane (`colegioariane.com.br`, já registrado no Hostgator)~~
 - [ ] Criar addon domain no cPanel + subir build na pasta do Ariane
-- [ ] Upload da logo do Ariane no Storage
-- [ ] Plugar `useEscolaConfig` no `SchoolHeader`, login e PDFs
+- [x] ~~Upload da logo do Ariane no Storage — bucket `escola-assets` (novo, público), `logo-ariane-light.png` + `logo-ariane-dark.png`. `escola_config.logo_url` do Ariane atualizado pra versão light (mesmo padrão de logo única da Conexão). Fontes também versionadas em `public/logo-ariane-{light,dark}.png`~~
+- [ ] Plugar `useEscolaConfig` no `SchoolHeader`, login e PDFs — escopo maior do que o previsto: nome "Colégio Conexão Maranhense" está hardcoded em **18 arquivos** (`SchoolHeader.tsx` usa `src/config/school.ts` estático, não o hook dinâmico), incluindo documentos oficiais (`EmissaoContratos.tsx`, `EmissaoDocumentos.tsx`, `Boletim.tsx`, `BoletimCoordenador.tsx`)
 - [ ] Cadastrar séries, turmas e disciplinas do Ariane no banco
 - [ ] Criar usuários da escola (secretaria, coordenador, professores, alunos)
 - [ ] Lançar notas do 1º semestre já existentes
